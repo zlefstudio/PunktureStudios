@@ -12,7 +12,15 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useStore } from '../store';
-import { calcTotal, ticketItems, peso, formatDate, formatTime, statusColor, formatJewelryName } from './utils';
+import {
+  calcTotal,
+  ticketItems,
+  peso,
+  formatDate,
+  formatTime,
+  statusColor,
+  formatJewelryName,
+} from './utils';
 import { CalendarPickerModal } from './CalendarPicker';
 
 type TimeFilter = 'date' | 'month' | 'all';
@@ -26,49 +34,41 @@ function toDateString(date: Date): string {
 
 function formatDisplayDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  const todayStr = toDateString(new Date());
-
+  const date      = new Date(y, m - 1, d);
+  const todayStr  = toDateString(new Date());
   const formatted = date.toLocaleDateString('en-PH', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
-
-  if (dateStr === todayStr) {
-    return `Today · ${formatted}`;
-  }
-  return formatted;
+  return dateStr === todayStr ? `Today · ${formatted}` : formatted;
 }
 
 export function HistoryView() {
-  const tickets = useStore((s) => s.tickets);
-  const items = useStore((s) => s.items);
-  const reopenTicket = useStore((s) => s.reopenTicket);
-  const setActiveTicket = useStore((s) => s.setActiveTicket);
+  const tickets                    = useStore((s) => s.tickets);
+  const items                      = useStore((s) => s.items);
+  const reopenTicket               = useStore((s) => s.reopenTicket);
+  const setActiveTicket            = useStore((s) => s.setActiveTicket);
   const clearHistoryAndResetNumbering = useStore((s) => s.clearHistoryAndResetNumbering);
 
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [reopenConfirm, setReopenConfirm] = useState<string | null>(null);
+  const [expandedId,       setExpandedId]       = useState<string | null>(null);
+  const [reopenConfirm,    setReopenConfirm]    = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showCalendarModal, setShowCalendarModal] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('date');
+  const [resetting,        setResetting]        = useState(false);
+  const [timeFilter,       setTimeFilter]       = useState<TimeFilter>('date');
 
-  // Default selected date is today in YYYY-MM-DD
   const todayStr = toDateString(new Date());
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
-  const now = new Date();
-  const currentYear = now.getFullYear();
+  const now          = new Date();
+  const currentYear  = now.getFullYear();
   const currentMonth = now.getMonth();
 
   function isMatchingSelectedDate(timestamp: number): boolean {
-    const d = new Date(timestamp);
-    return toDateString(d) === selectedDate;
+    return toDateString(new Date(timestamp)) === selectedDate;
   }
-
   function isSameMonth(timestamp: number): boolean {
     const d = new Date(timestamp);
     return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
@@ -76,27 +76,22 @@ export function HistoryView() {
 
   const finishedTickets = tickets.filter((t) => t.status === 'finished');
 
-  // Selected date finished stats
-  const dateTickets = finishedTickets.filter((t) => isMatchingSelectedDate(t.finishedAt ?? t.createdAt));
-  const dateTotalPesos = dateTickets.reduce((sum, t) => sum + calcTotal(ticketItems(items, t.id)), 0);
-  const dateTotalItems = dateTickets.reduce((sum, t) => {
-    const myItems = ticketItems(items, t.id);
-    return sum + myItems.reduce((acc, i) => acc + i.quantity, 0);
+  const dateTickets     = finishedTickets.filter((t) => isMatchingSelectedDate(t.finishedAt ?? t.createdAt));
+  const dateTotalPesos  = dateTickets.reduce((s, t) => s + calcTotal(ticketItems(items, t.id)), 0);
+  const dateTotalItems  = dateTickets.reduce((s, t) => {
+    return s + ticketItems(items, t.id).reduce((a, i) => a + i.quantity, 0);
   }, 0);
 
-  // Monthly finished stats (This Month)
-  const monthTickets = finishedTickets.filter((t) => isSameMonth(t.finishedAt ?? t.createdAt));
-  const monthTotalPesos = monthTickets.reduce((sum, t) => sum + calcTotal(ticketItems(items, t.id)), 0);
+  const monthTickets    = finishedTickets.filter((t) => isSameMonth(t.finishedAt ?? t.createdAt));
+  const monthTotalPesos = monthTickets.reduce((s, t) => s + calcTotal(ticketItems(items, t.id)), 0);
 
-  // All-time finished stats
-  const allTimeTotalPesos = finishedTickets.reduce((sum, t) => sum + calcTotal(ticketItems(items, t.id)), 0);
+  const allTimeTotalPesos = finishedTickets.reduce((s, t) => s + calcTotal(ticketItems(items, t.id)), 0);
 
-  // Filtered history records list
   const history = tickets
     .filter((t) => t.status === 'finished' || t.status === 'cancelled')
     .filter((t) => {
       const time = t.finishedAt ?? t.cancelledAt ?? t.createdAt;
-      if (timeFilter === 'date') return isMatchingSelectedDate(time);
+      if (timeFilter === 'date')  return isMatchingSelectedDate(time);
       if (timeFilter === 'month') return isSameMonth(time);
       return true;
     })
@@ -106,7 +101,6 @@ export function HistoryView() {
       return tb - ta;
     });
 
-  // Date stepper handlers
   function handlePrevDay() {
     const [y, m, d] = selectedDate.split('-').map(Number);
     const date = new Date(y, m - 1, d);
@@ -114,7 +108,6 @@ export function HistoryView() {
     setSelectedDate(toDateString(date));
     setTimeFilter('date');
   }
-
   function handleNextDay() {
     const [y, m, d] = selectedDate.split('-').map(Number);
     const date = new Date(y, m - 1, d);
@@ -122,7 +115,6 @@ export function HistoryView() {
     setSelectedDate(toDateString(date));
     setTimeFilter('date');
   }
-
   function handleToday() {
     setSelectedDate(todayStr);
     setTimeFilter('date');
@@ -133,7 +125,6 @@ export function HistoryView() {
     setReopenConfirm(null);
     setActiveTicket(id);
   }
-
   async function handleResetNumbering() {
     setResetting(true);
     await clearHistoryAndResetNumbering();
@@ -141,160 +132,248 @@ export function HistoryView() {
     setShowResetConfirm(false);
   }
 
-  const activeDates = new Set(
+  const activeDates     = new Set(
     tickets.map((t) => toDateString(new Date(t.finishedAt ?? t.cancelledAt ?? t.createdAt)))
   );
-
   const isTodaySelected = selectedDate === todayStr;
+
+  /* ── Shared style helpers ── */
+  const filterCardBase: React.CSSProperties = {
+    cursor: 'pointer',
+    borderRadius: '12px',
+    padding: '12px 14px',
+    border: '1px solid var(--color-border)',
+    background: 'rgba(255,255,255,0.03)',
+    transition: 'background 200ms, border-color 200ms, box-shadow 200ms',
+  };
+  const navBtnStyle: React.CSSProperties = {
+    padding: '8px',
+    borderRadius: '8px',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid var(--color-border)',
+    color: 'var(--color-text-muted)',
+  };
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-      {/* Top Card: Sales Performance & Interactive Calendar Picker */}
-      <div className="rounded-2xl bg-gradient-to-br from-[#121620] via-[#141926] to-[#171c2b] border border-white/12 p-4 shadow-xl space-y-3">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-slate-300 text-xs font-bold uppercase tracking-wider">
-            <TrendingUp size={14} className="text-emerald-400" />
-            <span>Sales &amp; Income</span>
-          </div>
 
+      {/* ── Stats + Date Nav card ── */}
+      <div
+        className="rounded-2xl p-4 space-y-3"
+        style={{
+          background: 'linear-gradient(145deg, var(--color-surface) 0%, var(--color-muted) 100%)',
+          border: '1px solid var(--color-border-strong)',
+          boxShadow: 'var(--shadow-md)',
+        }}
+      >
+        {/* Header row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <TrendingUp size={13} style={{ color: 'var(--color-success-text)' }} />
+            <span className="text-label-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Sales &amp; Income
+            </span>
+          </div>
           {!showResetConfirm && (
             <button
               onClick={() => setShowResetConfirm(true)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-950/40 hover:bg-red-900/50 border border-red-800/40 text-red-300 hover:text-white text-[11px] font-semibold transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-body-xs font-semibold"
+              style={{
+                background: 'var(--color-error-bg)',
+                border: '1px solid rgba(185,28,28,0.25)',
+                color: 'var(--color-error-text)',
+              }}
               title="Clear test data and reset counter"
             >
-              <RefreshCw size={11} />
+              <RefreshCw size={10} />
               Reset #1
             </button>
           )}
         </div>
 
-        {/* Date Selector Navigation Bar */}
-        <div className="bg-white/4 border border-white/8 rounded-xl p-2.5 space-y-2">
+        {/* Date navigation bar */}
+        <div
+          className="rounded-xl p-2.5 space-y-2"
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid var(--color-border)',
+          }}
+        >
           <div className="flex items-center justify-between gap-1.5">
-            {/* Prev Day Button */}
-            <button
-              type="button"
-              onClick={handlePrevDay}
-              className="p-2 rounded-lg bg-white/6 hover:bg-white/12 active:scale-95 text-slate-300 hover:text-white transition-all cursor-pointer"
-              title="Previous Day"
-            >
-              <ChevronLeft size={18} />
+            <button type="button" onClick={handlePrevDay} style={navBtnStyle} title="Previous Day">
+              <ChevronLeft size={17} />
             </button>
 
-            {/* Custom Date Input with Calendar Icon */}
             <div className="relative flex-1 flex items-center justify-center">
               <button
                 type="button"
                 onClick={() => setShowCalendarModal(true)}
-                className="flex items-center gap-2 cursor-pointer bg-white/8 hover:bg-white/14 border border-white/15 active:scale-[0.99] px-3 py-2 rounded-xl text-xs font-bold text-white transition-all w-full justify-center shadow-sm"
+                className="flex items-center gap-2 px-3 py-2 rounded-xl font-bold w-full justify-center"
+                style={{
+                  background: 'rgba(255,255,255,0.07)',
+                  border: '1px solid var(--color-border-strong)',
+                  color: 'var(--color-text)',
+                  fontSize: '12px',
+                }}
               >
-                <CalendarIcon size={15} className="text-emerald-400 flex-shrink-0" />
-                <span className="truncate text-xs font-bold">{formatDisplayDate(selectedDate)}</span>
+                <CalendarIcon size={14} style={{ color: 'var(--color-success-text)', flexShrink: 0 }} />
+                <span className="truncate">{formatDisplayDate(selectedDate)}</span>
               </button>
             </div>
 
-            {/* Next Day Button */}
-            <button
-              type="button"
-              onClick={handleNextDay}
-              className="p-2 rounded-lg bg-white/6 hover:bg-white/12 active:scale-95 text-slate-300 hover:text-white transition-all cursor-pointer"
-              title="Next Day"
-            >
-              <ChevronRight size={18} />
+            <button type="button" onClick={handleNextDay} style={navBtnStyle} title="Next Day">
+              <ChevronRight size={17} />
             </button>
           </div>
 
-          {/* Quick "Today" jump button if another day is selected */}
           {!isTodaySelected && (
             <button
               onClick={handleToday}
-              className="w-full py-1 text-center text-[11px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-950/40 hover:bg-emerald-950/60 border border-emerald-800/40 rounded-md transition-colors"
+              className="w-full py-1 text-center text-body-xs font-bold rounded-md"
+              style={{
+                background: 'var(--color-success-bg)',
+                border: '1px solid rgba(5,150,105,0.25)',
+                color: 'var(--color-success-text)',
+              }}
             >
               Jump to Today
             </button>
           )}
         </div>
 
-        {/* Selected Date Sales Banner */}
+        {/* Today's Income banner */}
         <div
           onClick={() => setTimeFilter('date')}
-          className={`cursor-pointer rounded-xl p-3.5 border transition-all ${
-            timeFilter === 'date'
-              ? 'bg-emerald-950/70 border-emerald-500/60 ring-1 ring-emerald-500/40'
-              : 'bg-white/4 border-white/8 hover:bg-white/7'
-          }`}
+          style={{
+            ...filterCardBase,
+            ...(timeFilter === 'date'
+              ? {
+                  background: 'var(--color-success-bg)',
+                  borderColor: 'rgba(5,150,105,0.50)',
+                  boxShadow: '0 0 0 1px var(--color-success-ring)',
+                }
+              : {}),
+          }}
         >
-          <div className="flex items-center justify-between text-xs font-bold text-emerald-400 mb-1">
-            <span>{isTodaySelected ? "Today's Income" : `Income on ${selectedDate}`}</span>
-            <span className="text-slate-400 font-normal">
+          <div className="flex items-center justify-between text-label-xs mb-1">
+            <span style={{ color: 'var(--color-success-text)' }}>
+              {isTodaySelected ? "Today's Income" : `Income on ${selectedDate}`}
+            </span>
+            <span style={{ color: 'var(--color-text-muted)', fontWeight: 500, letterSpacing: '0' }}>
               {dateTickets.length} client{dateTickets.length !== 1 ? 's' : ''} · {dateTotalItems} item{dateTotalItems !== 1 ? 's' : ''}
             </span>
           </div>
-          <div className="text-3xl font-black text-emerald-300 tracking-tight">
+          <div
+            className="font-black tracking-tight"
+            style={{ fontSize: '28px', color: 'var(--color-success-text)', fontFamily: 'var(--font-mono)' }}
+          >
             {peso(dateTotalPesos)}
           </div>
         </div>
 
-        {/* Quick Month & All-Time Overview Pills */}
+        {/* Month + All-time pills */}
         <div className="grid grid-cols-2 gap-2">
-          {/* This Month Card */}
+          {/* This Month */}
           <div
             onClick={() => setTimeFilter('month')}
-            className={`cursor-pointer rounded-xl p-2.5 border transition-all ${
-              timeFilter === 'month'
-                ? 'bg-violet-950/70 border-violet-500/60 ring-1 ring-violet-500/40'
-                : 'bg-white/4 border-white/8 hover:bg-white/7'
-            }`}
+            style={{
+              ...filterCardBase,
+              ...(timeFilter === 'month'
+                ? {
+                    background: 'var(--color-brand-bg)',
+                    borderColor: 'rgba(124,58,237,0.45)',
+                    boxShadow: '0 0 0 1px var(--color-brand-ring)',
+                  }
+                : {}),
+            }}
           >
-            <div className="text-[10px] font-bold uppercase tracking-wider text-violet-400 mb-0.5">
+            <div className="text-label-xs mb-0.5" style={{ color: 'var(--color-brand-text)' }}>
               This Month
             </div>
-            <div className="text-lg font-black text-white">{peso(monthTotalPesos)}</div>
-            <div className="text-[10px] text-slate-400">{monthTickets.length} finished</div>
+            <div
+              className="font-black"
+              style={{ fontSize: '17px', color: 'var(--color-text)', fontFamily: 'var(--font-mono)' }}
+            >
+              {peso(monthTotalPesos)}
+            </div>
+            <div className="text-body-xs mt-0.5" style={{ color: 'var(--color-text-faint)' }}>
+              {monthTickets.length} finished
+            </div>
           </div>
 
-          {/* All Time Card */}
+          {/* All Time */}
           <div
             onClick={() => setTimeFilter('all')}
-            className={`cursor-pointer rounded-xl p-2.5 border transition-all ${
-              timeFilter === 'all'
-                ? 'bg-blue-950/70 border-blue-500/60 ring-1 ring-blue-500/40'
-                : 'bg-white/4 border-white/8 hover:bg-white/7'
-            }`}
+            style={{
+              ...filterCardBase,
+              ...(timeFilter === 'all'
+                ? {
+                    background: 'rgba(37,99,235,0.12)',
+                    borderColor: 'rgba(37,99,235,0.40)',
+                    boxShadow: '0 0 0 1px rgba(96,165,250,0.20)',
+                  }
+                : {}),
+            }}
           >
-            <div className="text-[10px] font-bold uppercase tracking-wider text-blue-400 mb-0.5">
+            <div className="text-label-xs mb-0.5" style={{ color: 'var(--color-status-waiting-text)' }}>
               All Time
             </div>
-            <div className="text-lg font-black text-white">{peso(allTimeTotalPesos)}</div>
-            <div className="text-[10px] text-slate-400">{finishedTickets.length} finished</div>
+            <div
+              className="font-black"
+              style={{ fontSize: '17px', color: 'var(--color-text)', fontFamily: 'var(--font-mono)' }}
+            >
+              {peso(allTimeTotalPesos)}
+            </div>
+            <div className="text-body-xs mt-0.5" style={{ color: 'var(--color-text-faint)' }}>
+              {finishedTickets.length} finished
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Confirmation prompt for Reset Numbering */}
+      {/* ── Reset confirm ── */}
       {showResetConfirm && (
-        <div className="rounded-xl border border-red-800/60 bg-red-950/50 p-3.5 space-y-2.5 shadow-lg">
+        <div
+          className="rounded-xl p-3.5 space-y-2.5"
+          style={{
+            background: 'var(--color-error-bg)',
+            border: '1px solid rgba(185,28,28,0.40)',
+          }}
+        >
           <div className="flex items-start gap-2">
-            <AlertTriangle size={16} className="text-red-400 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-red-200 leading-relaxed">
-              <p className="font-bold text-red-300 mb-0.5">Reset Ticket Numbers to #1?</p>
-              This will remove completed/cancelled test records from history and start new ticket numbers back from #1.
+            <AlertTriangle size={15} style={{ color: 'var(--color-error-text)', flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              <p className="text-body-sm font-bold mb-0.5" style={{ color: 'var(--color-error-text)' }}>
+                Reset Ticket Numbers to #1?
+              </p>
+              <p className="text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
+                This will remove completed/cancelled test records from history and start new ticket numbers back from #1.
+              </p>
             </div>
           </div>
           <div className="flex gap-2 pt-1">
             <button
               onClick={handleResetNumbering}
               disabled={resetting}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-xs font-bold transition-colors"
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-body-xs font-bold"
+              style={{
+                background: 'var(--color-error)',
+                color: '#fff',
+                border: 'none',
+                opacity: resetting ? 0.5 : 1,
+              }}
             >
-              <Trash2 size={13} />
+              <Trash2 size={12} />
               {resetting ? 'Resetting…' : 'Yes, Reset to #1'}
             </button>
             <button
               onClick={() => setShowResetConfirm(false)}
-              className="flex-1 py-2 rounded-lg bg-white/8 hover:bg-white/15 text-slate-300 text-xs font-semibold transition-colors"
+              className="flex-1 py-2 rounded-lg text-body-xs font-semibold"
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text-muted)',
+              }}
             >
               Cancel
             </button>
@@ -302,9 +381,9 @@ export function HistoryView() {
         </div>
       )}
 
-      {/* Filtered list section header */}
-      <div className="flex items-center justify-between text-xs text-slate-500 px-1 pt-1">
-        <span className="font-bold uppercase tracking-wider">
+      {/* ── Section header ── */}
+      <div className="flex items-center justify-between px-1 pt-1">
+        <span className="text-label-xs" style={{ color: 'var(--color-text-faint)' }}>
           {timeFilter === 'date'
             ? isTodaySelected
               ? `Today's Orders (${history.length})`
@@ -313,7 +392,10 @@ export function HistoryView() {
             ? `This Month's Orders (${history.length})`
             : `All Orders (${history.length})`}
         </span>
-        <span className="font-semibold text-emerald-400">
+        <span
+          className="text-body-xs font-bold"
+          style={{ color: 'var(--color-success-text)', fontFamily: 'var(--font-mono)' }}
+        >
           {timeFilter === 'date'
             ? peso(dateTotalPesos)
             : timeFilter === 'month'
@@ -322,13 +404,19 @@ export function HistoryView() {
         </span>
       </div>
 
+      {/* ── History list ── */}
       {history.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center text-slate-600 text-sm py-12 text-center bg-white/2 rounded-xl border border-white/5">
-          No records found for{' '}
+        <div
+          className="flex items-center justify-center text-body-sm py-12 text-center rounded-xl"
+          style={{
+            color: 'var(--color-text-faint)',
+            background: 'rgba(255,255,255,0.02)',
+            border: '1px solid var(--color-border-subtle)',
+          }}
+        >
+          No records for{' '}
           {timeFilter === 'date'
-            ? isTodaySelected
-              ? 'today'
-              : selectedDate
+            ? isTodaySelected ? 'today' : selectedDate
             : timeFilter === 'month'
             ? 'this month'
             : 'this period'}
@@ -337,84 +425,155 @@ export function HistoryView() {
       ) : (
         <div className="space-y-2">
           {history.map((t) => {
-            const myItems = ticketItems(items, t.id);
-            const total = calcTotal(myItems);
+            const myItems   = ticketItems(items, t.id);
+            const total     = calcTotal(myItems);
             const isExpanded = expandedId === t.id;
-            const doneAt = t.finishedAt ?? t.cancelledAt ?? t.createdAt;
+            const doneAt    = t.finishedAt ?? t.cancelledAt ?? t.createdAt;
 
             return (
               <div
                 key={t.id}
-                className="rounded-xl border border-white/8 bg-white/3 overflow-hidden"
+                className="rounded-xl overflow-hidden"
+                style={{
+                  background: 'var(--color-muted)',
+                  border: '1px solid var(--color-border)',
+                }}
               >
+                {/* Row: expand toggle */}
                 <button
                   className="w-full text-left px-3 py-3 flex items-center gap-2"
                   onClick={() => setExpandedId(isExpanded ? null : t.id)}
                 >
-                  <span className="text-slate-500 font-mono text-xs">#{t.ticketNumber}</span>
-                  <span className="font-medium text-sm text-white flex-1 truncate">{t.name}</span>
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${statusColor(t.status)}`}>
+                  <span
+                    className="font-mono font-semibold flex-shrink-0"
+                    style={{ fontSize: '11px', color: 'var(--color-text-faint)' }}
+                  >
+                    #{t.ticketNumber}
+                  </span>
+                  <span
+                    className="font-medium flex-1 truncate"
+                    style={{ fontSize: '13px', color: 'var(--color-text)' }}
+                  >
+                    {t.name}
+                  </span>
+                  <span className="status-badge" style={statusColor(t.status)}>
                     {t.status}
                   </span>
-                  {isExpanded ? (
-                    <ChevronUp size={14} className="text-slate-500 flex-shrink-0" />
-                  ) : (
-                    <ChevronDown size={14} className="text-slate-500 flex-shrink-0" />
-                  )}
+                  {isExpanded
+                    ? <ChevronUp size={13} style={{ color: 'var(--color-text-faint)', flexShrink: 0 }} />
+                    : <ChevronDown size={13} style={{ color: 'var(--color-text-faint)', flexShrink: 0 }} />
+                  }
                 </button>
 
-                <div className="px-3 pb-2 flex items-center justify-between text-xs text-slate-500">
+                {/* Timestamp + total */}
+                <div
+                  className="px-3 pb-2 flex items-center justify-between text-body-xs"
+                  style={{ color: 'var(--color-text-faint)' }}
+                >
                   <span>{formatDate(doneAt)} {formatTime(doneAt)}</span>
                   {myItems.length > 0 && (
-                    <span className={`font-semibold ${t.status === 'finished' ? 'text-emerald-400' : 'text-slate-500 line-through'}`}>
+                    <span
+                      className="font-semibold font-mono"
+                      style={{
+                        color: t.status === 'finished'
+                          ? 'var(--color-success-text)'
+                          : 'var(--color-text-faint)',
+                        textDecoration: t.status !== 'finished' ? 'line-through' : 'none',
+                      }}
+                    >
                       {peso(total)}
                     </span>
                   )}
                 </div>
 
+                {/* Expanded detail */}
                 {isExpanded && (
-                  <div className="border-t border-white/8 px-3 py-3 space-y-2">
+                  <div
+                    className="px-3 py-3 space-y-2"
+                    style={{ borderTop: '1px solid var(--color-border)' }}
+                  >
                     {myItems.length === 0 ? (
-                      <p className="text-slate-600 text-xs">No items recorded.</p>
+                      <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
+                        No items recorded.
+                      </p>
                     ) : (
                       myItems.map((item) => {
                         const lt = (item.basePrice + item.upgradePrice) * item.quantity;
                         return (
-                          <div key={item.id} className="flex justify-between text-xs text-slate-400">
+                          <div
+                            key={item.id}
+                            className="flex justify-between text-body-xs"
+                            style={{ color: 'var(--color-text-muted)' }}
+                          >
                             <span>
                               {item.memberLabel ? `${item.memberLabel} · ` : ''}
-                              {item.placementName === 'Jewelry' ? formatJewelryName(item.upgradeLabel) : item.placementName}
-                              {item.placementName !== 'Jewelry' && item.upgradePrice > 0 ? ` + ${formatJewelryName(item.upgradeLabel)}` : ''}
+                              {item.placementName === 'Jewelry'
+                                ? formatJewelryName(item.upgradeLabel)
+                                : item.placementName}
+                              {item.placementName !== 'Jewelry' && item.upgradePrice > 0
+                                ? ` + ${formatJewelryName(item.upgradeLabel)}`
+                                : ''}
                               {item.quantity > 1 ? ` ×${item.quantity}` : ''}
                             </span>
-                            <span className="text-slate-300 font-semibold">{peso(lt)}</span>
+                            <span
+                              className="font-semibold font-mono"
+                              style={{ color: 'var(--color-text)' }}
+                            >
+                              {peso(lt)}
+                            </span>
                           </div>
                         );
                       })
                     )}
 
                     {myItems.length > 0 && (
-                      <div className="flex justify-between text-sm font-bold text-white pt-1 border-t border-white/8">
+                      <div
+                        className="flex justify-between text-body-sm font-bold pt-1"
+                        style={{
+                          borderTop: '1px solid var(--color-border)',
+                          color: 'var(--color-text)',
+                        }}
+                      >
                         <span>Total</span>
-                        <span className={t.status === 'finished' ? 'text-emerald-400' : 'text-slate-500 line-through'}>
+                        <span
+                          className="font-mono"
+                          style={{
+                            color: t.status === 'finished'
+                              ? 'var(--color-success-text)'
+                              : 'var(--color-text-faint)',
+                            textDecoration: t.status !== 'finished' ? 'line-through' : 'none',
+                          }}
+                        >
                           {peso(total)}
                         </span>
                       </div>
                     )}
 
+                    {/* Reopen */}
                     <div className="flex gap-2 pt-1">
                       {reopenConfirm === t.id ? (
                         <>
-                          <p className="text-xs text-amber-400 flex-1">Reopen this ticket?</p>
+                          <p
+                            className="text-body-xs font-semibold flex-1 self-center"
+                            style={{ color: 'var(--color-warn-text)' }}
+                          >
+                            Reopen this ticket?
+                          </p>
                           <button
                             onClick={() => handleReopen(t.id)}
-                            className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold"
+                            className="px-3 py-1.5 rounded-lg text-body-xs font-semibold"
+                            style={{ background: 'var(--color-warn)', color: '#fff', border: 'none' }}
                           >
                             Yes, Reopen
                           </button>
                           <button
                             onClick={() => setReopenConfirm(null)}
-                            className="px-3 py-1.5 rounded-lg bg-white/8 hover:bg-white/15 text-slate-300 text-xs font-semibold"
+                            className="px-3 py-1.5 rounded-lg text-body-xs font-semibold"
+                            style={{
+                              background: 'rgba(255,255,255,0.06)',
+                              border: '1px solid var(--color-border)',
+                              color: 'var(--color-text-muted)',
+                            }}
                           >
                             No
                           </button>
@@ -422,9 +581,14 @@ export function HistoryView() {
                       ) : (
                         <button
                           onClick={() => setReopenConfirm(t.id)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/8 hover:bg-white/15 text-slate-400 hover:text-white text-xs font-semibold transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-body-xs font-semibold"
+                          style={{
+                            background: 'rgba(255,255,255,0.05)',
+                            border: '1px solid var(--color-border)',
+                            color: 'var(--color-text-muted)',
+                          }}
                         >
-                          <RotateCcw size={12} />
+                          <RotateCcw size={11} />
                           Reopen
                         </button>
                       )}
@@ -437,7 +601,7 @@ export function HistoryView() {
         </div>
       )}
 
-      {/* Custom Calendar Picker Modal */}
+      {/* ── Calendar Modal ── */}
       {showCalendarModal && (
         <CalendarPickerModal
           selectedDate={selectedDate}

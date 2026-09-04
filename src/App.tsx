@@ -16,23 +16,51 @@ export function App() {
 
   if (!loaded) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#0d0f14]">
+      <div
+        className="flex h-full items-center justify-center"
+        style={{ background: 'var(--color-base)' }}
+      >
         {initError ? (
-          <div className="text-red-400 text-center p-8">
-            <p className="text-xl font-bold mb-2">Database error</p>
-            <p className="text-sm opacity-70">{initError}</p>
+          <div className="text-center p-8 space-y-2">
+            <p
+              className="text-heading-sm"
+              style={{ color: 'var(--color-error-text)' }}
+            >
+              Database error
+            </p>
+            <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+              {initError}
+            </p>
           </div>
         ) : (
-          <div className="text-slate-400 text-lg animate-pulse">Loading…</div>
+          <div className="flex flex-col items-center gap-3">
+            {/* Branded spinner */}
+            <div
+              className="w-8 h-8 rounded-full border-2 animate-spin"
+              style={{
+                borderColor: 'var(--color-border-strong)',
+                borderTopColor: 'var(--color-brand-light)',
+              }}
+            />
+            <p className="text-label-sm" style={{ color: 'var(--color-text-faint)' }}>
+              Loading…
+            </p>
+          </div>
         )}
       </div>
     );
   }
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#0d0f14]">
+    <div
+      className="flex h-full overflow-hidden"
+      style={{ background: 'var(--color-base)' }}
+    >
       {/* LEFT — Queue Board */}
-      <div className="w-[420px] min-w-[360px] flex-shrink-0 border-r border-white/8 overflow-y-auto">
+      <div
+        className="w-[420px] min-w-[360px] flex-shrink-0 overflow-y-auto"
+        style={{ borderRight: '1px solid var(--color-border)' }}
+      >
         <QueueBoard />
       </div>
 

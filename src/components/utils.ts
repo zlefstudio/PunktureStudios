@@ -37,31 +37,44 @@ export function waitingPosition(tickets: Ticket[], id: string): number {
 
 export function statusLabel(status: Ticket['status']): string {
   switch (status) {
-    case 'waiting': return 'Waiting';
-    case 'called': return 'Called';
+    case 'waiting':     return 'Waiting';
+    case 'called':      return 'Called';
     case 'in_progress': return 'In Progress';
-    case 'finished': return 'Finished';
-    case 'cancelled': return 'Cancelled';
+    case 'finished':    return 'Finished';
+    case 'cancelled':   return 'Cancelled';
   }
 }
 
-export function statusColor(status: Ticket['status']): string {
+/**
+ * Returns an inline-style object for the status badge.
+ * Used with the `.status-badge` CSS class in index.css.
+ */
+export function statusColor(status: Ticket['status']): React.CSSProperties {
   switch (status) {
-    case 'waiting': return 'text-blue-400 bg-blue-950/50';
-    case 'called': return 'text-amber-400 bg-amber-950/50';
-    case 'in_progress': return 'text-violet-400 bg-violet-950/50';
-    case 'finished': return 'text-emerald-400 bg-emerald-950/50';
-    case 'cancelled': return 'text-red-400 bg-red-950/50';
+    case 'waiting':
+      return { color: 'var(--color-status-waiting-text)', background: 'var(--color-status-waiting-bg)' };
+    case 'called':
+      return { color: 'var(--color-status-called-text)',  background: 'var(--color-status-called-bg)' };
+    case 'in_progress':
+      return { color: 'var(--color-status-active-text)',  background: 'var(--color-status-active-bg)' };
+    case 'finished':
+      return { color: 'var(--color-status-done-text)',    background: 'var(--color-status-done-bg)' };
+    case 'cancelled':
+      return { color: 'var(--color-status-cancelled-text)', background: 'var(--color-status-cancelled-bg)' };
   }
 }
 
+/**
+ * Returns the CSS custom-property value for the status border color.
+ * Use directly as a border-color string.
+ */
 export function statusBorder(status: Ticket['status']): string {
   switch (status) {
-    case 'waiting': return 'border-blue-800/50';
-    case 'called': return 'border-amber-700/60';
-    case 'in_progress': return 'border-violet-700/60';
-    case 'finished': return 'border-emerald-800/50';
-    case 'cancelled': return 'border-red-800/50';
+    case 'waiting':     return 'rgba(37,99,235,0.28)';
+    case 'called':      return 'rgba(217,119,6,0.35)';
+    case 'in_progress': return 'rgba(109,40,217,0.40)';
+    case 'finished':    return 'rgba(5,150,105,0.28)';
+    case 'cancelled':   return 'rgba(185,28,28,0.28)';
   }
 }
 
@@ -105,9 +118,9 @@ export function formatJewelryName(label: string): string {
 export function buildBreakdownText(ticket: Ticket, items: PiercingItem[]): string {
   const header = `${ticket.name} (#${ticket.ticketNumber})`;
   const lines = items.map((item) => {
-    const member = item.memberLabel ? `${item.memberLabel} - ` : '';
+    const member  = item.memberLabel ? `${item.memberLabel} - ` : '';
     const upgrade = item.upgradePrice === 0 ? 'Free' : formatJewelryName(item.upgradeLabel);
-    const total = (item.basePrice + item.upgradePrice) * item.quantity;
+    const total   = (item.basePrice + item.upgradePrice) * item.quantity;
     return `- ${member}${item.placementName} - ${item.basePrice} + ${upgrade} x${item.quantity} = ${total}`;
   });
   const total = calcTotal(items);

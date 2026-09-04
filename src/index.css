@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   CUSTOM FONT — Sanguine Frost (display / brand wordmark)
+───────────────────────────────────────────────────────────────────────────── */
 @font-face {
   font-family: 'Sanguine Frost';
   src: local('Sanguine Frost'), url('/fonts/SanguineFrost.ttf') format('truetype');
@@ -8,15 +11,96 @@
   font-display: swap;
 }
 
-.font-sanguine {
-  font-family: 'Sanguine Frost', system-ui, sans-serif;
+/* ─────────────────────────────────────────────────────────────────────────────
+   DESIGN TOKENS — single source of truth
+   All components reference these; no raw hex values in component files.
+───────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Fonts */
+  --font-sans:    'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Sanguine Frost', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+
+  /* ── Backgrounds ── */
+  --color-base:    #0c0e13;   /* deepest — page root */
+  --color-surface: #111520;   /* raised panels, headers */
+  --color-overlay: #161a26;   /* modals, popovers */
+  --color-muted:   #1b1f2e;   /* subtle card backgrounds */
+
+  /* ── Borders ── */
+  --color-border:        rgba(255,255,255,0.07);
+  --color-border-subtle: rgba(255,255,255,0.05);
+  --color-border-strong: rgba(255,255,255,0.13);
+
+  /* ── Text ── */
+  --color-text:       #e8eaf0;  /* primary */
+  --color-text-muted: #8892aa;  /* secondary labels */
+  --color-text-faint: #444d6a;  /* placeholders, disabled */
+
+  /* ── Brand — Violet ── */
+  --color-brand:        #7c3aed;
+  --color-brand-light:  #8b5cf6;
+  --color-brand-hover:  #6d28d9;
+  --color-brand-subtle: rgba(124, 58, 237, 0.14);
+  --color-brand-ring:   rgba(139, 92, 246, 0.35);
+  --color-brand-text:   #c4b5fd;
+  --color-brand-bg:     rgba(109, 40, 217, 0.18);  /* deep bg tint */
+
+  /* ── Success — Emerald ── */
+  --color-success:        #059669;
+  --color-success-hover:  #10b981;
+  --color-success-text:   #34d399;
+  --color-success-bg:     rgba(5, 150, 105, 0.12);
+  --color-success-ring:   rgba(52, 211, 153, 0.30);
+
+  /* ── Warning — Amber ── */
+  --color-warn:        #d97706;
+  --color-warn-hover:  #f59e0b;
+  --color-warn-text:   #fbbf24;
+  --color-warn-bg:     rgba(217, 119, 6, 0.12);
+  --color-warn-ring:   rgba(251, 191, 36, 0.25);
+
+  /* ── Error — Red ── */
+  --color-error:        #b91c1c;
+  --color-error-hover:  #dc2626;
+  --color-error-text:   #f87171;
+  --color-error-bg:     rgba(185, 28, 28, 0.14);
+  --color-error-ring:   rgba(248, 113, 113, 0.25);
+
+  /* ── Status semantic colors ── */
+  --color-status-waiting-text:  #60a5fa;
+  --color-status-waiting-bg:    rgba(37, 99, 235, 0.14);
+  --color-status-called-text:   #fbbf24;
+  --color-status-called-bg:     rgba(217, 119, 6, 0.14);
+  --color-status-active-text:   #a78bfa;
+  --color-status-active-bg:     rgba(109, 40, 217, 0.18);
+  --color-status-done-text:     #34d399;
+  --color-status-done-bg:       rgba(5, 150, 105, 0.14);
+  --color-status-cancelled-text:#f87171;
+  --color-status-cancelled-bg:  rgba(185, 28, 28, 0.14);
+
+  /* ── Shadows ── */
+  --shadow-sm:      0 1px 3px rgba(0,0,0,0.35);
+  --shadow-md:      0 4px 12px rgba(0,0,0,0.45);
+  --shadow-lg:      0 8px 28px rgba(0,0,0,0.55);
+  --shadow-brand:   0 4px 20px rgba(124, 58, 237, 0.28);
+  --shadow-success: 0 4px 20px rgba(5, 150, 105, 0.28);
+
+  /* ── Motion ── */
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   GLOBAL BASE STYLES
+───────────────────────────────────────────────────────────────────────────── */
 :root {
   color-scheme: dark;
 }
 
-* {
+*, *::before, *::after {
   box-sizing: border-box;
 }
 
@@ -24,26 +108,170 @@ html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
-  background: #0d0f14;
-  color: #e8eaf0;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--color-base);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar styling */
+/* ── Font Utility Classes ── */
+.font-sanguine {
+  font-family: var(--font-display);
+}
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TYPE SCALE UTILITIES  (@layer utilities keeps specificity low)
+───────────────────────────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Label styles — always uppercase, tight tracking */
+  .text-label-xs {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .text-label-sm {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .text-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  /* Body / UI text — no transform */
+  .text-body-xs  { font-size: 11px; font-weight: 400; }
+  .text-body-sm  { font-size: 13px; font-weight: 400; }
+  .text-body     { font-size: 14px; font-weight: 400; }
+  .text-ui-sm    { font-size: 12px; font-weight: 500; }
+  .text-ui       { font-size: 14px; font-weight: 500; }
+
+  /* Heading / display */
+  .text-heading-sm  { font-size: 16px; font-weight: 700; line-height: 1.25; }
+  .text-heading     { font-size: 20px; font-weight: 800; line-height: 1.2;  }
+  .text-display-sm  { font-size: 24px; font-weight: 900; line-height: 1.15; }
+  .text-display     { font-size: 32px; font-weight: 900; line-height: 1.1;  }
+  .text-display-lg  { font-size: 40px; font-weight: 900; line-height: 1.05; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SCROLLBAR
+───────────────────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #1a1d27;
+  background: var(--color-surface);
 }
 ::-webkit-scrollbar-thumb {
-  background: #3a3d4d;
-  border-radius: 3px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.22);
 }
 
-/* Focus ring */
+/* ─────────────────────────────────────────────────────────────────────────────
+   FOCUS RING — brand violet, consistent everywhere
+───────────────────────────────────────────────────────────────────────────── */
 :focus-visible {
-  outline: 2px solid #818cf8;
+  outline: 2px solid var(--color-brand-light);
   outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   INTERACTIVE BASELINE — smooth transitions on all buttons/inputs
+───────────────────────────────────────────────────────────────────────────── */
+button, input, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+button {
+  cursor: pointer;
+  transition: background-color var(--duration-base) var(--ease-out),
+              border-color var(--duration-base) var(--ease-out),
+              color var(--duration-base) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out),
+              opacity var(--duration-base) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SHARED COMPONENT CLASSES   (reduce repetition in TSX files)
+───────────────────────────────────────────────────────────────────────────── */
+
+/* Input — used across all forms */
+.input {
+  width: 100%;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--color-text);
+  outline: none;
+  transition: border-color var(--duration-base) var(--ease-out),
+              background var(--duration-base) var(--ease-out);
+}
+.input::placeholder {
+  color: var(--color-text-faint);
+}
+.input:focus {
+  border-color: var(--color-brand);
+  background: rgba(255,255,255,0.08);
+}
+
+/* Ghost button — secondary actions */
+.btn-ghost {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.btn-ghost:hover {
+  background: rgba(255,255,255,0.11);
+  color: var(--color-text);
+}
+
+/* Status badge pill */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Card base */
+.card {
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  background: var(--color-muted);
 }
