@@ -144,7 +144,8 @@ export function HistoryView() {
     padding: '12px 14px',
     border: '1px solid var(--color-border)',
     background: 'rgba(255,255,255,0.03)',
-    transition: 'background 200ms, border-color 200ms, box-shadow 200ms',
+    transition:
+      'background 200ms, border-color 200ms, box-shadow 200ms, transform 180ms cubic-bezier(0.16, 1, 0.3, 1), filter 180ms',
   };
   const navBtnStyle: React.CSSProperties = {
     padding: '8px',
@@ -243,6 +244,7 @@ export function HistoryView() {
 
         {/* Today's Income banner */}
         <div
+          className="clickable-card"
           onClick={() => setTimeFilter('date')}
           style={{
             ...filterCardBase,
@@ -275,6 +277,7 @@ export function HistoryView() {
         <div className="grid grid-cols-2 gap-2">
           {/* This Month */}
           <div
+            className="clickable-card"
             onClick={() => setTimeFilter('month')}
             style={{
               ...filterCardBase,
@@ -303,6 +306,7 @@ export function HistoryView() {
 
           {/* All Time */}
           <div
+            className="clickable-card"
             onClick={() => setTimeFilter('all')}
             style={{
               ...filterCardBase,

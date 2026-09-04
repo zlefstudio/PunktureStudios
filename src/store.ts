@@ -21,6 +21,7 @@ interface AppState {
   callTicket: (id: string) => Promise<void>;
   callNext: () => Promise<void>;
   startPiercing: (id: string) => Promise<void>;
+  cancelSession: (id: string) => Promise<void>;
   finishTicket: (id: string) => Promise<void>;
   cancelTicket: (id: string) => Promise<void>;
   sendToEnd: (id: string) => Promise<void>;
@@ -128,6 +129,29 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => ({
       tickets: s.tickets.map((t) =>
         t.id === id ? { ...t, status: 'in_progress', startedAt: now } : t
+      ),
+    }));
+  },
+
+  cancelSession: async (id: string) => {
+    const currentWaiting = sortWaiting(get().tickets.filter((t) => t.id !== id));
+    // Set queueOrder lower than any existing waiting ticket so it becomes Queue #1
+    let queueOrder = 0;
+    if (currentWaiting.length > 0) {
+      const minKey = Math.min(...currentWaiting.map((t) => t.queueOrder ?? t.createdAt));
+      queueOrder = minKey - 1;
+    }
+    await db.tickets.update(id, {
+      status: 'waiting',
+      queueOrder,
+      startedAt: undefined,
+      calledAt: undefined,
+    });
+    set((s) => ({
+      tickets: s.tickets.map((t) =>
+        t.id === id
+          ? { ...t, status: 'waiting', queueOrder, startedAt: undefined, calledAt: undefined }
+          : t
       ),
     }));
   },

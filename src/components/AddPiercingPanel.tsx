@@ -91,6 +91,18 @@ export function AddPiercingPanel({ ticket }: Props) {
                     color: 'var(--color-text-faint)',
                   }
               }
+              onMouseEnter={(e) => {
+                if (isActive) return;
+                const el = e.currentTarget;
+                el.style.background = 'rgba(255,255,255,0.08)';
+                el.style.color = 'var(--color-text-muted)';
+              }}
+              onMouseLeave={(e) => {
+                if (isActive) return;
+                const el = e.currentTarget;
+                el.style.background = 'transparent';
+                el.style.color = 'var(--color-text-faint)';
+              }}
             >
               {TAB_LABELS[cat]}
             </button>
@@ -111,6 +123,16 @@ export function AddPiercingPanel({ ticket }: Props) {
                   background: 'rgba(120,53,15,0.30)',
                   border: '1px solid rgba(217,119,6,0.30)',
                   color: 'var(--color-warn-text)',
+                }}
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget;
+                  el.style.background = 'rgba(217,119,6,0.24)';
+                  el.style.borderColor = 'rgba(251,191,36,0.60)';
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget;
+                  el.style.background = 'rgba(120,53,15,0.30)';
+                  el.style.borderColor = 'rgba(217,119,6,0.30)';
                 }}
               >
                 <span>💍</span>

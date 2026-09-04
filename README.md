@@ -10,7 +10,7 @@ No cloud, no backend, no internet required. All data lives in your browser's Ind
 - **FIFO queue** — first added, first served. Position numbers visible on every waiting card.
 - **↕ Drag-to-reorder queue** — grab any waiting card and glide it up/down to fix the line order instantly (premium Spotify-style motion). Order survives reloads & backups.
 - **Auto-open upon saving** — adding a client immediately opens their active workspace for zero-delay order taking.
-- **Now Serving banner** — large display of called/in-progress tickets so walk-up clients know who's next.
+- **⚡ In Progress = Now Serving** — the moment you hit *Start Piercing*, the ticket lives in exactly one place (the In Progress section) with a live session timer/progress bar — no duplicated banners, no confusion.
 - **One-tap piercing catalog** — 30+ placements across Ear / Oral / Face / Body + Custom free-text.
 - **💍 Standalone Jewelry sales** — separate jewelry tab with all upgrade tiers (Free excluded).
 - **Clear all button** — single-tap to clear all items on an active ticket.
@@ -96,6 +96,9 @@ Waiting → Called → In Progress → Finished
 - **Call Next** (top-right) calls the oldest waiting ticket automatically.
 - Any waiting ticket can also be called manually from the workspace.
 - Multiple called / in-progress tickets are supported for two piercers.
+- Once you hit **Start Piercing**, the ticket is shown **only** in the ⚡ In Progress section (which doubles as the Now Serving display) so nothing appears twice.
+- **Cancel Session** (workspace, when In Progress) — aborts the session and puts the client straight back at the front of the waiting queue.
+- **Cancel Ticket** (always, side-by-side with Cancel Session) — permanently cancels the ticket (client won't be pierced).
 
 ### Reordering the waiting line
 

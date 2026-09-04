@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Clock } from 'lucide-react';
 import { useStore } from '../store';
+import { useQueueWaitEstimates } from '../timeEstimate';
 import {
   formatTime,
   calcTotal,
@@ -28,6 +29,13 @@ export function TicketCard({ ticket, reorderable = false, dragging = false }: Ti
   const tickets         = useStore((s) => s.tickets);
   const setActiveTicket = useStore((s) => s.setActiveTicket);
   const activeTicketId  = useStore((s) => s.activeTicketId);
+
+  const { estimates, inProgressEstimate } = useQueueWaitEstimates();
+  const waitEstimate = ticket.status === 'waiting' ? estimates.get(ticket.id) : undefined;
+  const activeIpEstimate =
+    ticket.status === 'in_progress' && inProgressEstimate?.ticketId === ticket.id
+      ? inProgressEstimate
+      : undefined;
 
   const myItems  = ticketItems(items, ticket.id);
   const total    = calcTotal(myItems);
@@ -61,7 +69,7 @@ export function TicketCard({ ticket, reorderable = false, dragging = false }: Ti
   return (
     <button
       onClick={() => setActiveTicket(ticket.id)}
-      className={`group w-full text-left rounded-xl p-3 transition-colors ${
+      className={`group w-full text-left rounded-xl p-3 transition duration-200 ease-out ${
         reorderable && !dragging ? 'cursor-grab' : ''
       }`}
       style={style}
@@ -139,6 +147,128 @@ export function TicketCard({ ticket, reorderable = false, dragging = false }: Ti
           </span>
         )}
       </div>
+
+      {/* Row 3: Live Estimated Wait Time / Active Session */}
+      {ticket.status === 'waiting' && waitEstimate && (
+        <div
+          className={`flex items-center justify-between gap-1.5 mt-2 px-2 py-1 rounded-lg time-text-transition ${
+            waitEstimate.waitMinutes === 0 ? 'next-pill-glow' : ''
+          }`}
+          style={{
+            background:
+              waitEstimate.waitMinutes === 0
+                ? 'rgba(16,185,129,0.10)'
+                : 'rgba(255,255,255,0.04)',
+            border:
+              waitEstimate.waitMinutes === 0
+                ? '1px solid rgba(16,185,129,0.28)'
+                : '1px solid rgba(255,255,255,0.07)',
+            fontSize: '11px',
+          }}
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            {waitEstimate.waitMinutes === 0 ? (
+              <span className="relative flex h-2 w-2 flex-shrink-0">
+                <span className="sonar-ring absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+            ) : (
+              <Clock
+                size={12}
+                className="clock-live-tick text-blue-400 flex-shrink-0"
+              />
+            )}
+            <span
+              className="font-medium tracking-tight truncate time-text-transition"
+              style={{
+                color:
+                  waitEstimate.waitMinutes === 0
+                    ? '#34d399'
+                    : 'var(--color-text-muted)',
+              }}
+            >
+              {waitEstimate.formattedEstimate}
+              {waitEstimate.waitMinutes === 0 ? ' · Next' : ''}
+            </span>
+          </div>
+          <span
+            className="flex-shrink-0 font-mono"
+            style={{ fontSize: '10px', color: 'var(--color-text-faint)' }}
+          >
+            ~{waitEstimate.ownDuration}m
+          </span>
+        </div>
+      )}
+
+      {ticket.status === 'in_progress' && activeIpEstimate && (
+        <div
+          className="flex flex-col gap-1.5 mt-2 px-2 py-1.5 rounded-lg time-pill-glow time-text-transition"
+          style={{
+            background: activeIpEstimate.isOvertime
+              ? 'rgba(239,68,68,0.10)'
+              : 'rgba(139,92,246,0.12)',
+            border: activeIpEstimate.isOvertime
+              ? '1px solid rgba(239,68,68,0.30)'
+              : '1px solid rgba(139,92,246,0.28)',
+            fontSize: '11px',
+          }}
+        >
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="relative flex h-2 w-2 flex-shrink-0">
+                <span
+                  className="sonar-ring absolute inline-flex h-full w-full rounded-full opacity-75"
+                  style={{ background: activeIpEstimate.isOvertime ? '#ef4444' : '#a855f7' }}
+                />
+                <span
+                  className="relative inline-flex rounded-full h-2 w-2"
+                  style={{ background: activeIpEstimate.isOvertime ? '#ef4444' : '#c084fc' }}
+                />
+              </span>
+              <span
+                className="font-medium tracking-tight truncate"
+                style={{
+                  color: activeIpEstimate.isOvertime ? '#f87171' : '#c084fc',
+                }}
+              >
+                {activeIpEstimate.isOvertime
+                  ? `Overtime (+${activeIpEstimate.elapsedMinutes - activeIpEstimate.totalDuration}m)`
+                  : `~${activeIpEstimate.remainingMinutes}m remaining`}
+              </span>
+            </div>
+            <span
+              className="flex-shrink-0 font-mono"
+              style={{ fontSize: '10px', color: 'var(--color-text-faint)' }}
+            >
+              {activeIpEstimate.elapsedMinutes}m / ~{activeIpEstimate.totalDuration}m
+            </span>
+          </div>
+
+          {/* Mini progressing track */}
+          <div
+            className="w-full h-1 rounded-full overflow-hidden"
+            style={{ background: 'rgba(255,255,255,0.08)' }}
+          >
+            <div
+              className="h-full rounded-full progress-flow-stripes transition-all duration-700 ease-out"
+              style={{
+                width: `${Math.min(
+                  100,
+                  Math.max(
+                    8,
+                    Math.round(
+                      (activeIpEstimate.elapsedMinutes / activeIpEstimate.totalDuration) * 100
+                    )
+                  )
+                )}%`,
+                background: activeIpEstimate.isOvertime
+                  ? 'linear-gradient(90deg, #ef4444, #f87171)'
+                  : 'linear-gradient(90deg, #7c3aed, #a855f7)',
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Notes */}
       {ticket.notes && (

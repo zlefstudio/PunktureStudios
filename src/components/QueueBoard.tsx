@@ -4,7 +4,6 @@ import { useStore } from '../store';
 import { sortWaiting } from '../queue';
 import { TicketCard } from './TicketCard';
 import { WaitingQueueList } from './WaitingQueueList';
-import { NowServingBanner } from './NowServingBanner';
 import { HistoryView } from './HistoryView';
 import { BackupView } from './BackupView';
 import logoImg from '../assets/logo.png';
@@ -125,9 +124,6 @@ export function QueueBoard() {
       {/* ── Tab content ── */}
       {tab === 'active' && (
         <div className="flex flex-col flex-1 overflow-hidden">
-          {/* Now Serving */}
-          <NowServingBanner />
-
           {/* Add client */}
           <div
             className="px-4 py-3 flex-shrink-0"
