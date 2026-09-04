@@ -8,6 +8,7 @@ No cloud, no backend, no internet required. All data lives in your browser's Ind
 ## Features at a glance
 
 - **FIFO queue** — first added, first served. Position numbers visible on every waiting card.
+- **↕ Drag-to-reorder queue** — grab any waiting card and glide it up/down to fix the line order instantly (premium Spotify-style motion). Order survives reloads & backups.
 - **Auto-open upon saving** — adding a client immediately opens their active workspace for zero-delay order taking.
 - **Now Serving banner** — large display of called/in-progress tickets so walk-up clients know who's next.
 - **One-tap piercing catalog** — 30+ placements across Ear / Oral / Face / Body + Custom free-text.
@@ -96,6 +97,16 @@ Waiting → Called → In Progress → Finished
 - Any waiting ticket can also be called manually from the workspace.
 - Multiple called / in-progress tickets are supported for two piercers.
 
+### Reordering the waiting line
+
+1. The **Waiting** section shows a ⋮⋮ grip and a *drag to reorder* hint.
+2. **Mouse / trackpad:** press and hold anywhere on a waiting card, then drag it up or down. Other cards slide out of the way to preview the new line, and the list auto-scrolls near the edges.
+3. **Touch:** press and drag the ⋮⋮ grip handle on the right of the card.
+4. Release to drop — the card settles into place with a smooth animation.
+5. **Call Next** and the position badges (1, 2, 3…) follow the new order automatically.
+
+> Reordering is disabled while a search is active (search shows a filtered subset).
+
 ### Finishing a ticket
 
 1. Add at least one piercing item.
@@ -148,7 +159,7 @@ When a ticket is in **Called** status:
 All data is stored in **IndexedDB** (browser storage, not cookies, not localStorage).
 
 ```
-tickets: id, ticketNumber, name, status, piercer, notes, timestamps...
+tickets: id, ticketNumber, name, status, piercer, notes, timestamps, queueOrder...
 items:   id, ticketId, memberLabel, placementName, basePrice, upgradeLabel, upgradePrice, quantity
 ```
 

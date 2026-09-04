@@ -1,7 +1,9 @@
 import { useState, type KeyboardEvent } from 'react';
 import { UserPlus, Search, X } from 'lucide-react';
 import { useStore } from '../store';
+import { sortWaiting } from '../queue';
 import { TicketCard } from './TicketCard';
+import { WaitingQueueList } from './WaitingQueueList';
 import { NowServingBanner } from './NowServingBanner';
 import { HistoryView } from './HistoryView';
 import { BackupView } from './BackupView';
@@ -19,6 +21,7 @@ export function QueueBoard() {
   const tickets        = useStore((s) => s.tickets);
   const addTicket      = useStore((s) => s.addTicket);
   const setActiveTicket = useStore((s) => s.setActiveTicket);
+  const moveWaitingTicket = useStore((s) => s.moveWaitingTicket);
 
   const [name,    setName]    = useState('');
   const [notes,   setNotes]   = useState('');
@@ -53,7 +56,8 @@ export function QueueBoard() {
       );
     });
 
-  const waiting    = filtered(['waiting']).sort((a, b) => a.createdAt - b.createdAt);
+  const waiting    = sortWaiting(filtered(['waiting']));
+  const canReorder = q.length === 0;
   const called     = filtered(['called']).sort((a, b) => (a.calledAt ?? 0) - (b.calledAt ?? 0));
   const inProgress = filtered(['in_progress']).sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
 
@@ -244,13 +248,22 @@ export function QueueBoard() {
             )}
 
             {/* Waiting */}
-            <Section label="🕐 Waiting" count={waiting.length} tokenColor="var(--color-status-waiting-text)">
+            <Section
+              label="🕐 Waiting"
+              count={waiting.length}
+              tokenColor="var(--color-status-waiting-text)"
+              hint={canReorder && waiting.length > 1 ? 'drag to reorder' : undefined}
+            >
               {waiting.length === 0 ? (
                 <p className="text-center text-body-sm py-6" style={{ color: 'var(--color-text-faint)' }}>
                   No waiting clients
                 </p>
               ) : (
-                waiting.map((t) => <TicketCard key={t.id} ticket={t} />)
+                <WaitingQueueList
+                  tickets={waiting}
+                  disabled={!canReorder}
+                  onReorder={(id, toIndex) => moveWaitingTicket(id, toIndex)}
+                />
               )}
             </Section>
 
@@ -269,11 +282,13 @@ function Section({
   label,
   count,
   tokenColor,
+  hint,
   children,
 }: {
   label: string;
   count: number;
   tokenColor: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -286,6 +301,14 @@ function Section({
         >
           {count}
         </span>
+        {hint && (
+          <span
+            className="ml-auto text-label-xs font-normal"
+            style={{ color: 'var(--color-text-faint)', textTransform: 'none', letterSpacing: '0.02em' }}
+          >
+            {hint}
+          </span>
+        )}
       </div>
       <div className="space-y-2">{children}</div>
     </div>

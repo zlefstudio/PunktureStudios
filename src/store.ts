@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { db } from './db';
 import type { Ticket, PiercingItem } from './types';
+import { sortWaiting, nextWaitingToken } from './queue';
 
 function newId(): string {
   return crypto.randomUUID();
@@ -23,6 +24,7 @@ interface AppState {
   finishTicket: (id: string) => Promise<void>;
   cancelTicket: (id: string) => Promise<void>;
   sendToEnd: (id: string) => Promise<void>;
+  moveWaitingTicket: (id: string, toIndex: number) => Promise<void>;
   updateTicketNotes: (id: string, notes: string) => Promise<void>;
   reopenTicket: (id: string) => Promise<void>;
   clearHistoryAndResetNumbering: () => Promise<void>;
@@ -47,6 +49,32 @@ async function nextTicketNumber(): Promise<number> {
   return (all?.ticketNumber ?? 0) + 1;
 }
 
+/**
+ * One-time migration / hygiene pass: every waiting ticket gets a contiguous
+ * `queueOrder` (0..n-1) so legacy rows without the field sort correctly
+ * against newly created tickets. Returns the updated ticket array.
+ */
+async function normalizeWaitingOrder(tickets: Ticket[]): Promise<Ticket[]> {
+  const waiting = sortWaiting(tickets);
+  const indexById = new Map(waiting.map((t, i) => [t.id, i]));
+  const changed = waiting.filter((t, i) => t.queueOrder !== i);
+  if (changed.length === 0) return tickets;
+
+  await db.tickets.bulkUpdate(
+    changed.map((t) => ({
+      key: t.id,
+      changes: { queueOrder: indexById.get(t.id)! },
+    }))
+  );
+
+  return tickets.map((t) => {
+    if (t.status === 'waiting' && indexById.has(t.id)) {
+      return { ...t, queueOrder: indexById.get(t.id) };
+    }
+    return t;
+  });
+}
+
 export const useStore = create<AppState>((set, get) => ({
   tickets: [],
   items: [],
@@ -54,10 +82,11 @@ export const useStore = create<AppState>((set, get) => ({
   loaded: false,
 
   loadAll: async () => {
-    const [tickets, rawItems] = await Promise.all([
+    let [tickets, rawItems] = await Promise.all([
       db.tickets.orderBy('createdAt').toArray(),
       db.items.toArray(), // createdAt is not indexed on items; sort in memory
     ]);
+    tickets = await normalizeWaitingOrder(tickets);
     const items = rawItems.sort((a, b) => a.createdAt - b.createdAt);
     set({ tickets, items, loaded: true });
   },
@@ -71,6 +100,7 @@ export const useStore = create<AppState>((set, get) => ({
       status: 'waiting',
       notes: notes?.trim() || undefined,
       createdAt: Date.now(),
+      queueOrder: nextWaitingToken(get().tickets),
     };
     await db.tickets.add(ticket);
     set((s) => ({ tickets: [...s.tickets, ticket] }));
@@ -88,10 +118,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   callNext: async () => {
-    const { tickets } = get();
-    const next = tickets
-      .filter((t) => t.status === 'waiting')
-      .sort((a, b) => a.createdAt - b.createdAt)[0];
+    const next = sortWaiting(get().tickets)[0];
     if (next) await get().callTicket(next.id);
   },
 
@@ -129,23 +156,49 @@ export const useStore = create<AppState>((set, get) => ({
 
   sendToEnd: async (id) => {
     const now = Date.now();
+    const queueOrder = nextWaitingToken(get().tickets);
     // Reset to waiting with new createdAt so it joins end of queue
     await db.tickets.update(id, {
       status: 'waiting',
       createdAt: now,
+      queueOrder,
       calledAt: undefined,
       startedAt: undefined,
     });
     set((s) => ({
       tickets: s.tickets.map((t) =>
         t.id === id
-          ? { ...t, status: 'waiting', createdAt: now, calledAt: undefined, startedAt: undefined }
+          ? { ...t, status: 'waiting', createdAt: now, queueOrder, calledAt: undefined, startedAt: undefined }
           : t
       ),
     }));
   },
 
+  moveWaitingTicket: async (id, toIndex) => {
+    const { tickets } = get();
+    const ordered = sortWaiting(tickets);
+    const from = ordered.findIndex((t) => t.id === id);
+    if (from === -1) return;
+    const without = ordered.filter((t) => t.id !== id);
+    const target = Math.max(0, Math.min(toIndex, without.length));
+    if (target === from) return;
+    const nextOrder = [...without.slice(0, target), ordered[from], ...without.slice(target)];
 
+    const indexById = new Map(nextOrder.map((t, i) => [t.id, i]));
+    // Optimistic + synchronous: the UI (drag FLIP animation) reads the new
+    // order immediately; the IndexedDB write happens right after.
+    set((s) => ({
+      tickets: s.tickets.map((t) =>
+        indexById.has(t.id) ? { ...t, queueOrder: indexById.get(t.id) } : t
+      ),
+    }));
+
+    await db.transaction('rw', db.tickets, async () => {
+      for (let i = 0; i < nextOrder.length; i++) {
+        await db.tickets.update(nextOrder[i].id, { queueOrder: i });
+      }
+    });
+  },
 
   updateTicketNotes: async (id, notes) => {
     const val = notes.trim() || undefined;
@@ -159,9 +212,11 @@ export const useStore = create<AppState>((set, get) => ({
 
   reopenTicket: async (id) => {
     const now = Date.now();
+    const queueOrder = nextWaitingToken(get().tickets);
     await db.tickets.update(id, {
       status: 'waiting',
       createdAt: now,
+      queueOrder,
       finishedAt: undefined,
       cancelledAt: undefined,
       calledAt: undefined,
@@ -174,6 +229,7 @@ export const useStore = create<AppState>((set, get) => ({
               ...t,
               status: 'waiting',
               createdAt: now,
+              queueOrder,
               finishedAt: undefined,
               cancelledAt: undefined,
               calledAt: undefined,
@@ -199,6 +255,7 @@ export const useStore = create<AppState>((set, get) => ({
       .map((t, index) => ({
         ...t,
         ticketNumber: index + 1,
+        queueOrder: index,
       }));
 
     await db.transaction('rw', db.tickets, db.items, async () => {
@@ -209,7 +266,7 @@ export const useStore = create<AppState>((set, get) => ({
       }
       // Re-index remaining active tickets in db
       for (const t of activeTickets) {
-        await db.tickets.update(t.id, { ticketNumber: t.ticketNumber });
+        await db.tickets.update(t.id, { ticketNumber: t.ticketNumber, queueOrder: t.queueOrder });
       }
     });
 
@@ -261,6 +318,8 @@ export const useStore = create<AppState>((set, get) => ({
       await db.tickets.bulkAdd(tickets);
       await db.items.bulkAdd(items);
     });
-    set({ tickets, items, activeTicketId: null });
+    // Normalize queue order for backups created before reordering existed.
+    const normalized = await normalizeWaitingOrder(tickets);
+    set({ tickets: normalized, items, activeTicketId: null });
   },
 }));

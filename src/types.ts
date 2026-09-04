@@ -12,6 +12,11 @@ export interface Ticket {
   status: TicketStatus;
   notes?: string;
   createdAt: number; // epoch ms
+  /**
+   * Manual position inside the WAITING queue (0 = front of the line).
+   * Lower values are served first. Set by drag-and-drop reordering.
+   */
+  queueOrder?: number;
   calledAt?: number;
   startedAt?: number;
   finishedAt?: number;

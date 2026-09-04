@@ -1,4 +1,5 @@
 import type { Ticket, PiercingItem } from '../types';
+import { sortWaiting } from '../queue';
 
 export function formatTime(epoch: number): string {
   return new Date(epoch).toLocaleTimeString('en-PH', {
@@ -29,9 +30,7 @@ export function peso(n: number): string {
 }
 
 export function waitingPosition(tickets: Ticket[], id: string): number {
-  const sorted = tickets
-    .filter((t) => t.status === 'waiting')
-    .sort((a, b) => a.createdAt - b.createdAt);
+  const sorted = sortWaiting(tickets);
   return sorted.findIndex((t) => t.id === id) + 1;
 }
 
