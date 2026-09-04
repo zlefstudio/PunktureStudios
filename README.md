@@ -10,7 +10,7 @@ No cloud, no backend, no internet required. All data lives in your browser's Ind
 - **FIFO queue** — first added, first served. Position numbers visible on every waiting card.
 - **↕ Drag-to-reorder queue** — grab any waiting card and glide it up/down to fix the line order instantly (premium Spotify-style motion). Order survives reloads & backups.
 - **Auto-open upon saving** — adding a client immediately opens their active workspace for zero-delay order taking.
-- **⚡ In Progress = Now Serving** — the moment you hit *Start Piercing*, the ticket lives in exactly one place (the In Progress section) with a live session timer/progress bar — no duplicated banners, no confusion.
+- **⚡ In Progress = Now Serving** — the moment you hit *Start Piercing*, the ticket lives in exactly one place (the In Progress section) wrapped in a soft **moving light halo** (Session Aura) with a live session timer — no duplicated banners, no loading-bar look, no confusion.
 - **One-tap piercing catalog** — 30+ placements across Ear / Oral / Face / Body + Custom free-text.
 - **💍 Standalone Jewelry sales** — separate jewelry tab with all upgrade tiers (Free excluded).
 - **Clear all button** — single-tap to clear all items on an active ticket.

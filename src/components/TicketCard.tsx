@@ -67,6 +67,11 @@ export function TicketCard({ ticket, reorderable = false, dragging = false }: Ti
     : baseStyle;
 
   return (
+    <div
+      className={`session-aura relative rounded-xl ${
+        ticket.status === 'in_progress' ? 'aura-active' : ''
+      } ${activeIpEstimate?.isOvertime ? 'is-overtime' : ''}`}
+    >
     <button
       onClick={() => setActiveTicket(ticket.id)}
       className={`group w-full text-left rounded-xl p-3 transition duration-200 ease-out ${
@@ -200,73 +205,52 @@ export function TicketCard({ ticket, reorderable = false, dragging = false }: Ti
         </div>
       )}
 
-      {ticket.status === 'in_progress' && activeIpEstimate && (
+      {/* Row 3: Live session status (In Progress) */}
+      {ticket.status === 'in_progress' && (
         <div
-          className="flex flex-col gap-1.5 mt-2 px-2 py-1.5 rounded-lg time-pill-glow time-text-transition"
+          className="flex items-center justify-between gap-1.5 mt-2 px-2.5 py-1.5 rounded-lg time-text-transition"
           style={{
-            background: activeIpEstimate.isOvertime
+            background: activeIpEstimate?.isOvertime
               ? 'rgba(239,68,68,0.10)'
-              : 'rgba(139,92,246,0.12)',
-            border: activeIpEstimate.isOvertime
-              ? '1px solid rgba(239,68,68,0.30)'
-              : '1px solid rgba(139,92,246,0.28)',
+              : 'rgba(139,92,246,0.10)',
+            border: activeIpEstimate?.isOvertime
+              ? '1px solid rgba(239,68,68,0.28)'
+              : '1px solid rgba(139,92,246,0.22)',
             fontSize: '11px',
           }}
         >
-          <div className="flex items-center justify-between gap-1.5">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="relative flex h-2 w-2 flex-shrink-0">
-                <span
-                  className="sonar-ring absolute inline-flex h-full w-full rounded-full opacity-75"
-                  style={{ background: activeIpEstimate.isOvertime ? '#ef4444' : '#a855f7' }}
-                />
-                <span
-                  className="relative inline-flex rounded-full h-2 w-2"
-                  style={{ background: activeIpEstimate.isOvertime ? '#ef4444' : '#c084fc' }}
-                />
-              </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="relative flex h-2 w-2 flex-shrink-0">
               <span
-                className="font-medium tracking-tight truncate"
-                style={{
-                  color: activeIpEstimate.isOvertime ? '#f87171' : '#c084fc',
-                }}
-              >
-                {activeIpEstimate.isOvertime
-                  ? `Overtime (+${activeIpEstimate.elapsedMinutes - activeIpEstimate.totalDuration}m)`
-                  : `~${activeIpEstimate.remainingMinutes}m remaining`}
-              </span>
-            </div>
+                className="sonar-ring absolute inline-flex h-full w-full rounded-full opacity-75"
+                style={{ background: activeIpEstimate?.isOvertime ? '#ef4444' : '#a855f7' }}
+              />
+              <span
+                className="relative inline-flex rounded-full h-2 w-2"
+                style={{ background: activeIpEstimate?.isOvertime ? '#ef4444' : '#c084fc' }}
+              />
+            </span>
             <span
-              className="flex-shrink-0 font-mono"
-              style={{ fontSize: '10px', color: 'var(--color-text-faint)' }}
+              className="font-medium tracking-tight truncate time-text-transition"
+              style={{ color: activeIpEstimate?.isOvertime ? '#f87171' : '#c084fc' }}
             >
-              {activeIpEstimate.elapsedMinutes}m / ~{activeIpEstimate.totalDuration}m
+              {activeIpEstimate
+                ? activeIpEstimate.isOvertime
+                  ? `Overtime (+${activeIpEstimate.elapsedMinutes - activeIpEstimate.totalDuration}m)`
+                  : `~${activeIpEstimate.remainingMinutes}m left`
+                : 'Session in progress'}
             </span>
           </div>
-
-          {/* Mini progressing track */}
-          <div
-            className="w-full h-1 rounded-full overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.08)' }}
+          <span
+            className="flex-shrink-0 font-mono"
+            style={{ fontSize: '10px', color: 'var(--color-text-faint)' }}
           >
-            <div
-              className="h-full rounded-full progress-flow-stripes transition-all duration-700 ease-out"
-              style={{
-                width: `${Math.min(
-                  100,
-                  Math.max(
-                    8,
-                    Math.round(
-                      (activeIpEstimate.elapsedMinutes / activeIpEstimate.totalDuration) * 100
-                    )
-                  )
-                )}%`,
-                background: activeIpEstimate.isOvertime
-                  ? 'linear-gradient(90deg, #ef4444, #f87171)'
-                  : 'linear-gradient(90deg, #7c3aed, #a855f7)',
-              }}
-            />
-          </div>
+            {activeIpEstimate
+              ? `${activeIpEstimate.elapsedMinutes}m / ~${activeIpEstimate.totalDuration}m`
+              : ticket.startedAt
+                ? formatTime(ticket.startedAt)
+                : ''}
+          </span>
         </div>
       )}
 
@@ -277,6 +261,8 @@ export function TicketCard({ ticket, reorderable = false, dragging = false }: Ti
         </p>
       )}
     </button>
+    {ticket.status === 'in_progress' && <span aria-hidden className="aura-ring" />}
+    </div>
   );
 }
 

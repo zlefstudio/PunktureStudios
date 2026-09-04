@@ -297,19 +297,105 @@ button:disabled,
    PROGRESSION & TIME MICRO-ANIMATIONS (Minimalist & Premium)
 ───────────────────────────────────────────────────────────────────────────── */
 
-/* Flowing gradient beam (laser sweep on Now Serving) */
-@keyframes beam-sweep {
-  0% {
-    background-position: -200% 0;
+/* ─────────────────────────────────────────────────────────────────────────────
+   LIVE SESSION — "Session Aura"
+   A single soft studio-light ray that slowly travels around the border of an
+   in-progress ticket. Premium calm energy — never a loading bar.
+───────────────────────────────────────────────────────────────────────────── */
+.session-aura {
+  position: relative;
+  border-radius: 12px;
+  transition: transform var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-base) var(--ease-out);
+}
+
+.session-aura .aura-ring {
+  position: absolute;
+  inset: -2px;
+  padding: 1.5px;
+  border-radius: 14px;
+  pointer-events: none;
+  overflow: hidden;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  z-index: 1;
+}
+
+/* Hover: the whole in-progress card lifts together with its halo. The inner
+   button's own hover/press motion is neutralised so nothing "shifts twice". */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .session-aura.aura-active:hover {
+    transform: translateY(-1px);
   }
-  100% {
-    background-position: 200% 0;
+  .session-aura.aura-active:active {
+    transform: translateY(0) scale(0.97);
+  }
+  .session-aura.aura-active > button:hover,
+  .session-aura.aura-active > button:active {
+    transform: none !important;
   }
 }
 
-.animate-beam-sweep {
-  background-size: 200% 100%;
-  animation: beam-sweep 3.5s linear infinite;
+.session-aura .aura-ring::before {
+  content: "";
+  position: absolute;
+  left: -100%;
+  top: -100%;
+  width: 300%;
+  height: 300%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(124, 58, 237, 0) 0deg,
+    rgba(124, 58, 237, 0) 294deg,
+    rgba(139, 92, 246, 0.20) 314deg,
+    rgba(167, 139, 250, 0.60) 332deg,
+    rgba(216, 180, 254, 0.95) 348deg,
+    rgba(196, 181, 253, 0.70) 8deg,
+    rgba(139, 92, 246, 0.30) 24deg,
+    rgba(124, 58, 237, 0.06) 38deg,
+    rgba(124, 58, 237, 0) 54deg,
+    rgba(124, 58, 237, 0) 360deg
+  );
+  animation: aura-orbit 6s linear infinite;
+  will-change: transform;
+}
+
+@keyframes aura-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Overtime — the aura warms to red to call attention */
+.session-aura.is-overtime .aura-ring::before {
+  background: conic-gradient(
+    from 0deg,
+    rgba(185, 28, 28, 0) 0deg,
+    rgba(185, 28, 28, 0) 294deg,
+    rgba(220, 38, 38, 0.25) 316deg,
+    rgba(239, 68, 68, 0.65) 334deg,
+    rgba(254, 202, 202, 0.95) 350deg,
+    rgba(248, 113, 113, 0.70) 10deg,
+    rgba(239, 68, 68, 0.28) 26deg,
+    rgba(185, 28, 28, 0.06) 40deg,
+    rgba(185, 28, 28, 0) 56deg,
+    rgba(185, 28, 28, 0) 360deg
+  );
+  animation-duration: 4.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-aura .aura-ring {
+    display: none;
+  }
+  .session-aura.aura-active {
+    box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.45);
+  }
+  .session-aura.aura-active.is-overtime {
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.55);
+  }
 }
 
 /* Sonar wave for active sessions */
@@ -330,31 +416,6 @@ button:disabled,
 
 .sonar-ring {
   animation: sonar-wave 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
-}
-
-/* Progress bar animated flowing stripes */
-@keyframes flow-stripes {
-  from {
-    background-position: 24px 0;
-  }
-  to {
-    background-position: 0 0;
-  }
-}
-
-.progress-flow-stripes {
-  background-image: linear-gradient(
-    45deg,
-    rgba(255, 255, 255, 0.18) 25%,
-    transparent 25%,
-    transparent 50%,
-    rgba(255, 255, 255, 0.18) 50%,
-    rgba(255, 255, 255, 0.18) 75%,
-    transparent 75%,
-    transparent
-  );
-  background-size: 20px 20px;
-  animation: flow-stripes 1.8s linear infinite;
 }
 
 /* Micro pulse on clock icon */
@@ -451,9 +512,7 @@ button:disabled,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-beam-sweep,
   .sonar-ring,
-  .progress-flow-stripes,
   .clock-live-tick,
   .time-pill-glow,
   .next-pill-glow {
