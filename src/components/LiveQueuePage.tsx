@@ -3,6 +3,7 @@ import { onSnapshot, collection, query, doc } from 'firebase/firestore';
 import { firestore } from '../firebase';
 import { Ticket, CalendarHeart } from 'lucide-react';
 import type { PublicSettings } from '../types';
+import { PiercingRitualAnimation } from './PiercingRitualAnimation';
 
 /**
  * PUBLIC LIVE QUEUE — customer-facing, real-time, privacy-safe.
@@ -122,9 +123,16 @@ export function LiveQueuePage() {
           'radial-gradient(1200px 600px at 50% -10%, rgba(139,92,246,0.20) 0%, transparent 60%), radial-gradient(900px 500px at 90% 110%, rgba(217,119,6,0.12) 0%, transparent 55%), var(--color-base)',
         color: 'var(--color-text)',
         fontFamily: 'Inter, system-ui, sans-serif',
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        paddingLeft: 'env(safe-area-inset-left, 0px)',
+        paddingRight: 'env(safe-area-inset-right, 0px)',
       }}
     >
-      <div className="mx-auto w-full max-w-md px-5 py-7 space-y-6" style={{ animation: 'pk-fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both' }}>
+      <div
+        className="mx-auto w-full max-w-md md:max-w-4xl lg:max-w-5xl px-4 sm:px-6 py-6 md:py-8 space-y-6"
+        style={{ animation: 'pk-fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both' }}
+      >
         {/* ── Brand header ── */}
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -159,168 +167,177 @@ export function LiveQueuePage() {
           </span>
         </header>
 
-        {/* ── Body ── */}
-        {error ? (
-          <div
-            className="rounded-2xl p-6 text-center space-y-2"
-            style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(248,113,113,0.25)' }}
-          >
-            <p className="font-bold text-body" style={{ color: 'var(--color-error-text)' }}>
-              Queue unavailable
-            </p>
-            <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-              {error}
-            </p>
+        {/* ── Main Layout: Mobile stacked (stage on top), Desktop 2-column (stage beside queue) ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-start">
+          {/* Stage: Top on mobile, left on desktop */}
+          <div className="w-full flex justify-center md:sticky md:top-6">
+            <PiercingRitualAnimation />
           </div>
-        ) : rows === null ? (
-          <div className="rounded-2xl p-8 space-y-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)' }}>
-            <div className="w-12 h-12 mx-auto rounded-full" style={{ border: '2px solid transparent', borderTopColor: 'var(--color-brand)', animation: 'pk-spin 0.9s linear infinite' }} />
-            <p className="text-center text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-              Loading live queue…
-            </p>
-          </div>
-        ) : !hasLive ? (
-          hasEvent ? (
-            <div
-              className="rounded-3xl p-7 text-center space-y-3 overflow-hidden"
-              style={{
-                background: 'linear-gradient(145deg, rgba(139,92,246,0.16), rgba(217,119,6,0.08))',
-                border: '1px solid rgba(168,85,247,0.35)',
-              }}
-            >
-              <div className="text-3xl" style={{ animation: 'pk-logo-float 2.6s ease-in-out infinite' }}>
-                <CalendarHeart size={30} style={{ margin: '0 auto', color: 'var(--color-brand-text)' }} />
-              </div>
-              <p className="text-label-xs" style={{ color: 'var(--color-warn-text)' }}>
-                NEXT POP-UP · SAVE THE DATE
-              </p>
-              <p className="font-black leading-tight" style={{ fontSize: 22 }}>
-                {eventDateLabel}
-              </p>
-              {publicSettings?.eventLocation && (
-                <p className="font-semibold text-body" style={{ color: 'var(--color-text)' }}>
-                  📍 {publicSettings.eventLocation}
+
+          {/* Queue Body: Below stage on mobile, right column on desktop */}
+          <div className="w-full space-y-6">
+            {error ? (
+              <div
+                className="rounded-2xl p-6 text-center space-y-2"
+                style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(248,113,113,0.25)' }}
+              >
+                <p className="font-bold text-body" style={{ color: 'var(--color-error-text)' }}>
+                  Queue unavailable
                 </p>
-              )}
-              {publicSettings?.eventNote && (
                 <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-                  {publicSettings.eventNote}
-                </p>
-              )}
-              <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
-                Wala pang live queue — pero puwede ka nang mag-book sa home studio! ✨
-              </p>
-              <a
-                href="/appointment.html"
-                className="inline-block px-6 py-3 rounded-2xl font-black mt-1"
-                style={{
-                  background: 'linear-gradient(135deg, var(--color-warn), #d97706)',
-                  color: '#fff',
-                  boxShadow: 'var(--shadow-brand)',
-                }}
-              >
-                📅 Book a home studio appointment
-              </a>
-            </div>
-          ) : (
-            <div className="rounded-2xl p-8 text-center space-y-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)' }}>
-              <div className="text-3xl" style={{ animation: 'pk-logo-float 2.6s ease-in-out infinite' }}>✨</div>
-              <p className="font-black" style={{ fontSize: 17 }}>No live queue right now</p>
-              <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-                We're between pop-ups — hang tight, kami na ang bahala sa susunod na schedule. 👀
-              </p>
-              <a
-                href="/appointment.html"
-                className="inline-block px-5 py-2.5 rounded-2xl font-bold mt-1"
-                style={{ background: 'var(--color-brand)', color: '#fff' }}
-              >
-                Book a home studio appointment
-              </a>
-            </div>
-          )
-        ) : (
-          <>
-            {/* Now serving */}
-            {nowServing && (
-              <div
-                className="relative overflow-hidden rounded-3xl p-6 text-center"
-                style={{
-                  background: 'linear-gradient(145deg, rgba(139,92,246,0.22), rgba(139,92,246,0.06))',
-                  border: '1px solid rgba(168,85,247,0.45)',
-                  boxShadow: '0 0 0 1px rgba(168,85,247,0.12), 0 18px 50px -20px rgba(139,92,246,0.5)',
-                }}
-              >
-                <p className="text-label-xs mb-1" style={{ color: 'var(--color-brand-text)' }}>
-                  {nowServing.status === 'in_progress' ? '⚡ NOW SERVING' : '📣 NOW CALLING'}
-                </p>
-                <p className="font-black leading-none" style={{ fontSize: 64, fontFamily: 'var(--font-mono)', color: '#fff' }}>
-                  #{nowServing.ticketNumber}
-                </p>
-                <p className="mt-2 text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
-                  {nowServing.status === 'in_progress'
-                    ? 'This ticket is at the piercing chair now ✨'
-                    : 'Please come to the station! 💜'}
+                  {error}
                 </p>
               </div>
-            )}
-
-            {/* Next up */}
-            {nextUp && (
-              <div
-                className="flex items-center justify-between rounded-2xl px-5 py-4"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)' }}
-              >
-                <span className="text-body-sm font-semibold" style={{ color: 'var(--color-text-muted)' }}>
-                  Next in line
-                </span>
-                <span className="font-black font-mono" style={{ fontSize: 22, color: '#a78bfa' }}>
-                  #{nextUp.ticketNumber}
-                </span>
-              </div>
-            )}
-
-            {/* Waiting list */}
-            {data.waiting.length > 0 && (
-              <div className="space-y-2">
-                <p className="flex items-center gap-1.5 text-label-xs" style={{ color: 'var(--color-text-faint)' }}>
-                  <Ticket size={12} />
-                  In line · {data.waiting.length} {data.waiting.length === 1 ? 'person' : 'people'}
+            ) : rows === null ? (
+              <div className="rounded-2xl p-8 space-y-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)' }}>
+                <div className="w-12 h-12 mx-auto rounded-full" style={{ border: '2px solid transparent', borderTopColor: 'var(--color-brand)', animation: 'pk-spin 0.9s linear infinite' }} />
+                <p className="text-center text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+                  Loading live queue…
                 </p>
-                {data.waiting.map((w, i) => (
-                  <div
-                    key={`${w.ticketNumber}-${w.position}`}
-                    className="flex items-center gap-3 rounded-2xl px-4 py-3"
+              </div>
+            ) : !hasLive ? (
+              hasEvent ? (
+                <div
+                  className="rounded-3xl p-7 text-center space-y-3 overflow-hidden"
+                  style={{
+                    background: 'linear-gradient(145deg, rgba(139,92,246,0.16), rgba(217,119,6,0.08))',
+                    border: '1px solid rgba(168,85,247,0.35)',
+                  }}
+                >
+                  <div className="text-3xl" style={{ animation: 'pk-logo-float 2.6s ease-in-out infinite' }}>
+                    <CalendarHeart size={30} style={{ margin: '0 auto', color: 'var(--color-brand-text)' }} />
+                  </div>
+                  <p className="text-label-xs" style={{ color: 'var(--color-warn-text)' }}>
+                    NEXT POP-UP · SAVE THE DATE
+                  </p>
+                  <p className="font-black leading-tight" style={{ fontSize: 22 }}>
+                    {eventDateLabel}
+                  </p>
+                  {publicSettings?.eventLocation && (
+                    <p className="font-semibold text-body" style={{ color: 'var(--color-text)' }}>
+                      📍 {publicSettings.eventLocation}
+                    </p>
+                  )}
+                  {publicSettings?.eventNote && (
+                    <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+                      {publicSettings.eventNote}
+                    </p>
+                  )}
+                  <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
+                    Wala pang live queue — pero puwede ka nang mag-book sa home studio! ✨
+                  </p>
+                  <a
+                    href="/appointment.html"
+                    className="inline-block px-6 py-3 rounded-2xl font-black mt-1"
                     style={{
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid var(--color-border)',
-                      animation: `pk-fade-in 0.4s cubic-bezier(0.16,1,0.3,1) ${Math.min(i * 0.06, 0.5)}s both`,
+                      background: 'linear-gradient(135deg, var(--color-warn), #d97706)',
+                      color: '#fff',
+                      boxShadow: 'var(--shadow-brand)',
                     }}
                   >
-                    <span
-                      className="w-7 h-7 flex items-center justify-center rounded-full font-mono font-bold flex-shrink-0"
-                      style={{
-                        background: w.position === 0 ? 'var(--color-brand)' : 'rgba(255,255,255,0.08)',
-                        color: w.position === 0 ? '#fff' : 'var(--color-text-muted)',
-                        fontSize: 11,
-                      }}
-                    >
-                      {(w.position ?? i) + 1}
-                    </span>
-                    <span className="font-black font-mono" style={{ fontSize: 15 }}>
-                      #{w.ticketNumber}
-                    </span>
-                    {w.position === 0 && !nowServing && (
-                      <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(217,119,6,0.15)', color: 'var(--color-warn-text)', border: '1px solid rgba(217,119,6,0.3)' }}>
-                        NEXT
-                      </span>
-                    )}
+                    📅 Book a home studio appointment
+                  </a>
+                </div>
+              ) : (
+                <div className="rounded-2xl p-8 text-center space-y-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)' }}>
+                  <div className="text-3xl" style={{ animation: 'pk-logo-float 2.6s ease-in-out infinite' }}>✨</div>
+                  <p className="font-black" style={{ fontSize: 17 }}>No live queue right now</p>
+                  <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+                    We're between pop-ups — hang tight, kami na ang bahala sa susunod na schedule. 👀
+                  </p>
+                  <a
+                    href="/appointment.html"
+                    className="inline-block px-5 py-2.5 rounded-2xl font-bold mt-1"
+                    style={{ background: 'var(--color-brand)', color: '#fff' }}
+                  >
+                    Book a home studio appointment
+                  </a>
+                </div>
+              )
+            ) : (
+              <>
+                {/* Now serving */}
+                {nowServing && (
+                  <div
+                    className="relative overflow-hidden rounded-3xl p-6 text-center"
+                    style={{
+                      background: 'linear-gradient(145deg, rgba(139,92,246,0.22), rgba(139,92,246,0.06))',
+                      border: '1px solid rgba(168,85,247,0.45)',
+                      boxShadow: '0 0 0 1px rgba(168,85,247,0.12), 0 18px 50px -20px rgba(139,92,246,0.5)',
+                    }}
+                  >
+                    <p className="text-label-xs mb-1" style={{ color: 'var(--color-brand-text)' }}>
+                      {nowServing.status === 'in_progress' ? '⚡ NOW SERVING' : '📣 NOW CALLING'}
+                    </p>
+                    <p className="font-black leading-none" style={{ fontSize: 64, fontFamily: 'var(--font-mono)', color: '#fff' }}>
+                      #{nowServing.ticketNumber}
+                    </p>
+                    <p className="mt-2 text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      {nowServing.status === 'in_progress'
+                        ? 'This ticket is at the piercing chair now ✨'
+                        : 'Please come to the station! 💜'}
+                    </p>
                   </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+                )}
 
+                {/* Next up */}
+                {nextUp && (
+                  <div
+                    className="flex items-center justify-between rounded-2xl px-5 py-4"
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)' }}
+                  >
+                    <span className="text-body-sm font-semibold" style={{ color: 'var(--color-text-muted)' }}>
+                      Next in line
+                    </span>
+                    <span className="font-black font-mono" style={{ fontSize: 22, color: '#a78bfa' }}>
+                      #{nextUp.ticketNumber}
+                    </span>
+                  </div>
+                )}
+
+                {/* Waiting list */}
+                {data.waiting.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="flex items-center gap-1.5 text-label-xs" style={{ color: 'var(--color-text-faint)' }}>
+                      <Ticket size={12} />
+                      In line · {data.waiting.length} {data.waiting.length === 1 ? 'person' : 'people'}
+                    </p>
+                    {data.waiting.map((w, i) => (
+                      <div
+                        key={`${w.ticketNumber}-${w.position}`}
+                        className="flex items-center gap-3 rounded-2xl px-4 py-3"
+                        style={{
+                          background: 'rgba(255,255,255,0.03)',
+                          border: '1px solid var(--color-border)',
+                          animation: `pk-fade-in 0.4s cubic-bezier(0.16,1,0.3,1) ${Math.min(i * 0.06, 0.5)}s both`,
+                        }}
+                      >
+                        <span
+                          className="w-7 h-7 flex items-center justify-center rounded-full font-mono font-bold flex-shrink-0"
+                          style={{
+                            background: w.position === 0 ? 'var(--color-brand)' : 'rgba(255,255,255,0.08)',
+                            color: w.position === 0 ? '#fff' : 'var(--color-text-muted)',
+                            fontSize: 11,
+                          }}
+                        >
+                          {(w.position ?? i) + 1}
+                        </span>
+                        <span className="font-black font-mono" style={{ fontSize: 15 }}>
+                          #{w.ticketNumber}
+                        </span>
+                        {w.position === 0 && !nowServing && (
+                          <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(217,119,6,0.15)', color: 'var(--color-warn-text)', border: '1px solid rgba(217,119,6,0.3)' }}>
+                            NEXT
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
 
         {/* ── Footer ── */}
         <footer className="pt-2 pb-1 text-center space-y-1">
