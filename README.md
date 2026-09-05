@@ -14,7 +14,8 @@ No cloud, no backend, no internet required. All data lives in your browser's Ind
 - **One-tap piercing catalog** — 30+ placements across Ear / Oral / Face / Body + Custom free-text.
 - **💍 Standalone Jewelry sales** — separate jewelry tab with all upgrade tiers (Free excluded).
 - **Clear all button** — single-tap to clear all items on an active ticket.
-- **Reset Ticket Numbering** — reset ticket numbers back to #1 anytime from the History tab.
+- **Reset Ticket Numbering** — reset ticket numbers back to #1 anytime from the History tab. Finished/cancelled records are **archived, never deleted**.
+- **📈 Earnings dashboard (History tab)** — per-day / month / all-time revenue, jewelry share, cancelled-loss, breakdown by category and top placements, plus a rolling 7-day trend.
 - **Full group support** — one ticket, optional per-member labels on each item.
 - **Large client-facing review modal** — bold high-contrast breakdown view for showing total to clients.
 - **Offline backup** — export / import JSON; survives power outages and device swaps.
@@ -52,7 +53,12 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in Chrome or Edge.
+Open [http://localhost:5174](http://localhost:5174) in Chrome or Edge.
+
+> ⚠️ **Always use this exact URL.** The app stores its data in the browser's
+> IndexedDB, which is scoped per origin **including the port**. If you open the
+> app on a different port (e.g. `5173`), it looks like all your queue/history
+> disappeared — the data is still in the other port's database.
 
 ### Build for production
 
@@ -126,25 +132,64 @@ When a ticket is in **Called** status:
 
 ---
 
-## Backup & restore
+## Data tools, backup & Excel export
 
 > ⚠️ **Data is stored locally in the browser only.** Clearing browser data, using a different browser, or using a private/incognito window will result in data loss.
 
-### Export a backup
+All data tools live in the **📋 History** tab, under **"Data tools"**.
 
-1. Click the **💾 Backup** tab (left panel).
-2. Click **Export JSON Backup**.
-3. A file named `piercing-backup-YYYY-MM-DD-HHmm.json` downloads automatically.
-4. Copy the file to a USB drive, Google Drive (when online), or another safe location.
+### Export to Excel (CSV)
 
-**Recommended: export a backup at the end of every event day.**
+1. Open the **📋 History** tab and set the filter you want (Today / a specific date / Month / All).
+2. Click **Excel (…)** — downloads `punkture-orders-YYYY-MM-DD-HHmm.csv`.
+3. Open the file in Excel / Google Sheets. Columns: date, time, ticket #, client, status, item lines, quantities, prices and totals.
 
-### Import a backup
+### Export a full backup
 
-1. Click the **💾 Backup** tab.
-2. Click **Choose Backup File** and select a `.json` backup file.
-3. Review the summary (ticket count, export date).
-4. Click **Yes, Replace Data** — ⚠️ this permanently replaces all current data.
+1. In the **📋 History** tab → **Data tools**, click **Full backup**.
+2. A file named `piercing-backup-YYYY-MM-DD-HHmm.json` downloads automatically.
+3. Copy the file to a USB drive, Google Drive (when online), or another safe location.
+
+**Recommended: export a full backup at the end of every event day.**
+
+## Cloud sync (Firebase) — free
+
+The cashier still works 100% offline-first (local IndexedDB). When online **and** connected, it syncs to your free Firebase project and keeps a sanitized public mirror (`publicQueue` — ticket # + status only, never names).
+
+### One-time Firebase console setup (free Spark plan, no credit card)
+
+1. **Firestore Database** → Create → region near you (`asia-southeast1` Singapore or `asia-southeast2` Jakarta) → **Start in production mode**.
+2. **Authentication** → Sign-in method → enable **Email/Password** → **Users** → Add your staff account(s).
+3. **Firestore → Rules** → paste the contents of **`firestore.rules`** (in this project) → replace `PASTE_STAFF_EMAIL_HERE` with your staff email → **Publish**.
+4. **Project settings → Your apps → Web (`</>`)** → copy the `firebaseConfig` — it is already wired into `src/firebase.ts`.
+
+### Using it
+
+- Open the app → at the bottom-left, click **☁️ Connect** → enter the staff email/password once (session is remembered).
+- Green dot + **Synced HH:MM** = cloud is up to date. Grey dot + *Offline* = data is safe locally and sync resumes automatically when internet returns.
+- Finished/cancelled orders never appear in the public mirror; only the current live queue is published.
+
+### Public live queue page (customers)
+
+A separate, mobile-first page at **`live.html`** that auto-updates in real time from the sanitized `publicQueue` (ticket numbers + status only — **no names**).
+
+- **Preview locally:** `npm run dev` → open `http://localhost:5174/live.html`
+- **Edit it:** everything lives in `src/components/LiveQueuePage.tsx` (layout/animations) — easy to restyle.
+- **It shows:** a pulsing LIVE badge, "Now serving / Now calling" hero card, "Next in line", and the rest of the line. When there's no active queue it shows a friendly "No live queue right now" card.
+- **Publishing data:** the page only has content once the cashier app is connected to the cloud and there are waiting / called / in-progress tickets. Finished and cancelled tickets are never published.
+
+### Deploying the public pages (Firebase Hosting)
+
+The **staff queue tool is never hosted** — it stays local (`npm run dev`, `http://localhost:5174`). Only the two customer pages are deployed, so there is no staff UI on the public internet:
+
+```bash
+npm run deploy          # builds live.html + appointment.html ONLY → deploys
+```
+
+- Live queue: **https://punkture-queue.web.app/** (root redirects here)
+- Book an appointment: **https://punkture-queue.web.app/appointment**
+- `/index.html` and `/` both redirect to the live queue — the staff tool has no public URL.
+- The Firestore security rules live in the Firebase console (staff email allowlist). If you ever edit `firestore.rules`, publish it from the console — do not rely on `firebase deploy` for rules (not configured, to avoid overwriting the console copy).
 
 ---
 
@@ -162,8 +207,11 @@ When a ticket is in **Called** status:
 All data is stored in **IndexedDB** (browser storage, not cookies, not localStorage).
 
 ```
-tickets: id, ticketNumber, name, status, piercer, notes, timestamps, queueOrder...
-items:   id, ticketId, memberLabel, placementName, basePrice, upgradeLabel, upgradePrice, quantity
+tickets: id, ticketNumber, name, status, notes, timestamps, queueOrder,
+         updatedAt (sync/audit), archivedAt (set by "Reset #1" — kept, never deleted)
+items:   id, ticketId, memberLabel, placementName, basePrice, upgradeLabel,
+         upgradePrice, quantity, updatedAt
+meta:    atomic counters (ticket numbering) — prevents duplicate ticket numbers
 ```
 
 Backup file schema: `{ schemaVersion: 1, exportedAt, tickets[], items[] }`

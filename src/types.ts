@@ -12,6 +12,10 @@ export interface Ticket {
   status: TicketStatus;
   notes?: string;
   createdAt: number; // epoch ms
+  /** Last-modified epoch ms. Backfilled for legacy rows; enables future cloud sync diffing. */
+  updatedAt: number;
+  /** Set by "Reset #1". Records are archived (kept for reports), never deleted. */
+  archivedAt?: number;
   /**
    * Manual position inside the WAITING queue (0 = front of the line).
    * Lower values are served first. Set by drag-and-drop reordering.
@@ -33,6 +37,25 @@ export interface PiercingItem {
   upgradePrice: number;
   quantity: number;
   createdAt: number;
+  /** Last-modified epoch ms. Backfilled for legacy rows; enables future cloud sync diffing. */
+  updatedAt: number;
+}
+
+/**
+ * Public page settings (edited by staff in the 🌐 Public tab, mirrored to the
+ * Firestore `public` doc so the public live page / booking page can read it).
+ */
+export interface PublicSettings {
+  key: 'public';
+  /** Next pop-up date as YYYY-MM-DD (optional). */
+  eventDate?: string;
+  /** Venue / location of the next pop-up (optional). */
+  eventLocation?: string;
+  /** Short promo note shown on the public page (optional). */
+  eventNote?: string;
+  /** When true and an eventDate exists, the public page advertises the event. */
+  eventActive: boolean;
+  updatedAt: number;
 }
 
 // --- Catalog types ---

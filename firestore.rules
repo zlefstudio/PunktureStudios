@@ -1,0 +1,58 @@
+rules_version = '2';
+
+// PUNKTURE STUDIOS — Firestore security rules.
+//
+// HOW TO APPLY: Firebase Console → Build → Firestore Database → Rules tab →
+// paste this → Publish. Then replace the PASTE_STAFF_EMAIL_HERE below with
+// the staff account(s) you created under Build → Authentication → Users.
+// Add one line per staff email.
+//
+// Security model:
+//   · publicQueue → ANYONE can read (it only contains ticket # + status,
+//     never names). Only signed-in staff can write it.
+//   · tickets / items → signed-in staff ONLY. Outsiders cannot read or write.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isStaff() {
+      return request.auth != null &&
+        request.auth.token.email == 'PASTE_STAFF_EMAIL_HERE';
+        // || request.auth.token.email == 'second-staff@gmail.com';
+    }
+
+    match /publicQueue/{ticketId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    // Public page settings ("next pop-up" etc.) — anyone reads, staff writes.
+    match /public/{settingId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    // Home-studio booking requests — the public can CREATE their own request
+    // but can NEVER read/list other people's requests (staff-only).
+    match /appointments/{appointmentId} {
+      allow create: if request.auth == null
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.contact is string
+        && request.resource.data.contact.size() > 0
+        && request.resource.data.contact.size() <= 80
+        && request.resource.data.date is string
+        && request.resource.data.time is string
+        && request.resource.data.status == 'requested'
+        && request.resource.data.createdAt is number;
+      allow read, update, delete: if isStaff();
+    }
+
+    match /tickets/{ticketId} {
+      allow read, write: if isStaff();
+    }
+
+    match /items/{itemId} {
+      allow read, write: if isStaff();
+    }
+  }
+}

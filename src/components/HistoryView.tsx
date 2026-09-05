@@ -4,7 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   RefreshCw,
-  Trash2,
+  Archive,
   AlertTriangle,
   TrendingUp,
   Calendar as CalendarIcon,
@@ -22,6 +22,8 @@ import {
   formatJewelryName,
 } from './utils';
 import { CalendarPickerModal } from './CalendarPicker';
+import { EarningsDashboard } from './EarningsDashboard';
+import { DataTools } from './DataTools';
 
 type TimeFilter = 'date' | 'month' | 'all';
 
@@ -184,7 +186,7 @@ export function HistoryView() {
                 border: '1px solid rgba(185,28,28,0.25)',
                 color: 'var(--color-error-text)',
               }}
-              title="Clear test data and reset counter"
+              title="Archive finished/cancelled records and restart ticket numbers at #1"
             >
               <RefreshCw size={10} />
               Reset #1
@@ -335,6 +337,28 @@ export function HistoryView() {
         </div>
       </div>
 
+      {/* ── Data tools: Excel export + full backup/restore ── */}
+      <DataTools
+        historyTickets={history}
+        scopeLabel={
+          timeFilter === 'date'
+            ? selectedDate === todayStr
+              ? 'Today'
+              : selectedDate
+            : timeFilter === 'month'
+              ? 'Month'
+              : 'All'
+        }
+      />
+
+      {/* ── Earnings breakdown dashboard (respects the active filter above) ── */}
+      <EarningsDashboard
+        tickets={tickets}
+        items={items}
+        scope={timeFilter}
+        selectedDate={selectedDate}
+      />
+
       {/* ── Reset confirm ── */}
       {showResetConfirm && (
         <div
@@ -351,7 +375,8 @@ export function HistoryView() {
                 Reset Ticket Numbers to #1?
               </p>
               <p className="text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
-                This will remove completed/cancelled test records from history and start new ticket numbers back from #1.
+                Finished &amp; cancelled records are archived (kept forever for your reports —
+                nothing is deleted). Ticket numbers for the queue restart from #1.
               </p>
             </div>
           </div>
@@ -367,7 +392,7 @@ export function HistoryView() {
                 opacity: resetting ? 0.5 : 1,
               }}
             >
-              <Trash2 size={12} />
+              <Archive size={12} />
               {resetting ? 'Resetting…' : 'Yes, Reset to #1'}
             </button>
             <button

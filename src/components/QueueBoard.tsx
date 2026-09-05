@@ -5,15 +5,16 @@ import { sortWaiting } from '../queue';
 import { TicketCard } from './TicketCard';
 import { WaitingQueueList } from './WaitingQueueList';
 import { HistoryView } from './HistoryView';
-import { BackupView } from './BackupView';
+import { PublicSettingsView } from './PublicSettingsView';
+import { SyncPanel } from './SyncPanel';
 import logoImg from '../assets/logo.png';
 
-type Tab = 'active' | 'history' | 'backup';
+type Tab = 'active' | 'history' | 'public';
 
 const TAB_META: { id: Tab; label: string }[] = [
   { id: 'active',  label: '🗂 Queue'   },
   { id: 'history', label: '📋 History' },
-  { id: 'backup',  label: '💾 Backup'  },
+  { id: 'public',  label: '🌐 Public'  },
 ];
 
 export function QueueBoard() {
@@ -268,7 +269,10 @@ export function QueueBoard() {
       )}
 
       {tab === 'history' && <HistoryView />}
-      {tab === 'backup'  && <BackupView />}
+      {tab === 'public'  && <PublicSettingsView />}
+
+      {/* Cloud sync status (always visible at the bottom) */}
+      <SyncPanel />
     </div>
   );
 }

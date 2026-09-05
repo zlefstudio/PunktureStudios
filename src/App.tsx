@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore } from './store';
+import { startSyncWatcher } from './sync';
 import { QueueBoard } from './components/QueueBoard';
 import { TicketWorkspace } from './components/TicketWorkspace';
 import logoImg from './assets/logo.png';
@@ -10,9 +11,11 @@ export function App() {
   const [initError, setInitError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadAll().catch((e: unknown) => {
-      setInitError(e instanceof Error ? e.message : 'Failed to load database');
-    });
+    loadAll()
+      .then(() => startSyncWatcher())
+      .catch((e: unknown) => {
+        setInitError(e instanceof Error ? e.message : 'Failed to load database');
+      });
   }, [loadAll]);
 
   if (!loaded) {
