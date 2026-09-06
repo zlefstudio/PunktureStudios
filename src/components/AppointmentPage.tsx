@@ -39,7 +39,7 @@ export function AppointmentPage() {
       } else if (code.includes('offline') || code.includes('network') || code.includes('unavailable')) {
         setError('No internet — please try again when you have a connection.');
       } else {
-        setError('Hindi na-save ang request. Pakisubukan ulit.');
+        setError('Could not save your request. Please try again.');
       }
     } finally {
       setBusy(false);
@@ -76,13 +76,12 @@ export function AppointmentPage() {
         </a>
 
         <div className="flex items-center gap-2.5 mb-1">
-          <div
-            className="w-9 h-9 rounded-full flex items-center justify-center font-black"
-            style={{ background: 'linear-gradient(135deg, var(--color-brand), #7c3aed)', color: '#fff', fontSize: 18 }}
-          >
-            P
-          </div>
-          <p className="font-black leading-none tracking-tight" style={{ fontSize: 15 }}>
+          <img
+            src="/logo.png"
+            alt="PUNKTURE STUDIOS"
+            className="w-9 h-9 object-contain drop-shadow select-none"
+          />
+          <p className="font-sanguine select-none leading-none" style={{ fontSize: 17, letterSpacing: '0.12em', color: 'var(--color-text)' }}>
             PUNKTURE STUDIOS
           </p>
         </div>
@@ -98,7 +97,7 @@ export function AppointmentPage() {
             <CheckCircle2 size={34} style={{ color: 'var(--color-success-text)', margin: '0 auto' }} />
             <p className="font-black" style={{ fontSize: 19 }}>Request sent! ✨</p>
             <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-              Salamat, {name.trim().split(' ')[0]}! I-confirm namin ang appointment mo via {contact.trim()}. 📅 {date} · {time}
+              Thank you, {name.trim().split(' ')[0]}! We'll confirm your appointment through {contact.trim()}. 📅 {date} · {time}
             </p>
             <a
               href="/live.html"
@@ -115,7 +114,7 @@ export function AppointmentPage() {
             style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)' }}
           >
             <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-              Pumili ka ng date at time na gusto mo — kukumpirmahin namin via contact mo.
+              Pick your preferred date and time — we'll confirm through your contact.
             </p>
 
             <label className="block">
@@ -146,7 +145,7 @@ export function AppointmentPage() {
                 style={{ ...inputStyle, resize: 'vertical' }}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Anong piercing ang balak mo? (para ma-advise ka namin)"
+                placeholder="Which piercing are you considering? (so we can advise you)"
                 maxLength={300}
               />
             </label>
@@ -173,7 +172,7 @@ export function AppointmentPage() {
               {busy ? 'Sending…' : 'Send appointment request'}
             </button>
             <p className="text-[10px] text-center" style={{ color: 'var(--color-text-faint)' }}>
-              PUNKTURE STUDIOS · request lang ito — hindi pa kumpirmado hangga't hindi ka namin kinokontak.
+              PUNKTURE STUDIOS · this is a request only — not confirmed until we contact you.
             </p>
           </form>
         )}

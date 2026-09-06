@@ -121,6 +121,22 @@ html, body, #root {
 .font-sanguine {
   font-family: var(--font-display);
 }
+
+/* ── Shimmer text — AI "thinking" style glow for the ritual phase label ── */
+.phase-shimmer {
+  background-image: linear-gradient(90deg, #a78bfa 0%, #ffffff 50%, #a78bfa 100%);
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: pk-shimmer 2.2s linear infinite;
+}
+
+@keyframes pk-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 .font-mono {
   font-family: var(--font-mono);
 }

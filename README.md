@@ -101,7 +101,7 @@ Waiting → Called → In Progress → Finished
 
 - **Call Next** (top-right) calls the oldest waiting ticket automatically.
 - Any waiting ticket can also be called manually from the workspace.
-- Multiple called / in-progress tickets are supported for two piercers.
+- One active session at a time — Call Next → Start Piercing → Finish, then repeat for the next in line.
 - Once you hit **Start Piercing**, the ticket is shown **only** in the ⚡ In Progress section (which doubles as the Now Serving display) so nothing appears twice.
 - **Cancel Session** (workspace, when In Progress) — aborts the session and puts the client straight back at the front of the waiting queue.
 - **Cancel Ticket** (always, side-by-side with Cancel Session) — permanently cancels the ticket (client won't be pierced).
@@ -126,7 +126,7 @@ Waiting → Called → In Progress → Finished
 ### No-show client
 
 When a ticket is in **Called** status:
-- **Copy Call Msg** — copies `Hi [name], next na po kayo sa piercing station.` to clipboard. Staff can paste into Messenger/Viber manually.
+- **Copy Call Msg** — copies `Hi [name], you're next at the piercing station.` to clipboard. Staff can paste into Messenger/Viber manually.
 - **Send to End** — moves them back to the waiting list at the end (new timestamp).
 - **Cancel** — removes them with a confirmation prompt.
 
@@ -253,4 +253,3 @@ Jewelry upgrades: Free (+₱0) · +50 · 150 Gold · 150 Silver · 200 Gold · 2
 > ⚠️ **Do NOT use incognito/private mode** for active sessions — data is lost when the window closes.
 
 > ⚠️ **This app is a single-browser tool.** Multiple devices do not sync. Use one laptop as the station terminal.
-# PunktureStudios

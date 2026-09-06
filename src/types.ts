@@ -51,8 +51,8 @@ export interface PublicSettings {
   eventDate?: string;
   /** Venue / location of the next pop-up (optional). */
   eventLocation?: string;
-  /** Short promo note shown on the public page (optional). */
-  eventNote?: string;
+  /** Google Maps (or similar) link shown on the public page (optional). */
+  eventMapUrl?: string;
   /** When true and an eventDate exists, the public page advertises the event. */
   eventActive: boolean;
   updatedAt: number;

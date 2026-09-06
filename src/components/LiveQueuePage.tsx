@@ -114,6 +114,8 @@ export function LiveQueuePage() {
         year: 'numeric',
       })
     : '';
+  const mapUrl = publicSettings?.eventMapUrl?.trim();
+  const showStage = hasEvent || hasLive;
 
   return (
     <div
@@ -136,20 +138,17 @@ export function LiveQueuePage() {
         {/* ── Brand header ── */}
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div
-              className="w-9 h-9 rounded-full flex items-center justify-center font-black select-none"
-              style={{ background: 'linear-gradient(135deg, var(--color-brand), #7c3aed)', color: '#fff', fontSize: 18 }}
+            <img
+              src="/logo.png"
+              alt="PUNKTURE STUDIOS"
+              className="w-9 h-9 object-contain drop-shadow select-none"
+            />
+            <p
+              className="font-sanguine select-none leading-none"
+              style={{ fontSize: 17, letterSpacing: '0.12em', color: 'var(--color-text)' }}
             >
-              P
-            </div>
-            <div>
-              <p className="font-black leading-none tracking-tight" style={{ fontSize: 15 }}>
-                PUNKTURE STUDIOS
-              </p>
-              <p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: 'var(--color-text-faint)' }}>
-                Piercing · Live Queue
-              </p>
-            </div>
+              PUNKTURE STUDIOS
+            </p>
           </div>
           <span
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold"
@@ -168,11 +167,13 @@ export function LiveQueuePage() {
         </header>
 
         {/* ── Main Layout: Mobile stacked (stage on top), Desktop 2-column (stage beside queue) ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-start">
+        <div className={`grid grid-cols-1 ${showStage ? 'md:grid-cols-2' : ''} gap-6 md:gap-8 items-start`}>
           {/* Stage: Top on mobile, left on desktop */}
-          <div className="w-full flex justify-center md:sticky md:top-6">
-            <PiercingRitualAnimation />
-          </div>
+          {showStage && (
+            <div className="w-full flex justify-center md:sticky md:top-6">
+              <PiercingRitualAnimation />
+            </div>
+          )}
 
           {/* Queue Body: Below stage on mobile, right column on desktop */}
           <div className="w-full space-y-6">
@@ -218,13 +219,24 @@ export function LiveQueuePage() {
                       📍 {publicSettings.eventLocation}
                     </p>
                   )}
-                  {publicSettings?.eventNote && (
-                    <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-                      {publicSettings.eventNote}
-                    </p>
+                  {mapUrl && (
+                    <a
+                      href={mapUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-2xl font-bold"
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        color: 'var(--color-text)',
+                        border: '1px solid var(--color-border-strong)',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      📍 Open in Maps
+                    </a>
                   )}
                   <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
-                    Wala pang live queue — pero puwede ka nang mag-book sa home studio! ✨
+                    No live queue yet — but you can book a home studio appointment! ✨
                   </p>
                   <a
                     href="/appointment.html"
@@ -243,8 +255,24 @@ export function LiveQueuePage() {
                   <div className="text-3xl" style={{ animation: 'pk-logo-float 2.6s ease-in-out infinite' }}>✨</div>
                   <p className="font-black" style={{ fontSize: 17 }}>No live queue right now</p>
                   <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-                    We're between pop-ups — hang tight, kami na ang bahala sa susunod na schedule. 👀
+                    We're between pop-ups — stay tuned for the next schedule. 👀
                   </p>
+                  {mapUrl && (
+                    <a
+                      href={mapUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-2xl font-bold"
+                      style={{
+                        background: 'rgba(255,255,255,0.06)',
+                        color: 'var(--color-text)',
+                        border: '1px solid var(--color-border-strong)',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      📍 View location
+                    </a>
+                  )}
                   <a
                     href="/appointment.html"
                     className="inline-block px-5 py-2.5 rounded-2xl font-bold mt-1"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Megaphone, CalendarCheck, Save } from 'lucide-react';
+import { Megaphone, CalendarCheck, Save, ExternalLink } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { auth, firestore } from '../firebase';
@@ -8,6 +8,9 @@ import {
   saveLocalPublicSettings,
 } from '../sync';
 import type { PublicSettings } from '../types';
+
+const LIVE_URL = 'https://punkture-queue.web.app/';
+const BOOKING_URL = 'https://punkture-queue.web.app/appointment';
 
 /** 🌐 Public tab — staff controls what the public live page advertises. */
 export function PublicSettingsView() {
@@ -52,7 +55,7 @@ export function PublicSettingsView() {
     const next = await saveLocalPublicSettings({
       eventDate: settings.eventDate?.trim() ? settings.eventDate.trim() : undefined,
       eventLocation: settings.eventLocation?.trim() ? settings.eventLocation.trim() : undefined,
-      eventNote: settings.eventNote?.trim() ? settings.eventNote.trim() : undefined,
+      eventMapUrl: settings.eventMapUrl?.trim() ? settings.eventMapUrl.trim() : undefined,
       eventActive: settings.eventActive,
     });
     setSettings(next);
@@ -86,6 +89,41 @@ export function PublicSettingsView() {
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4">
+      {/* Public pages preview */}
+      <div style={card} className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <ExternalLink size={14} style={{ color: 'var(--color-brand-text)' }} />
+          <p className="text-label-xs" style={{ color: 'var(--color-text)' }}>
+            Public pages (what customers see)
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <a
+            href={LIVE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-body-xs font-bold"
+            style={{ background: 'var(--color-brand)', color: '#fff', textDecoration: 'none' }}
+          >
+            🔗 Live queue
+          </a>
+          <a
+            href={BOOKING_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-body-xs font-bold"
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              color: 'var(--color-text)',
+              border: '1px solid var(--color-border-strong)',
+              textDecoration: 'none',
+            }}
+          >
+            📅 Booking page
+          </a>
+        </div>
+      </div>
+
       {/* Next pop-up editor */}
       <div style={card} className="p-4 space-y-3">
         <div className="flex items-center gap-2">
@@ -116,13 +154,13 @@ export function PublicSettingsView() {
             />
           </label>
           <label className="block">
-            <span className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>Short promo note</span>
+            <span className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>Map link (Google Maps / Waze)</span>
             <input
-              type="text"
-              placeholder="e.g. 20% off first piercings!"
+              type="url"
+              placeholder="https://maps.app.goo.gl/…"
               style={inputStyle}
-              value={settings?.eventNote ?? ''}
-              onChange={(e) => setSettings((s) => (s ? { ...s, eventNote: e.target.value } : s))}
+              value={settings?.eventMapUrl ?? ''}
+              onChange={(e) => setSettings((s) => (s ? { ...s, eventMapUrl: e.target.value } : s))}
             />
           </label>
 
@@ -133,7 +171,7 @@ export function PublicSettingsView() {
               onChange={(e) => setSettings((s) => (s ? { ...s, eventActive: e.target.checked } : s))}
             />
             <span className="text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
-              I-advertise ito sa public page (pag walang live queue)
+              Advertise this on the public page (when there's no live queue)
             </span>
           </label>
 
@@ -148,11 +186,11 @@ export function PublicSettingsView() {
         </form>
         {saved && (
           <p className="text-body-xs font-semibold" style={{ color: 'var(--color-success-text)' }}>
-            ✓ Saved on this device — mag-u-upload sa cloud pag online.
+            ✓ Saved on this device — uploads to the cloud when online.
           </p>
         )}
         <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
-          Nakikita ito ng public page bilang "Next pop-up" kasama ang Book appointment button.
+          The public page shows this as "Next pop-up" with the Book appointment button.
         </p>
       </div>
 
@@ -167,13 +205,13 @@ export function PublicSettingsView() {
 
         {!user ? (
           <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
-            ☁️ Connect to cloud (bottom bar) para makita ang mga booking requests.
+            ☁️ Connect to cloud (bottom bar) to see booking requests.
           </p>
         ) : appointments === null ? (
           <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>Loading…</p>
         ) : appointments.length === 0 ? (
           <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
-            Wala pang appointment requests.
+            No appointment requests yet.
           </p>
         ) : (
           <div className="space-y-2">
@@ -220,7 +258,7 @@ export function PublicSettingsView() {
           </div>
         )}
         <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
-          Confirm / approve workflow — darating sa susunod na update.
+          Confirm / approve workflow — coming in a future update.
         </p>
       </div>
     </div>

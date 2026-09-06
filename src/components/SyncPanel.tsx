@@ -160,9 +160,9 @@ export function SyncPanel() {
               )}
               {error && (
                 <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
-                  Sa Firebase Console: (1) Authentication → i-enable ang <b>Email/Password</b> at
-                  gumawa ng user; (2) Firestore → Rules → i-publish ang <b>firestore.rules</b>{' '}
-                  (palitan ang email ng staff mo); (3) may internet ka ba?
+                  In the Firebase Console: (1) Authentication → enable <b>Email/Password</b> and
+                  create a user; (2) Firestore → Rules → publish <b>firestore.rules</b>{' '}
+                  (replace with your staff email); (3) check that you're connected to the internet.
                 </p>
               )}
               <button
@@ -181,7 +181,7 @@ export function SyncPanel() {
               </button>
             </form>
             <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
-              Isang beses ka lang maglo-login kada device — naka-save ang session.
+              Sign in once per device — your session is remembered.
             </p>
           </div>
         </div>

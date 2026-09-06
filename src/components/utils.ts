@@ -78,7 +78,7 @@ export function statusBorder(status: Ticket['status']): string {
 }
 
 export function copyCallMessage(name: string): void {
-  const msg = `Hi ${name}, next na po kayo sa piercing station.`;
+  const msg = `Hi ${name}, you're next at the piercing station.`;
   navigator.clipboard.writeText(msg).catch(() => {
     // fallback: show msg (handled by caller)
   });

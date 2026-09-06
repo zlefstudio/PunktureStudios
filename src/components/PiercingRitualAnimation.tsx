@@ -703,10 +703,10 @@ export function PiercingRitualAnimation() {
               </span>
             </div>
             <span
-              className="text-[9px] tracking-widest text-purple-300/70 uppercase font-semibold"
+              className="phase-shimmer text-[9px] tracking-widest uppercase font-bold"
               style={{ fontFamily: 'var(--font-mono, monospace)' }}
             >
-              {stageState.phaseName} · LIVE
+              {stageState.phaseName}
             </span>
           </div>
 
