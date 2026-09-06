@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebase';
 import { Cloud, CloudOff, RefreshCw, X, LogOut } from 'lucide-react';
 import {
   subscribeSyncStatus,
@@ -14,7 +16,7 @@ import {
 /** Small always-visible cloud status bar for the cashier (bottom of left panel). */
 export function SyncPanel() {
   const [status, setStatus] = useState<SyncStatus>(getSyncStatus());
-  const [hasUser] = useState(() => getSyncUser() !== null);
+  const [hasUser, setHasUser] = useState(() => getSyncUser() !== null);
   const [showSignIn, setShowSignIn] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,9 +24,10 @@ export function SyncPanel() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => subscribeSyncStatus(setStatus), []);
+  useEffect(() => onAuthStateChanged(auth, user => setHasUser(user !== null)), []);
 
   const online = isOnline();
-  const signedIn = hasUser || status.phase === 'syncing' || status.phase === 'synced';
+  const signedIn = hasUser;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,7 +77,7 @@ export function SyncPanel() {
             className="relative flex h-2 w-2 flex-shrink-0"
             style={{ background: dotColor, borderRadius: '99px' }}
           />
-          <span className="text-body-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
+          <span title={statusLabel} role={status.phase === 'error' ? 'alert' : 'status'} className="text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
             {statusLabel}
           </span>
           <button

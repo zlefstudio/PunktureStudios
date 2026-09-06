@@ -113,9 +113,12 @@ export async function listItemDeletions(): Promise<Map<string, number>> {
 }
 
 /** Forget tombstones that have already been applied to the cloud. */
-export async function clearItemDeletions(ids: string[]): Promise<void> {
-  if (ids.length === 0) return;
+export async function clearItemDeletions(applied: Map<string, number>): Promise<void> {
+  if (applied.size === 0) return;
   await db.transaction('rw', db.meta, async () => {
-    for (const id of ids) await db.meta.delete(ITEM_DELETE_PREFIX + id);
+    for (const [id, time] of applied) {
+      const key = ITEM_DELETE_PREFIX + id;
+      if ((await db.meta.get(key))?.value === time) await db.meta.delete(key);
+    }
   });
 }

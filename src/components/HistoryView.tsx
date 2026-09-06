@@ -128,10 +128,12 @@ export function HistoryView() {
     setActiveTicket(id);
   }
   async function handleResetNumbering() {
+    if (resetting) return;
     setResetting(true);
-    await clearHistoryAndResetNumbering();
-    setResetting(false);
-    setShowResetConfirm(false);
+    try {
+      await clearHistoryAndResetNumbering();
+      setShowResetConfirm(false);
+    } finally { setResetting(false); }
   }
 
   const activeDates     = new Set(

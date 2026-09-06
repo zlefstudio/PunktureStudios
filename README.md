@@ -1,255 +1,115 @@
-# PUNKTURE STUDIOS — Queue Manager
+# PUNKTURE STUDIOS
 
-An **offline-first**, internal staff tool for a pop-up piercing station inside a bazaar or café.  
-No cloud, no backend, no internet required. All data lives in your browser's IndexedDB.
+An offline-first piercing queue and order manager with multiple cashier tabs/devices, optional Firebase synchronization and five public customer pages.
 
----
+## Run locally
 
-## Features at a glance
+Use Node.js 24 and npm. On Windows PowerShell, use `npm.cmd` if script execution policy blocks `npm.ps1`.
 
-- **FIFO queue** — first added, first served. Position numbers visible on every waiting card.
-- **↕ Drag-to-reorder queue** — grab any waiting card and glide it up/down to fix the line order instantly (premium Spotify-style motion). Order survives reloads & backups.
-- **Auto-open upon saving** — adding a client immediately opens their active workspace for zero-delay order taking.
-- **⚡ In Progress = Now Serving** — the moment you hit *Start Piercing*, the ticket lives in exactly one place (the In Progress section) wrapped in a soft **moving light halo** (Session Aura) with a live session timer — no duplicated banners, no loading-bar look, no confusion.
-- **One-tap piercing catalog** — 30+ placements across Ear / Oral / Face / Body + Custom free-text.
-- **💍 Standalone Jewelry sales** — separate jewelry tab with all upgrade tiers (Free excluded).
-- **Clear all button** — single-tap to clear all items on an active ticket.
-- **Reset Ticket Numbering** — reset ticket numbers back to #1 anytime from the History tab. Finished/cancelled records are **archived, never deleted**.
-- **📈 Earnings dashboard (History tab)** — per-day / month / all-time revenue, jewelry share, cancelled-loss, breakdown by category and top placements, plus a rolling 7-day trend.
-- **Full group support** — one ticket, optional per-member labels on each item.
-- **Large client-facing review modal** — bold high-contrast breakdown view for showing total to clients.
-- **Offline backup** — export / import JSON; survives power outages and device swaps.
-
----
-
-## Tech stack
-
-| | |
-|---|---|
-| Framework | Vite + React 19 + TypeScript (strict) |
-| Styling | Tailwind CSS v4 (build-time, no CDN) |
-| Icons | lucide-react (bundled) |
-| State | Zustand |
-| Persistence | Dexie.js → IndexedDB |
-
----
-
-## Getting started
-
-### Prerequisites
-
-- Node.js ≥ 18
-- npm ≥ 9
-
-### Install
-
-```bash
-npm install
-```
-
-### Run (development)
-
-```bash
+```sh
+npm ci
 npm run dev
 ```
 
-Open [http://localhost:5174](http://localhost:5174) in Chrome or Edge.
+The staff application is at **http://localhost:5174**. Keep this exact origin: changing the hostname, protocol or port opens a different IndexedDB database. The port is pinned and Vite will fail instead of silently choosing another port.
 
-> ⚠️ **Always use this exact URL.** The app stores its data in the browser's
-> IndexedDB, which is scoped per origin **including the port**. If you open the
-> app on a different port (e.g. `5173`), it looks like all your queue/history
-> disappeared — the data is still in the other port's database.
+Multiple staff tabs can open at the same time. Short database-operation locks serialize local writes without blocking another tab from opening. IndexedDB remains usable without internet while the local server is running. This is not an installed PWA; keep the local server and its files available. Never open `dist/*.html` through `file://`.
 
-### Build for production
+## Architecture
 
-```bash
+| Area | Implementation |
+| --- | --- |
+| Staff interface | React 19, TypeScript strict mode, Zustand |
+| Local database | Dexie/IndexedDB: tickets, items, meta counters and public settings |
+| Styling | Tailwind CSS 4 and shared design tokens |
+| Cloud | Firebase Authentication and Firestore |
+| Public pages | Live queue, appointment request, acknowledgment, aftercare, privacy |
+| Hosting | Firebase Hosting, public pages only |
+
+`src/store.ts` owns staff mutations. `src/sync.ts` owns cloud synchronization. Local mutations, restores and sync's local merge steps serialize through `src/dataLock.ts`; network waits do not block local editing.
+
+## Staff workflow
+
+1. Add a client and optional notes. Saving opens the ticket workspace.
+2. Add piercing placements or standalone jewelry; adjust quantity, upgrade and member labels.
+3. Start piercing when the station is free. Only one called/in-progress session is allowed.
+4. Review the order and confirm completion. An order needs at least one item; jewelry-only sales can finish without a piercing session.
+5. Cancel Session returns the client to the front of the waiting queue. Cancel Ticket closes it as cancelled.
+
+Drag waiting cards to change serving order. With the keyboard, focus a waiting ticket and press **Alt+Up / Alt+Down**. Reordering is disabled while searching. Wait estimates are approximate; called clients count toward the wait, and jewelry-only purchases add no piercing time.
+
+History provides day, current-month and all-time totals. Reset #1 archives finished/cancelled records and renumbers active tickets while preserving waiting order. Archives remain in reports. Reopening an archived ticket allocates a fresh number to avoid collisions; reopening removes that ticket from finished revenue until completed again.
+
+## Backup and recovery
+
+Export **Full backup** after each event and before changing browsers or restoring data. Store the downloaded JSON somewhere separate from the working device.
+
+Version 2 backups contain tickets, items, public settings and the exact ticket counter. Version 1 ticket/item backups still import; their counter is reconstructed from unarchived ticket numbers and settings default to empty.
+
+Restore validates the complete file before changing storage, then replaces local tickets, items, settings and numbering in one transaction. Invalid records, duplicate IDs, orphan items, invalid prices and multiple active sessions are rejected. Imports are limited to 25 MB.
+
+**When connected, restore also replaces the station's cloud ticket/item/settings copy.** Records absent from the backup become durable cloud deletion records. Appointment requests are a separate cloud collection and are not replaced or included in this backup. A pending restore survives offline use, reloads and partial network failures and retries before normal synchronization.
+
+CSV export neutralizes formula-leading text in client-entered fields. Ticket Total repeats on each item row; sum Line Total for item-based revenue reports rather than summing the repeated Ticket Total column.
+
+Clearing browser data deletes the local database. Reset #1 does not clear personal data. Appointment deletion is available in the Public tab; historical ticket removal can be performed through a reviewed replacement backup. Exported files and copies on other devices need separate handling.
+
+## Firebase setup and staff access
+
+1. Enable Firestore and Firebase Authentication Email/Password in project `punkture-studios`.
+2. Create each staff Authentication account and copy its UID.
+3. In the Firestore console, create **`staff/{UID}`** with the Boolean field **`enabled: true`**. These documents are managed only through the console/Admin SDK; clients cannot grant themselves access. Set `enabled: false` to revoke access.
+4. Deploy the version-controlled rules together with the public pages. The rules require the staff registry above; the old email-placeholder template is no longer used.
+5. Open the local staff app and Connect using the staff account.
+
+The Firebase web configuration in `src/firebase.ts` is public configuration. Access is controlled by Firestore rules. Rules reject client names/notes in the public queue, validate booking fields and times, require server timestamps for booking creation and the heartbeat, and keep private records staff-only.
+
+Public booking creates requests without customer sign-in. Signed-in staff can also use the form. Public clients cannot read or list requests. Date/time is Philippine time, must be in the future and within 366 days, and must agree with the stored requested timestamp. Configure Firebase App Check in your Firebase project before exposing a high-traffic booking form; field validation alone is not rate limiting. App Check is not enabled by this repository without a project-specific provider setup.
+
+### Multiple cashier browsers
+
+Open the cashier on any tab or device and connect with your staff account. No browser claims exclusive ownership; existing `cloudControl/station` records are ignored. Deploy the current rules if the older station-restricted rules were previously deployed.
+
+Each browser keeps its own local database and syncs records by `updatedAt` (last write wins). Changes appear on the next successful sync. Simultaneous offline edits are not coordinated: different devices can allocate the same ticket number or overwrite edits to the same record. This mode allows personal testing across devices; it does not provide transactional multi-cashier coordination.
+
+Restore remains an explicit replacement of the shared cloud copy. Do not manually clear item/ticket cloud deletion records: they prevent stale copies from resurrecting removed charges.
+
+### Synchronization and public status
+
+Local edits request sync after a short delay, with a safety sync every 30 seconds. Remote collection snapshots refresh every sync cycle so other devices' changes are picked up; successful writes update the cache within that cycle. Unchanged public tickets are not rewritten. Historical data is still read each cycle, so this is intended for a small setup rather than a large distributed service.
+
+The public queue receives a server-timestamped heartbeat. After 90 seconds without one it shows **Updates paused** with the last known queue. An empty, recently updated queue is labeled **Queue empty**. Closing the cashier does not falsely keep an indefinitely live status.
+
+## Public pages and appointments
+
+| Path | Purpose |
+| --- | --- |
+| `/live` | Queue, studio details and upcoming event |
+| `/appointment` | Booking request |
+| `/waiver` | English/Tagalog information acknowledgment |
+| `/aftercare` | Aftercare information |
+| `/privacy` | Data-handling information |
+
+The acknowledgment asks on each visit. It stores no identity, signature or acknowledgment record and is not a staff-verifiable consent ledger. Public queue access is available independently of it.
+
+The staff Public tab supports fresh-install settings, request loading errors, loading older requests, confirmation, cancellation and permanent deletion. Confirming updates the record only: staff must contact the customer separately. It does not reserve capacity or send an email/SMS.
+
+## Checks and deployment
+
+```sh
+npm test
+npm run lint
 npm run build
+npm run test:rules
 ```
 
-Output goes to `dist/`. Serve with any static file server:
+Unit/integration tests use disposable IndexedDB and a mocked cloud transport. Rules tests use the Firestore emulator at `127.0.0.1:8180` with **`demo-punkture-tests`**, never the live project. Install Java 21+ to run the emulator; the test runner also recognizes the optional portable runtime under `node_modules/.tmp/java-test/runtime`. The test runner downloads the pinned Firebase CLI on first use when it is not already installed; emulator and test CLI caches remain under `node_modules/.tmp`. Deployment also uses that pinned CLI version.
 
-```bash
-npx serve dist
-# or just open dist/index.html directly in your browser
+```sh
+npm run firebase:login
+npm run deploy
 ```
 
----
+Deployment builds the five public pages and publishes Hosting plus Firestore rules. It intentionally excludes `index.html`/the staff application. Provision the staff registry before deploying the new rules, then restart/update the local cashier. Root URLs redirect to the public live queue. Review the build and rules tests before deployment.
 
-## How to use
-
-### Adding a client
-
-1. Click **Add Client to Queue** (left panel).
-2. Enter name / nickname / group name (required) and optional notes.
-3. Press **Enter** or **Save to Queue** — they join the waiting list instantly.
-4. Or press **Save & Open** to jump straight to their workspace.
-
-### Adding piercings
-
-1. Click any ticket to open the right workspace.
-2. Pick a category tab: **EAR / ORAL / FACE / BODY / CUSTOM**.
-3. Tap a placement chip — it's added immediately with Free upgrade, qty 1.
-4. Adjust member label, upgrade, and quantity in the item row.
-
-### Queue flow
-
-```
-Waiting → Called → In Progress → Finished
-                ↘ (no-show) → Send to End (rejoins Waiting at the back)
-                            → Cancel
-```
-
-- **Call Next** (top-right) calls the oldest waiting ticket automatically.
-- Any waiting ticket can also be called manually from the workspace.
-- One active session at a time — Call Next → Start Piercing → Finish, then repeat for the next in line.
-- Once you hit **Start Piercing**, the ticket is shown **only** in the ⚡ In Progress section (which doubles as the Now Serving display) so nothing appears twice.
-- **Cancel Session** (workspace, when In Progress) — aborts the session and puts the client straight back at the front of the waiting queue.
-- **Cancel Ticket** (always, side-by-side with Cancel Session) — permanently cancels the ticket (client won't be pierced).
-
-### Reordering the waiting line
-
-1. The **Waiting** section shows a ⋮⋮ grip and a *drag to reorder* hint.
-2. **Mouse / trackpad:** press and hold anywhere on a waiting card, then drag it up or down. Other cards slide out of the way to preview the new line, and the list auto-scrolls near the edges.
-3. **Touch:** press and drag the ⋮⋮ grip handle on the right of the card.
-4. Release to drop — the card settles into place with a smooth animation.
-5. **Call Next** and the position badges (1, 2, 3…) follow the new order automatically.
-
-> Reordering is disabled while a search is active (search shows a filtered subset).
-
-### Finishing a ticket
-
-1. Add at least one piercing item.
-2. Click **Finish & Review** (bottom-right of workspace).
-3. Review the breakdown, then **Confirm Finish**.
-4. Or **Copy** the breakdown text to paste into your notes / message thread.
-
-### No-show client
-
-When a ticket is in **Called** status:
-- **Copy Call Msg** — copies `Hi [name], you're next at the piercing station.` to clipboard. Staff can paste into Messenger/Viber manually.
-- **Send to End** — moves them back to the waiting list at the end (new timestamp).
-- **Cancel** — removes them with a confirmation prompt.
-
----
-
-## Data tools, backup & Excel export
-
-> ⚠️ **Data is stored locally in the browser only.** Clearing browser data, using a different browser, or using a private/incognito window will result in data loss.
-
-All data tools live in the **📋 History** tab, under **"Data tools"**.
-
-### Export to Excel (CSV)
-
-1. Open the **📋 History** tab and set the filter you want (Today / a specific date / Month / All).
-2. Click **Excel (…)** — downloads `punkture-orders-YYYY-MM-DD-HHmm.csv`.
-3. Open the file in Excel / Google Sheets. Columns: date, time, ticket #, client, status, item lines, quantities, prices and totals.
-
-### Export a full backup
-
-1. In the **📋 History** tab → **Data tools**, click **Full backup**.
-2. A file named `piercing-backup-YYYY-MM-DD-HHmm.json` downloads automatically.
-3. Copy the file to a USB drive, Google Drive (when online), or another safe location.
-
-**Recommended: export a full backup at the end of every event day.**
-
-## Cloud sync (Firebase) — free
-
-The cashier still works 100% offline-first (local IndexedDB). When online **and** connected, it syncs to your free Firebase project and keeps a sanitized public mirror (`publicQueue` — ticket # + status only, never names).
-
-### One-time Firebase console setup (free Spark plan, no credit card)
-
-1. **Firestore Database** → Create → region near you (`asia-southeast1` Singapore or `asia-southeast2` Jakarta) → **Start in production mode**.
-2. **Authentication** → Sign-in method → enable **Email/Password** → **Users** → Add your staff account(s).
-3. **Firestore → Rules** → paste the contents of **`firestore.rules`** (in this project) → replace `PASTE_STAFF_EMAIL_HERE` with your staff email → **Publish**.
-4. **Project settings → Your apps → Web (`</>`)** → copy the `firebaseConfig` — it is already wired into `src/firebase.ts`.
-
-### Using it
-
-- Open the app → at the bottom-left, click **☁️ Connect** → enter the staff email/password once (session is remembered).
-- Green dot + **Synced HH:MM** = cloud is up to date. Grey dot + *Offline* = data is safe locally and sync resumes automatically when internet returns.
-- Finished/cancelled orders never appear in the public mirror; only the current live queue is published.
-
-### Public live queue page (customers)
-
-A separate, mobile-first page at **`live.html`** that auto-updates in real time from the sanitized `publicQueue` (ticket numbers + status only — **no names**).
-
-- **Preview locally:** `npm run dev` → open `http://localhost:5174/live.html`
-- **Edit it:** everything lives in `src/components/LiveQueuePage.tsx` (layout/animations) — easy to restyle.
-- **It shows:** a pulsing LIVE badge, "Now serving / Now calling" hero card, "Next in line", and the rest of the line. When there's no active queue it shows a friendly "No live queue right now" card.
-- **Publishing data:** the page only has content once the cashier app is connected to the cloud and there are waiting / called / in-progress tickets. Finished and cancelled tickets are never published.
-
-### Deploying the public pages (Firebase Hosting)
-
-The **staff queue tool is never hosted** — it stays local (`npm run dev`, `http://localhost:5174`). Only the two customer pages are deployed, so there is no staff UI on the public internet:
-
-```bash
-npm run deploy          # builds live.html + appointment.html ONLY → deploys
-```
-
-- Live queue: **https://punkture-queue.web.app/** (root redirects here)
-- Book an appointment: **https://punkture-queue.web.app/appointment**
-- `/index.html` and `/` both redirect to the live queue — the staff tool has no public URL.
-- The Firestore security rules live in the Firebase console (staff email allowlist). If you ever edit `firestore.rules`, publish it from the console — do not rely on `firebase deploy` for rules (not configured, to avoid overwriting the console copy).
-
----
-
-## Keyboard shortcuts
-
-| Key | Action |
-|-----|--------|
-| `Enter` | Save client form |
-| `Escape` | Cancel / close client form |
-
----
-
-## Data model
-
-All data is stored in **IndexedDB** (browser storage, not cookies, not localStorage).
-
-```
-tickets: id, ticketNumber, name, status, notes, timestamps, queueOrder,
-         updatedAt (sync/audit), archivedAt (set by "Reset #1" — kept, never deleted)
-items:   id, ticketId, memberLabel, placementName, basePrice, upgradeLabel,
-         upgradePrice, quantity, updatedAt
-meta:    atomic counters (ticket numbering) — prevents duplicate ticket numbers
-```
-
-Backup file schema: `{ schemaVersion: 1, exportedAt, tickets[], items[] }`
-
----
-
-## Pricing reference
-
-| Category | Placement | Base Price |
-|----------|-----------|------------|
-| EAR | Lobe | ₱250 |
-| EAR | Auricle | ₱300 |
-| EAR | Helix / Forward Helix / Flat / Conch | ₱350 |
-| EAR | Faux Rook / Rook / Daith / Snug / Tragus | ₱400 |
-| EAR | Anti Tragus | ₱450 |
-| EAR | Industrial | ₱600 |
-| ORAL | Labret / Madonna / Monroe / Medusa | ₱300 |
-| ORAL | Smiley | ₱350 |
-| ORAL | Tongue | ₱400 |
-| ORAL | Jestrum / Spider Bites / Angel Bites / Snake Bites / Angel Fangs | ₱450 |
-| FACE | Nostril | ₱350 |
-| FACE | Eyebrow / Septum | ₱400 |
-| FACE | Dahlia | ₱450 |
-| FACE | Dimple | ₱500 |
-| BODY | Nipple (single) | ₱400 |
-| BODY | Navel | ₱450 |
-| BODY | Floating Navel | ₱500 |
-
-Jewelry upgrades: Free (+₱0) · +50 · 150 Gold · 150 Silver · 200 Gold · 200 Silver
-
-**Formula:** `(basePrice + upgradePrice) × quantity = line total`
-
----
-
-## Important warnings
-
-> ⚠️ **Do NOT clear browser data, reset browser settings, or uninstall the browser without exporting a backup first.** This will permanently delete all ticket and item data.
-
-> ⚠️ **Do NOT use incognito/private mode** for active sessions — data is lost when the window closes.
-
-> ⚠️ **This app is a single-browser tool.** Multiple devices do not sync. Use one laptop as the station terminal.
+Firebase rules reference: [field validation](https://firebase.google.com/docs/firestore/security/rules-fields), [transactions and batched writes](https://firebase.google.com/docs/firestore/manage-data/transactions).

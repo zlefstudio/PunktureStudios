@@ -6,12 +6,12 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: 'AIzaSyBhxhVquGTkmJihgrHVHLemqP-QXEV8fuI',
-  authDomain: 'punkture-queue.firebaseapp.com',
-  projectId: 'punkture-queue',
-  storageBucket: 'punkture-queue.firebasestorage.app',
-  messagingSenderId: '434206035857',
-  appId: '1:434206035857:web:eef0504b37c6cd12f55430',
+  apiKey: 'AIzaSyDQHORJgFp4WS9dK6x9MM2D8ycvE92pvb8',
+  authDomain: 'punkture-studios.firebaseapp.com',
+  projectId: 'punkture-studios',
+  storageBucket: 'punkture-studios.firebasestorage.app',
+  messagingSenderId: '514800638322',
+  appId: '1:514800638322:web:4ec9421ed70cc7613425eb',
 };
 
 export const app = initializeApp(firebaseConfig);

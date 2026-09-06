@@ -1,14 +1,18 @@
 import { create } from 'zustand';
 import { db, allocateTicketNumber, setTicketCounter, recordItemDeletions } from './db';
-import type { Ticket, PiercingItem } from './types';
+import type { Ticket, PiercingItem, BackupPayload } from './types';
+import { validateBackup, validateItem } from './validation';
+import { withDataLock } from './dataLock';
 import { sortWaiting, nextWaitingToken } from './queue';
 
 function newId(): string {
   return crypto.randomUUID();
 }
 
+let lastStamp = 0;
 function stampNow(): number {
-  return Date.now();
+  lastStamp = Math.max(Date.now(), lastStamp + 1);
+  return lastStamp;
 }
 
 
@@ -45,8 +49,8 @@ interface AppState {
   setActiveTicket: (id: string | null) => void;
 
   // Backup
-  exportBackup: () => { tickets: Ticket[]; items: PiercingItem[] };
-  importBackup: (tickets: Ticket[], items: PiercingItem[]) => Promise<void>;
+  exportBackup: () => Promise<BackupPayload>;
+  importBackup: (payload: BackupPayload) => Promise<void>;
 }
 
 /**
@@ -95,6 +99,7 @@ export const useStore = create<AppState>((set, get) => ({
     const items = rawItems
       .map((i) => ({ ...i, updatedAt: stamp(i.updatedAt, i.createdAt) }))
       .sort((a, b) => a.createdAt - b.createdAt);
+    for (const row of [...tickets, ...items]) if (Number.isFinite(row.updatedAt)) lastStamp = Math.max(lastStamp, row.updatedAt);
 
     // Persist the backfill once so future loads read clean rows.
     const ticketFixes = rows
@@ -120,6 +125,8 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   addTicket: async (name, notes) => {
+    if (!name.trim() || name.trim().length > 200) throw new Error('Enter a client name (up to 200 characters).');
+    if (notes && notes.length > 2000) throw new Error('Notes must be at most 2000 characters.');
     const ticketNumber = await allocateTicketNumber();
     const created = stampNow();
     const ticket: Ticket = {
@@ -139,7 +146,12 @@ export const useStore = create<AppState>((set, get) => ({
 
   callTicket: async (id) => {
     const ts = stampNow();
-    await db.tickets.update(id, { status: 'called', calledAt: ts, updatedAt: ts });
+    await db.transaction('rw', db.tickets, async () => {
+      const ticket = await db.tickets.get(id);
+      if (!ticket || ticket.status !== 'waiting') throw new Error('Only waiting tickets can be called.');
+      if (await db.tickets.where('status').anyOf('called', 'in_progress').count()) throw new Error('Finish the current session first.');
+      await db.tickets.update(id, { status: 'called', calledAt: ts, updatedAt: ts });
+    });
     set((s) => ({
       tickets: s.tickets.map((t) =>
         t.id === id ? { ...t, status: 'called', calledAt: ts, updatedAt: ts } : t
@@ -154,7 +166,13 @@ export const useStore = create<AppState>((set, get) => ({
 
   startPiercing: async (id) => {
     const ts = stampNow();
-    await db.tickets.update(id, { status: 'in_progress', startedAt: ts, updatedAt: ts });
+    await db.transaction('rw', db.tickets, async () => {
+      const ticket = await db.tickets.get(id);
+      if (!ticket || !['waiting', 'called'].includes(ticket.status)) throw new Error('This ticket cannot be started.');
+      const busy = await db.tickets.where('status').anyOf('called', 'in_progress').toArray();
+      if (busy.some(t => t.id !== id)) throw new Error('Finish or return the current session to the queue first.');
+      await db.tickets.update(id, { status: 'in_progress', startedAt: ts, updatedAt: ts });
+    });
     set((s) => ({
       tickets: s.tickets.map((t) =>
         t.id === id ? { ...t, status: 'in_progress', startedAt: ts, updatedAt: ts } : t
@@ -163,6 +181,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   cancelSession: async (id: string) => {
+    if ((await db.tickets.get(id))?.status !== 'in_progress') throw new Error('Only an active session can return to the queue.');
     const currentWaiting = sortWaiting(get().tickets.filter((t) => t.id !== id));
     // Set queueOrder lower than any existing waiting ticket so it becomes Queue #1
     let queueOrder = 0;
@@ -189,7 +208,12 @@ export const useStore = create<AppState>((set, get) => ({
 
   finishTicket: async (id) => {
     const ts = stampNow();
-    await db.tickets.update(id, { status: 'finished', finishedAt: ts, updatedAt: ts });
+    await db.transaction('rw', db.tickets, db.items, async () => {
+      const ticket = await db.tickets.get(id);
+      if (!ticket || ['finished', 'cancelled'].includes(ticket.status)) throw new Error('This ticket is already closed.');
+      if (!(await db.items.where('ticketId').equals(id).count())) throw new Error('Add an item before finishing.');
+      await db.tickets.update(id, { status: 'finished', finishedAt: ts, cancelledAt: undefined, updatedAt: ts });
+    });
     set((s) => ({
       tickets: s.tickets.map((t) =>
         t.id === id ? { ...t, status: 'finished', finishedAt: ts, updatedAt: ts } : t
@@ -199,6 +223,8 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   cancelTicket: async (id) => {
+    const current = await db.tickets.get(id);
+    if (!current || ['finished', 'cancelled'].includes(current.status)) throw new Error('This ticket is already closed.');
     const ts = stampNow();
     await db.tickets.update(id, { status: 'cancelled', cancelledAt: ts, updatedAt: ts });
     set((s) => ({
@@ -210,6 +236,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   sendToEnd: async (id) => {
+    if ((await db.tickets.get(id))?.status !== 'called') throw new Error('Only a called ticket can be sent to the end.');
     const ts = stampNow();
     const queueOrder = nextWaitingToken(get().tickets);
     // Reset to waiting with new createdAt so it joins end of queue
@@ -252,14 +279,19 @@ export const useStore = create<AppState>((set, get) => ({
       ),
     }));
 
-    await db.transaction('rw', db.tickets, async () => {
-      for (let i = 0; i < nextOrder.length; i++) {
-        await db.tickets.update(nextOrder[i].id, { queueOrder: i, updatedAt: ts });
-      }
-    });
+    try {
+      await db.transaction('rw', db.tickets, async () => {
+        for (let i = 0; i < nextOrder.length; i++) {
+          await db.tickets.update(nextOrder[i].id, { queueOrder: i, updatedAt: ts });
+        }
+      });
+    } catch (error) { set({ tickets }); throw error; }
   },
 
   updateTicketNotes: async (id, notes) => {
+    const ticket = await db.tickets.get(id);
+    if (!ticket || ['finished', 'cancelled'].includes(ticket.status)) throw new Error('This ticket is closed.');
+    if (notes.length > 2000) throw new Error('Notes must be at most 2000 characters.');
     const val = notes.trim() || undefined;
     const ts = stampNow();
     await db.tickets.update(id, { notes: val, updatedAt: ts });
@@ -271,12 +303,17 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   reopenTicket: async (id) => {
+    const ticket = await db.tickets.get(id);
+    if (!ticket || !['finished', 'cancelled'].includes(ticket.status)) throw new Error('Only closed tickets can be reopened.');
+    const numberInUse = get().tickets.some(t => t.id !== id && typeof t.archivedAt !== 'number' && t.ticketNumber === ticket.ticketNumber);
+    const ticketNumber = numberInUse || typeof ticket.archivedAt === 'number' ? await allocateTicketNumber() : ticket.ticketNumber;
     const ts = stampNow();
     const queueOrder = nextWaitingToken(get().tickets);
     await db.tickets.update(id, {
       status: 'waiting',
       createdAt: ts,
       queueOrder,
+      ticketNumber,
       finishedAt: undefined,
       cancelledAt: undefined,
       calledAt: undefined,
@@ -289,6 +326,7 @@ export const useStore = create<AppState>((set, get) => ({
         t.id === id
           ? {
               ...t,
+              ticketNumber,
               status: 'waiting',
               createdAt: ts,
               queueOrder,
@@ -320,15 +358,16 @@ export const useStore = create<AppState>((set, get) => ({
         .map((t) => t.id)
     );
 
-    // Active tickets get renumbered 1..n (sorted by creation time) and their
-    // queue slots rewritten contiguously.
+    // Preserve the manually chosen waiting order while renumbering.
+    const waitingPositions = new Map(sortWaiting(tickets).map((t, i) => [t.id, i]));
     const activeTickets = tickets
       .filter((t) => t.status !== 'finished' && t.status !== 'cancelled')
-      .sort((a, b) => a.createdAt - b.createdAt)
+      .sort((a, b) => (a.status === 'waiting' ? 1 : 0) - (b.status === 'waiting' ? 1 : 0)
+        || (waitingPositions.get(a.id) ?? 0) - (waitingPositions.get(b.id) ?? 0))
       .map((t, index) => ({
         ...t,
         ticketNumber: index + 1,
-        queueOrder: index,
+        queueOrder: waitingPositions.get(t.id) ?? t.queueOrder,
         updatedAt: ts,
       }));
 
@@ -367,21 +406,38 @@ export const useStore = create<AppState>((set, get) => ({
       createdAt: created,
       updatedAt: created,
     };
-    await db.items.add(item);
+    validateItem(item);
+    await db.transaction('rw', db.tickets, db.items, async () => {
+      const ticket = await db.tickets.get(item.ticketId);
+      if (!ticket || ['finished', 'cancelled'].includes(ticket.status)) throw new Error('Select an open ticket.');
+      await db.items.add(item);
+    });
     set((s) => ({ items: [...s.items, item] }));
   },
 
   updateItem: async (id, changes) => {
     const ts = stampNow();
     const merged = { ...changes, updatedAt: ts };
-    await db.items.update(id, merged);
+    await db.transaction('rw', db.items, db.tickets, async () => {
+      const current = await db.items.get(id);
+      if (!current) throw new Error('Item no longer exists.');
+      if ((changes.id && changes.id !== id) || (changes.ticketId && changes.ticketId !== current.ticketId)) throw new Error('Item identity cannot change.');
+      const ticket = await db.tickets.get(current.ticketId);
+      if (!ticket || ['finished', 'cancelled'].includes(ticket.status)) throw new Error('This ticket is closed.');
+      validateItem({ ...current, ...merged });
+      await db.items.update(id, merged);
+    });
     set((s) => ({
       items: s.items.map((i) => (i.id === id ? { ...i, ...merged } : i)),
     }));
   },
 
   deleteItem: async (id) => {
-    await db.transaction('rw', db.items, db.meta, async () => {
+    await db.transaction('rw', db.items, db.meta, db.tickets, async () => {
+      const item = await db.items.get(id);
+      if (!item) return;
+      const ticket = await db.tickets.get(item.ticketId);
+      if (!ticket || ['finished', 'cancelled'].includes(ticket.status)) throw new Error('This ticket is closed.');
       await db.items.delete(id);
       await recordItemDeletions([id]);
     });
@@ -389,6 +445,8 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   deleteItemsByTicket: async (ticketId) => {
+    const ticket = await db.tickets.get(ticketId);
+    if (!ticket || ['finished', 'cancelled'].includes(ticket.status)) throw new Error('This ticket is closed.');
     const doomed = (await db.items.where('ticketId').equals(ticketId).toArray()).map((i) => i.id);
     await db.transaction('rw', db.items, db.meta, async () => {
       if (doomed.length > 0) {
@@ -401,43 +459,43 @@ export const useStore = create<AppState>((set, get) => ({
 
   setActiveTicket: (id) => set({ activeTicketId: id }),
 
-  exportBackup: () => {
-    const { tickets, items } = get();
-    return { tickets, items };
-  },
+  exportBackup: async () => db.transaction('r', db.tickets, db.items, db.meta, db.settings, async () => ({
+    schemaVersion: 2,
+    exportedAt: new Date().toISOString(),
+    tickets: await db.tickets.toArray(),
+    items: await db.items.toArray(),
+    ticketCounter: (await db.meta.get('ticketCounter'))?.value ?? (await db.tickets.toArray()).reduce((max, ticket) => typeof ticket.archivedAt === 'number' ? max : Math.max(max, ticket.ticketNumber), 0),
+    settings: (await db.settings.get('public')) ?? null,
+  })),
 
-  importBackup: async (tickets, items) => {
-    // Backfill sync/audit fields for backups exported before they existed.
-    const readyTickets: Ticket[] = tickets.map((t) => ({
-      ...t,
-      updatedAt: typeof t.updatedAt === 'number' ? t.updatedAt : t.createdAt,
-    }));
-    const readyItems: PiercingItem[] = items.map((i) => ({
-      ...i,
-      updatedAt: typeof i.updatedAt === 'number' ? i.updatedAt : i.createdAt,
-    }));
-
-    let maxNumber = 0;
-    for (const t of readyTickets) {
-      if (typeof t.ticketNumber === 'number' && t.ticketNumber > maxNumber) {
-        maxNumber = t.ticketNumber;
-      }
-    }
-
-    await db.transaction('rw', db.tickets, db.items, db.meta, async () => {
+  importBackup: async (raw) => {
+    const payload = validateBackup(raw);
+    const ts = stampNow();
+    await db.transaction('rw', db.tickets, db.items, db.meta, db.settings, async () => {
       await db.tickets.clear();
       await db.items.clear();
-      await db.meta.delete('ticketCounter');
-      if (readyTickets.length > 0) await db.tickets.bulkAdd(readyTickets);
-      if (readyItems.length > 0) await db.items.bulkAdd(readyItems);
-      await setTicketCounter(maxNumber);
+      await db.meta.clear();
+      await db.settings.clear();
+      await db.tickets.bulkAdd(payload.tickets.map(t => ({ ...t, updatedAt: ts })));
+      await db.items.bulkAdd(payload.items.map(i => ({ ...i, updatedAt: ts })));
+      if (payload.settings) await db.settings.put({ ...payload.settings, updatedAt: ts });
+      await setTicketCounter(payload.ticketCounter ?? 0);
+      // A durable restore intent survives reloads, offline use and partial cloud writes.
+      await db.meta.put({ key: 'restorePending', value: ts });
     });
-    // Normalize queue order for backups created before reordering existed.
-    const normalized = await normalizeWaitingOrder(readyTickets);
-    set({
-      tickets: normalized,
-      items: readyItems.sort((a, b) => a.createdAt - b.createdAt),
-      activeTicketId: null,
-    });
+    await get().loadAll();
+    set({ activeTicketId: null });
   },
 }));
+
+// Sync and every local mutation share one lock. callNext delegates to callTicket.
+const serializedActions = [
+  'addTicket', 'callTicket', 'startPiercing', 'cancelSession', 'finishTicket',
+  'cancelTicket', 'sendToEnd', 'moveWaitingTicket', 'updateTicketNotes',
+  'reopenTicket', 'clearHistoryAndResetNumbering', 'addItem', 'updateItem',
+  'deleteItem', 'deleteItemsByTicket', 'importBackup', 'exportBackup',
+] as const;
+for (const key of serializedActions) {
+  const action = useStore.getState()[key] as (...args: never[]) => Promise<unknown>;
+  useStore.setState({ [key]: (...args: never[]) => withDataLock(() => action(...args)) });
+}

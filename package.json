@@ -8,8 +8,10 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "deploy": "npm run build && npx --yes firebase-tools deploy",
-    "firebase:login": "npx --yes firebase-tools login"
+    "deploy": "npm run build && npx --yes firebase-tools@15.29.0 deploy --only hosting,firestore:rules",
+    "firebase:login": "npx --yes firebase-tools@15.29.0 login",
+    "test": "node --experimental-test-module-mocks --import ./tests/register.mjs --test tests/*.test.mjs",
+    "test:rules": "node scripts/run-rules-tests.cjs"
   },
   "dependencies": {
     "dexie": "^4.4.4",
@@ -20,14 +22,20 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^30.0.1",
     "oxlint": "^1.75.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.0"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

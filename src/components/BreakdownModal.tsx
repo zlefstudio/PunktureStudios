@@ -14,10 +14,12 @@ interface Props {
 export function BreakdownModal({ ticket, items, total, onClose, onConfirm }: Props) {
   const [confirming, setConfirming] = useState(false);
 
+  const [error, setError] = useState<string | null>(null);
   async function handleConfirm() {
+    if (confirming) return;
+    setError(null);
     setConfirming(true);
-    await onConfirm();
-    setConfirming(false);
+    try { await onConfirm(); } catch (e) { setError(e instanceof Error ? e.message : 'Could not finish ticket.'); } finally { setConfirming(false); }
   }
 
   return (
@@ -25,7 +27,7 @@ export function BreakdownModal({ ticket, items, total, onClose, onConfirm }: Pro
       className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
       style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(12px)' }}
     >
-      <div
+      <div role="dialog" aria-modal="true" aria-label="Order summary"
         className="w-full max-w-xl rounded-3xl overflow-hidden flex flex-col"
         style={{
           background: 'var(--color-overlay)',
@@ -34,6 +36,7 @@ export function BreakdownModal({ ticket, items, total, onClose, onConfirm }: Pro
           maxHeight: '90vh',
         }}
       >
+        {error && <p role="alert" className="p-4 text-red-400">{error}</p>}
         {/* ── Header ── */}
         <div
           className="flex items-start justify-between px-8 pt-7 pb-5"
@@ -67,14 +70,14 @@ export function BreakdownModal({ ticket, items, total, onClose, onConfirm }: Pro
             }}
             onMouseEnter={(e) => {
               const el = e.currentTarget;
-              el.style.background   = 'rgba(255,255,255,0.08)';
-              el.style.color        = 'var(--color-text)';
-              el.style.borderColor  = 'var(--color-border)';
+              el.style.background = 'rgba(255,255,255,0.08)';
+              el.style.color = 'var(--color-text)';
+              el.style.borderColor = 'var(--color-border)';
             }}
             onMouseLeave={(e) => {
               const el = e.currentTarget;
-              el.style.background  = 'transparent';
-              el.style.color       = 'var(--color-text-faint)';
+              el.style.background = 'transparent';
+              el.style.color = 'var(--color-text-faint)';
               el.style.borderColor = 'transparent';
             }}
           >
@@ -85,10 +88,10 @@ export function BreakdownModal({ ticket, items, total, onClose, onConfirm }: Pro
         {/* ── Items list ── */}
         <div className="px-8 py-5 overflow-y-auto flex-1" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
           {items.map((item, idx) => {
-            const lineTotal           = (item.basePrice + item.upgradePrice) * item.quantity;
+            const lineTotal = (item.basePrice + item.upgradePrice) * item.quantity;
             const isStandaloneJewelry = item.placementName === 'Jewelry' || item.basePrice === 0;
-            const hasUpgrade          = item.upgradePrice > 0;
-            const isLast              = idx === items.length - 1;
+            const hasUpgrade = item.upgradePrice > 0;
+            const isLast = idx === items.length - 1;
 
             return (
               <div

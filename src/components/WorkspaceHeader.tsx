@@ -10,11 +10,13 @@ interface Props {
 }
 
 export function WorkspaceHeader({ ticket }: Props) {
-  const startPiercing      = useStore((s) => s.startPiercing);
-  const cancelSession      = useStore((s) => s.cancelSession);
-  const cancelTicket       = useStore((s) => s.cancelTicket);
-  const updateTicketNotes  = useStore((s) => s.updateTicketNotes);
-  const items              = useStore((s) => s.items);
+  const tickets = useStore(s => s.tickets);
+  const anotherSession = tickets.some(t => t.id !== ticket.id && ['called', 'in_progress'].includes(t.status));
+  const startPiercing = useStore((s) => s.startPiercing);
+  const cancelSession = useStore((s) => s.cancelSession);
+  const cancelTicket = useStore((s) => s.cancelTicket);
+  const updateTicketNotes = useStore((s) => s.updateTicketNotes);
+  const items = useStore((s) => s.items);
 
   const { estimates, inProgressEstimate } = useQueueWaitEstimates();
   const waitEstimate = ticket.status === 'waiting' ? estimates.get(ticket.id) : undefined;
@@ -23,8 +25,8 @@ export function WorkspaceHeader({ ticket }: Props) {
 
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [sessionConfirm, setSessionConfirm] = useState(false);
-  const [notesEditing,  setNotesEditing]  = useState(false);
-  const [notesVal,      setNotesVal]      = useState(ticket.notes ?? '');
+  const [notesEditing, setNotesEditing] = useState(false);
+  const [notesVal, setNotesVal] = useState(ticket.notes ?? '');
 
   async function handleCancel() {
     await cancelTicket(ticket.id);
@@ -72,9 +74,8 @@ export function WorkspaceHeader({ ticket }: Props) {
             {/* Live Time Estimate Badge */}
             {status === 'waiting' && waitEstimate && (
               <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium time-text-transition ${
-                  waitEstimate.waitMinutes === 0 ? 'next-pill-glow' : ''
-                }`}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-medium time-text-transition ${waitEstimate.waitMinutes === 0 ? 'next-pill-glow' : ''
+                  }`}
                 style={{
                   fontSize: '11px',
                   background:
@@ -150,8 +151,10 @@ export function WorkspaceHeader({ ticket }: Props) {
             onChange={(e) => setNotesVal(e.target.value)}
             onBlur={handleNotesBlur}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur();
+              if (e.key === 'Escape') { setNotesEditing(false); setNotesVal(ticket.notes ?? ''); }
+              if (e.key === 'Enter') e.currentTarget.blur();
             }}
+            maxLength={2000}
             placeholder="Notes…"
             className="input"
           />
@@ -184,7 +187,8 @@ export function WorkspaceHeader({ ticket }: Props) {
           {status !== 'in_progress' && (
             <ActionBtn
               icon={<Play size={13} />}
-              label="Start Piercing"
+              label={anotherSession ? "Another session is active" : "Start Piercing"}
+              disabled={anotherSession}
               variant="brand"
               onClick={() => startPiercing(ticket.id)}
             />
@@ -270,13 +274,17 @@ function ActionBtn({
   variant,
   title,
   onClick,
+  disabled = false,
 }: {
   icon?: React.ReactNode;
   label: string;
   variant: BtnVariant;
   title?: string;
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
+  disabled?: boolean;
 }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const styles: Record<BtnVariant, React.CSSProperties> = {
     brand: {
       background: 'var(--color-brand)',
@@ -306,14 +314,18 @@ function ActionBtn({
   };
 
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-ui-sm font-semibold"
-      style={styles[variant]}
-    >
-      {icon}
-      {label}
-    </button>
+    <span>
+      <button
+        disabled={disabled || busy}
+        onClick={async () => { if (busy) return; setBusy(true); setError(null); try { await onClick(); } catch (e) { setError(e instanceof Error ? e.message : 'Action failed.'); } finally { setBusy(false); } }}
+        title={title}
+        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-ui-sm font-semibold"
+        style={styles[variant]}
+      >
+        {icon}
+        {label}
+      </button>
+      {error && <span role="alert" className="block text-red-400 text-xs">{error}</span>}
+    </span>
   );
 }

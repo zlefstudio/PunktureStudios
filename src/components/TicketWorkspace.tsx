@@ -60,7 +60,7 @@ export function TicketWorkspace() {
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-base)' }}>
       {/* Header */}
-      <WorkspaceHeader ticket={ticket} />
+      <WorkspaceHeader key={ticket.id} ticket={ticket} />
 
       {/* Main scrollable area */}
       <div className="flex-1 overflow-y-auto">

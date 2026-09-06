@@ -4,6 +4,8 @@ import { firestore } from '../firebase';
 import { Ticket, CalendarHeart } from 'lucide-react';
 import type { PublicSettings } from '../types';
 import { PiercingRitualAnimation } from './PiercingRitualAnimation';
+import { PublicShell } from './PublicShell';
+import { safeHttpUrl } from '../validation';
 
 /**
  * PUBLIC LIVE QUEUE — customer-facing, real-time, privacy-safe.
@@ -42,6 +44,12 @@ function friendlyError(err: unknown): string {
 }
 
 export function LiveQueuePage() {
+  const [heartbeat, setHeartbeat] = useState(0);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(timer); }, []);
+  useEffect(() => onSnapshot(doc(firestore, 'public', 'heartbeat'), snap => {
+    const stamp = snap.data()?.publishedAt; setHeartbeat(stamp?.toMillis?.() ?? 0);
+  }, () => setHeartbeat(0)), []);
   const [rows, setRows] = useState<PublicRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [publicSettings, setPublicSettings] = useState<PublicSettings | null>(null);
@@ -67,12 +75,11 @@ export function LiveQueuePage() {
     return unsub;
   }, []);
 
-  // "Next pop-up" info edited by staff in the 🌐 Public tab.
   useEffect(() => {
     const unsub = onSnapshot(
       doc(firestore, 'public', 'public'),
       (snap) => {
-        if (snap.exists()) setPublicSettings(snap.data() as PublicSettings);
+        setPublicSettings(snap.exists() ? snap.data() as PublicSettings : null);
       },
       () => {
         setPublicSettings(null);
@@ -98,6 +105,8 @@ export function LiveQueuePage() {
     ? Math.max(...rows.map((r) => r.updatedAt ?? 0))
     : undefined;
   const hasLive = (data.waiting.length + data.called.length + data.inProgress.length) > 0;
+  const fresh = heartbeat > 0 && now - heartbeat < 90000 && now - heartbeat > -60000;
+  const live = hasLive && fresh && !error;
   const nowServing = data.inProgress[0] ?? data.called[0];
   const nextUp = data.waiting[0];
   const ps = publicSettings;
@@ -105,7 +114,7 @@ export function LiveQueuePage() {
     ps !== null &&
     ps.eventActive === true &&
     typeof ps.eventDate === 'string' &&
-    ps.eventDate.length > 0;
+    ps.eventDate.length > 0 && ps.eventDate >= new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
   const eventDateLabel = hasEvent && publicSettings?.eventDate
     ? new Date(publicSettings.eventDate + 'T00:00:00').toLocaleDateString('en-PH', {
         weekday: 'long',
@@ -114,201 +123,179 @@ export function LiveQueuePage() {
         year: 'numeric',
       })
     : '';
-  const mapUrl = publicSettings?.eventMapUrl?.trim();
+  const mapUrl = safeHttpUrl(publicSettings?.eventMapUrl);
+  const studioMapUrl = safeHttpUrl(publicSettings?.studioMapUrl);
+  const eventTitle = publicSettings?.eventTitle?.trim() || 'Next pop-up coming soon';
+  const eventHours = publicSettings?.eventHours?.trim();
   const showStage = hasEvent || hasLive;
 
   return (
-    <div
-      className="min-h-dvh w-full overflow-x-hidden"
-      style={{
-        background:
-          'radial-gradient(1200px 600px at 50% -10%, rgba(139,92,246,0.20) 0%, transparent 60%), radial-gradient(900px 500px at 90% 110%, rgba(217,119,6,0.12) 0%, transparent 55%), var(--color-base)',
-        color: 'var(--color-text)',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        paddingTop: 'env(safe-area-inset-top, 0px)',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        paddingLeft: 'env(safe-area-inset-left, 0px)',
-        paddingRight: 'env(safe-area-inset-right, 0px)',
-      }}
-    >
-      <div
-        className="mx-auto w-full max-w-md md:max-w-4xl lg:max-w-5xl px-4 sm:px-6 py-6 md:py-8 space-y-6"
-        style={{ animation: 'pk-fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both' }}
-      >
-        {/* ── Brand header ── */}
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <img
-              src="/logo.png"
-              alt="PUNKTURE STUDIOS"
-              className="w-9 h-9 object-contain drop-shadow select-none"
-            />
-            <p
-              className="font-sanguine select-none leading-none"
-              style={{ fontSize: 17, letterSpacing: '0.12em', color: 'var(--color-text)' }}
-            >
-              PUNKTURE STUDIOS
-            </p>
-          </div>
-          <span
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold"
-            style={{ background: hasLive ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.06)', color: hasLive ? '#34d399' : 'var(--color-text-faint)', border: `1px solid ${hasLive ? 'rgba(16,185,129,0.35)' : 'var(--color-border)'}` }}
-          >
-            <span className="relative flex h-2 w-2">
-              {hasLive && (
-                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-              )}
-              <span
-                className={`relative inline-flex rounded-full h-2 w-2 ${hasLive ? 'bg-emerald-400' : 'bg-white/20'}`}
-              />
-            </span>
-            {hasLive ? 'LIVE' : 'OFFLINE'}
+    <PublicShell page="live" wide>
+      {/* Status row */}
+      <div className="flex items-center justify-between mb-5">
+        <span
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold"
+          style={{
+            background: live ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.06)',
+            color: live ? '#34d399' : 'var(--color-text-faint)',
+            border: `1px solid ${live ? 'rgba(16,185,129,0.35)' : 'var(--color-border)'}`,
+          }}
+        >
+          <span className="relative flex h-2 w-2">
+            {live && (
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+            )}
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${live ? 'bg-emerald-400' : 'bg-white/20'}`} />
           </span>
-        </header>
+          {live ? 'LIVE' : hasLive ? 'UPDATES PAUSED' : fresh ? 'QUEUE EMPTY' : 'OFFLINE'}
+        </span>
+        <span className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
+          {lastUpdated
+            ? `Updated ${new Date(lastUpdated).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}`
+            : 'Waiting for updates…'}
+        </span>
+      </div>
 
-        {/* ── Main Layout: Mobile stacked (stage on top), Desktop 2-column (stage beside queue) ── */}
-        <div className={`grid grid-cols-1 ${showStage ? 'md:grid-cols-2' : ''} gap-6 md:gap-8 items-start`}>
-          {/* Stage: Top on mobile, left on desktop */}
-          {showStage && (
-            <div className="w-full flex justify-center md:sticky md:top-6">
-              <PiercingRitualAnimation />
+      {hasLive && !fresh && <p role="status" className="mb-4 rounded-xl bg-amber-950 p-3 text-amber-100">Updates are paused. This is the last known queue; please check with staff.</p>}
+      <div className={`grid grid-cols-1 ${showStage ? 'md:grid-cols-2' : ''} gap-6 md:gap-8 items-start`}>
+        {showStage && (
+          <div className="w-full flex justify-center md:sticky md:top-6">
+            <PiercingRitualAnimation />
+          </div>
+        )}
+
+        <div className="w-full space-y-5">
+          {error ? (
+            <div
+              className="rounded-2xl p-6 text-center space-y-2"
+              style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(248,113,113,0.25)' }}
+            >
+              <p className="font-bold text-body" style={{ color: 'var(--color-error-text)' }}>
+                Queue unavailable
+              </p>
+              <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+                {error}
+              </p>
             </div>
-          )}
-
-          {/* Queue Body: Below stage on mobile, right column on desktop */}
-          <div className="w-full space-y-6">
-            {error ? (
+          ) : rows === null ? (
+            <div
+              className="rounded-2xl p-8 space-y-3"
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)' }}
+            >
               <div
-                className="rounded-2xl p-6 text-center space-y-2"
-                style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(248,113,113,0.25)' }}
+                className="w-12 h-12 mx-auto rounded-full"
+                style={{ border: '2px solid transparent', borderTopColor: 'var(--color-brand)', animation: 'pk-spin 0.9s linear infinite' }}
+              />
+              <p className="text-center text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+                Loading live queue…
+              </p>
+            </div>
+          ) : !hasLive ? (
+            hasEvent ? (
+              <div
+                id="next-popup"
+                className="rounded-3xl p-8 text-center space-y-3 overflow-hidden"
+                style={{
+                  background: 'linear-gradient(145deg, rgba(139,92,246,0.16), rgba(217,119,6,0.08))',
+                  border: '1px solid rgba(168,85,247,0.35)',
+                }}
               >
-                <p className="font-bold text-body" style={{ color: 'var(--color-error-text)' }}>
-                  Queue unavailable
+                <div className="text-3xl" style={{ animation: 'pk-logo-float 2.6s ease-in-out infinite' }}>
+                  <CalendarHeart size={30} style={{ margin: '0 auto', color: 'var(--color-brand-text)' }} />
+                </div>
+                <p className="text-label-xs" style={{ color: 'var(--color-warn-text)' }}>
+                  SAVE THE DATE
                 </p>
-                <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-                  {error}
+                <p className="font-sanguine leading-tight" style={{ fontSize: 30, letterSpacing: '0.04em', color: 'var(--color-text)' }}>
+                  {eventTitle}
                 </p>
+                <p className="font-black" style={{ fontSize: 20 }}>
+                  {eventDateLabel}
+                </p>
+                {publicSettings?.eventLocation && (
+                  <p className="font-semibold text-body" style={{ color: 'var(--color-text)' }}>
+                    📍 {publicSettings.eventLocation}
+                  </p>
+                )}
+                {eventHours && (
+                  <p className="text-body-sm font-mono" style={{ color: 'var(--color-text-muted)' }}>
+                    🕒 {eventHours}
+                  </p>
+                )}
+                {mapUrl && (
+                  <a
+                    href={mapUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-2xl font-bold"
+                    style={{ background: 'var(--color-brand)', color: '#fff', boxShadow: 'var(--shadow-brand)', textDecoration: 'none' }}
+                  >
+                    📍 Open in Maps
+                  </a>
+                )}
               </div>
-            ) : rows === null ? (
-              <div className="rounded-2xl p-8 space-y-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)' }}>
-                <div className="w-12 h-12 mx-auto rounded-full" style={{ border: '2px solid transparent', borderTopColor: 'var(--color-brand)', animation: 'pk-spin 0.9s linear infinite' }} />
-                <p className="text-center text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-                  Loading live queue…
+            ) : (
+              <div
+                id="next-popup"
+                className="rounded-3xl p-8 text-center space-y-3 overflow-hidden"
+                style={{
+                  background: 'linear-gradient(145deg, rgba(139,92,246,0.16), rgba(217,119,6,0.06))',
+                  border: '1px solid rgba(168,85,247,0.30)',
+                }}
+              >
+                <div className="text-3xl" style={{ animation: 'pk-logo-float 2.6s ease-in-out infinite' }}>✨</div>
+                <p className="text-label-xs" style={{ color: 'var(--color-warn-text)' }}>
+                  SAVE THE DATE
                 </p>
+                <p className="font-sanguine leading-tight" style={{ fontSize: 30, letterSpacing: '0.04em', color: 'var(--color-text)' }}>
+                  {eventTitle}
+                </p>
+                {publicSettings?.studioAddress && (
+                  <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+                    📍 {publicSettings.studioAddress}
+                  </p>
+                )}
+                {(studioMapUrl || mapUrl) && (
+                  <a
+                    href={studioMapUrl || mapUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-2xl font-bold"
+                    style={{ background: 'var(--color-brand)', color: '#fff', boxShadow: 'var(--shadow-brand)', textDecoration: 'none' }}
+                  >
+                    📍 View location
+                  </a>
+                )}
               </div>
-            ) : !hasLive ? (
-              hasEvent ? (
+            )
+          ) : (
+            <>
+              {/* Now serving */}
+              {nowServing && (
                 <div
-                  className="rounded-3xl p-7 text-center space-y-3 overflow-hidden"
+                  className="relative overflow-hidden rounded-3xl p-6 text-center"
                   style={{
-                    background: 'linear-gradient(145deg, rgba(139,92,246,0.16), rgba(217,119,6,0.08))',
-                    border: '1px solid rgba(168,85,247,0.35)',
+                    background: 'linear-gradient(145deg, rgba(139,92,246,0.22), rgba(139,92,246,0.06))',
+                    border: '1px solid rgba(168,85,247,0.45)',
+                    boxShadow: '0 0 0 1px rgba(168,85,247,0.12), 0 18px 50px -20px rgba(139,92,246,0.5)',
                   }}
                 >
-                  <div className="text-3xl" style={{ animation: 'pk-logo-float 2.6s ease-in-out infinite' }}>
-                    <CalendarHeart size={30} style={{ margin: '0 auto', color: 'var(--color-brand-text)' }} />
-                  </div>
-                  <p className="text-label-xs" style={{ color: 'var(--color-warn-text)' }}>
-                    NEXT POP-UP · SAVE THE DATE
+                  <p className="text-label-xs mb-1" style={{ color: 'var(--color-brand-text)' }}>
+                    {nowServing.status === 'in_progress' ? '⚡ NOW SERVING' : '📣 NOW CALLING'}
                   </p>
-                  <p className="font-black leading-tight" style={{ fontSize: 22 }}>
-                    {eventDateLabel}
+                  <p className="font-black leading-none" style={{ fontSize: 64, fontFamily: 'var(--font-mono)', color: '#fff' }}>
+                    #{nowServing.ticketNumber}
                   </p>
-                  {publicSettings?.eventLocation && (
-                    <p className="font-semibold text-body" style={{ color: 'var(--color-text)' }}>
-                      📍 {publicSettings.eventLocation}
-                    </p>
-                  )}
-                  {mapUrl && (
-                    <a
-                      href={mapUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-2xl font-bold"
-                      style={{
-                        background: 'rgba(255,255,255,0.06)',
-                        color: 'var(--color-text)',
-                        border: '1px solid var(--color-border-strong)',
-                        textDecoration: 'none',
-                      }}
-                    >
-                      📍 Open in Maps
-                    </a>
-                  )}
-                  <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
-                    No live queue yet — but you can book a home studio appointment! ✨
+                  <p className="mt-2 text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
+                    {nowServing.status === 'in_progress'
+                      ? 'This ticket is at the piercing chair now ✨'
+                      : 'Please come to the station! 💜'}
                   </p>
-                  <a
-                    href="/appointment.html"
-                    className="inline-block px-6 py-3 rounded-2xl font-black mt-1"
-                    style={{
-                      background: 'linear-gradient(135deg, var(--color-warn), #d97706)',
-                      color: '#fff',
-                      boxShadow: 'var(--shadow-brand)',
-                    }}
-                  >
-                    📅 Book a home studio appointment
-                  </a>
                 </div>
-              ) : (
-                <div className="rounded-2xl p-8 text-center space-y-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)' }}>
-                  <div className="text-3xl" style={{ animation: 'pk-logo-float 2.6s ease-in-out infinite' }}>✨</div>
-                  <p className="font-black" style={{ fontSize: 17 }}>No live queue right now</p>
-                  <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-                    We're between pop-ups — stay tuned for the next schedule. 👀
-                  </p>
-                  {mapUrl && (
-                    <a
-                      href={mapUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-2xl font-bold"
-                      style={{
-                        background: 'rgba(255,255,255,0.06)',
-                        color: 'var(--color-text)',
-                        border: '1px solid var(--color-border-strong)',
-                        textDecoration: 'none',
-                      }}
-                    >
-                      📍 View location
-                    </a>
-                  )}
-                  <a
-                    href="/appointment.html"
-                    className="inline-block px-5 py-2.5 rounded-2xl font-bold mt-1"
-                    style={{ background: 'var(--color-brand)', color: '#fff' }}
-                  >
-                    Book a home studio appointment
-                  </a>
-                </div>
-              )
-            ) : (
-              <>
-                {/* Now serving */}
-                {nowServing && (
-                  <div
-                    className="relative overflow-hidden rounded-3xl p-6 text-center"
-                    style={{
-                      background: 'linear-gradient(145deg, rgba(139,92,246,0.22), rgba(139,92,246,0.06))',
-                      border: '1px solid rgba(168,85,247,0.45)',
-                      boxShadow: '0 0 0 1px rgba(168,85,247,0.12), 0 18px 50px -20px rgba(139,92,246,0.5)',
-                    }}
-                  >
-                    <p className="text-label-xs mb-1" style={{ color: 'var(--color-brand-text)' }}>
-                      {nowServing.status === 'in_progress' ? '⚡ NOW SERVING' : '📣 NOW CALLING'}
-                    </p>
-                    <p className="font-black leading-none" style={{ fontSize: 64, fontFamily: 'var(--font-mono)', color: '#fff' }}>
-                      #{nowServing.ticketNumber}
-                    </p>
-                    <p className="mt-2 text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
-                      {nowServing.status === 'in_progress'
-                        ? 'This ticket is at the piercing chair now ✨'
-                        : 'Please come to the station! 💜'}
-                    </p>
-                  </div>
-                )}
+              )}
 
-                {/* Next up */}
+              {/* Queue card */}
+              <div className="rounded-3xl p-5 space-y-3" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                 {nextUp && (
                   <div
                     className="flex items-center justify-between rounded-2xl px-5 py-4"
@@ -323,7 +310,6 @@ export function LiveQueuePage() {
                   </div>
                 )}
 
-                {/* Waiting list */}
                 {data.waiting.length > 0 && (
                   <div className="space-y-2">
                     <p className="flex items-center gap-1.5 text-label-xs" style={{ color: 'var(--color-text-faint)' }}>
@@ -354,7 +340,10 @@ export function LiveQueuePage() {
                           #{w.ticketNumber}
                         </span>
                         {w.position === 0 && !nowServing && (
-                          <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(217,119,6,0.15)', color: 'var(--color-warn-text)', border: '1px solid rgba(217,119,6,0.3)' }}>
+                          <span
+                            className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full"
+                            style={{ background: 'rgba(217,119,6,0.15)', color: 'var(--color-warn-text)', border: '1px solid rgba(217,119,6,0.3)' }}
+                          >
                             NEXT
                           </span>
                         )}
@@ -362,24 +351,12 @@ export function LiveQueuePage() {
                     ))}
                   </div>
                 )}
-              </>
-            )}
-          </div>
+              </div>
+            </>
+          )}
         </div>
-
-        {/* ── Footer ── */}
-        <footer className="pt-2 pb-1 text-center space-y-1">
-          <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
-            {lastUpdated
-              ? `Updated ${new Date(lastUpdated).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })} · live`
-              : 'Waiting for live updates…'}
-          </p>
-          <p className="text-[10px]" style={{ color: 'var(--color-text-faint)', opacity: 0.6 }}>
-            PUNKTURE STUDIOS · privacy-safe (no names shown)
-          </p>
-        </footer>
       </div>
-    </div>
+    </PublicShell>
   );
 }
 

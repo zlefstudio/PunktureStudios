@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import type { Ticket, PiercingItem } from './types';
 import { sortWaiting } from './queue';
 import { useStore } from './store';
@@ -56,7 +56,7 @@ export function getTicketDuration(items: PiercingItem[]): number {
   }
 
   const sum = items.reduce((acc, item) => acc + getItemDuration(item), 0);
-  return sum > 0 ? sum : DEFAULT_PIERCING_DURATION;
+  return sum;
 }
 
 /**
@@ -106,14 +106,20 @@ export function calculateQueueWaitTimes(
   currentTime = Date.now()
 ): QueueEstimates {
   const estimates = new Map<string, TicketWaitEstimate>();
+  const byTicket = new Map<string, PiercingItem[]>();
+  for (const item of items) {
+    const group = byTicket.get(item.ticketId) ?? [];
+    group.push(item); byTicket.set(item.ticketId, group);
+  }
 
   // Find currently active in-progress ticket (if any)
   const inProgressTicket = tickets.find((t) => t.status === 'in_progress');
-  let rollingWaitMinutes = 0;
+  let rollingWaitMinutes = tickets.filter(t => t.status === 'called')
+    .reduce((sum, t) => sum + getTicketDuration(byTicket.get(t.id) ?? []), 0);
   let inProgressEstimate: InProgressEstimate | undefined = undefined;
 
   if (inProgressTicket) {
-    const ipItems = items.filter((i) => i.ticketId === inProgressTicket.id);
+    const ipItems = byTicket.get(inProgressTicket.id) ?? [];
     const totalDuration = getTicketDuration(ipItems);
     const elapsedMs = Math.max(0, currentTime - (inProgressTicket.startedAt ?? currentTime));
     const elapsedMinutes = Math.floor(elapsedMs / 60000);
@@ -122,7 +128,7 @@ export function calculateQueueWaitTimes(
     // If overtime, assume wrapping up within 1 minute
     const remainingMinutes = isOvertime ? 1 : Math.max(1, totalDuration - elapsedMinutes);
 
-    rollingWaitMinutes = remainingMinutes;
+    rollingWaitMinutes += remainingMinutes;
     inProgressEstimate = {
       ticketId: inProgressTicket.id,
       totalDuration,
@@ -136,7 +142,7 @@ export function calculateQueueWaitTimes(
   const waitingTickets = sortWaiting(tickets);
 
   for (const ticket of waitingTickets) {
-    const ticketSpecificItems = items.filter((i) => i.ticketId === ticket.id);
+    const ticketSpecificItems = byTicket.get(ticket.id) ?? [];
     const ownDuration = getTicketDuration(ticketSpecificItems);
 
     const waitMinutes = rollingWaitMinutes;
@@ -166,17 +172,33 @@ export function calculateQueueWaitTimes(
  * real-time relative and clock-based wait estimates fresh.
  */
 export function useLiveClock(intervalMs = 15000): number {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setNow(Date.now());
-    }, intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-
-  return now;
+  const clock = useMemo(() => getClock(intervalMs), [intervalMs]);
+  return useSyncExternalStore(clock.subscribe, clock.getSnapshot, clock.getSnapshot);
 }
+
+const clocks = new Map<number, ReturnType<typeof createClock>>();
+function createClock(interval: number) {
+  let now = Date.now();
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const listeners = new Set<() => void>();
+  return {
+    getSnapshot: () => now,
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      if (!timer) {
+        now = Date.now();
+        timer = setInterval(() => { now = Date.now(); listeners.forEach(l => l()); }, interval);
+      }
+      return () => { listeners.delete(listener); if (!listeners.size) { clearInterval(timer); timer = undefined; } };
+    },
+  };
+}
+function getClock(interval: number) {
+  let clock = clocks.get(interval);
+  if (!clock) { clock = createClock(interval); clocks.set(interval, clock); }
+  return clock;
+}
+let estimateCache: { tickets: Ticket[]; items: PiercingItem[]; now: number; result: QueueEstimates } | undefined;
 
 /**
  * Reactive hook returning current queue estimates and in-progress session stats.
@@ -186,5 +208,10 @@ export function useQueueWaitEstimates() {
   const items = useStore((s) => s.items);
   const now = useLiveClock(15000);
 
-  return useMemo(() => calculateQueueWaitTimes(tickets, items, now), [tickets, items, now]);
+  return useMemo(() => {
+    if (!estimateCache || estimateCache.tickets !== tickets || estimateCache.items !== items || estimateCache.now !== now) {
+      estimateCache = { tickets, items, now, result: calculateQueueWaitTimes(tickets, items, now) };
+    }
+    return estimateCache.result;
+  }, [tickets, items, now]);
 }

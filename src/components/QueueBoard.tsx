@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { UserPlus, Search, X } from 'lucide-react';
 import { useStore } from '../store';
 import { sortWaiting } from '../queue';
@@ -12,31 +12,38 @@ import logoImg from '../assets/logo.png';
 type Tab = 'active' | 'history' | 'public';
 
 const TAB_META: { id: Tab; label: string }[] = [
-  { id: 'active',  label: '🗂 Queue'   },
+  { id: 'active', label: '🗂 Queue' },
   { id: 'history', label: '📋 History' },
-  { id: 'public',  label: '🌐 Public'  },
+  { id: 'public', label: '🌐 Public' },
 ];
 
 export function QueueBoard() {
-  const tickets        = useStore((s) => s.tickets);
-  const addTicket      = useStore((s) => s.addTicket);
+  const tickets = useStore((s) => s.tickets);
+  const addTicket = useStore((s) => s.addTicket);
   const setActiveTicket = useStore((s) => s.setActiveTicket);
   const moveWaitingTicket = useStore((s) => s.moveWaitingTicket);
 
-  const [name,    setName]    = useState('');
-  const [notes,   setNotes]   = useState('');
-  const [search,  setSearch]  = useState('');
-  const [tab,     setTab]     = useState<Tab>('active');
-  const [adding,  setAdding]  = useState(false);
+  const [name, setName] = useState('');
+  const [notes, setNotes] = useState('');
+  const [search, setSearch] = useState('');
+  const [tab, setTab] = useState<Tab>('active');
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   async function handleAdd() {
     const trimmed = name.trim();
-    if (!trimmed) return;
-    const ticket = await addTicket(trimmed, notes.trim() || undefined);
-    setName('');
-    setNotes('');
-    setAdding(false);
-    setActiveTicket(ticket.id);
+    if (!trimmed || savingRef.current) return;
+    savingRef.current = true; setSaving(true); setAddError(null);
+    try {
+      const ticket = await addTicket(trimmed, notes.trim() || undefined);
+      setName('');
+      setNotes('');
+      setAdding(false);
+      setActiveTicket(ticket.id);
+    } catch (e) { setAddError(e instanceof Error ? e.message : 'Could not add client.'); }
+    finally { savingRef.current = false; setSaving(false); }
   }
 
   function handleKeyDown(e: KeyboardEvent) {
@@ -44,26 +51,27 @@ export function QueueBoard() {
     if (e.key === 'Escape') { setAdding(false); setName(''); setNotes(''); }
   }
 
-  const q        = search.toLowerCase();
+  const q = search.toLowerCase();
   const filtered = (status: string[]) =>
     tickets.filter((t) => {
       if (!status.includes(t.status)) return false;
       if (!q) return true;
       return (
         t.name.toLowerCase().includes(q) ||
-        `#${t.ticketNumber}`.includes(q)  ||
+        `#${t.ticketNumber}`.includes(q) ||
         String(t.ticketNumber).includes(q)
       );
     });
 
-  const waiting    = sortWaiting(filtered(['waiting']));
+  const waiting = sortWaiting(filtered(['waiting']));
   const canReorder = q.length === 0;
-  const called     = filtered(['called']).sort((a, b) => (a.calledAt ?? 0) - (b.calledAt ?? 0));
+  const called = filtered(['called']).sort((a, b) => (a.calledAt ?? 0) - (b.calledAt ?? 0));
   const inProgress = filtered(['in_progress']).sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-base)' }}>
 
+      {addError && <p role="alert" className="p-3 text-red-400">{addError}</p>}
       {/* ── Top header ── */}
       <div
         className="px-4 pt-4 pb-3 flex-shrink-0"
@@ -103,14 +111,14 @@ export function QueueBoard() {
                 style={
                   isActive
                     ? {
-                        background: 'var(--color-brand)',
-                        color: '#fff',
-                        boxShadow: 'var(--shadow-brand)',
-                      }
+                      background: 'var(--color-brand)',
+                      color: '#fff',
+                      boxShadow: 'var(--shadow-brand)',
+                    }
                     : {
-                        background: 'transparent',
-                        color: 'var(--color-text-faint)',
-                      }
+                      background: 'transparent',
+                      color: 'var(--color-text-faint)',
+                    }
                 }
                 onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.color = 'var(--color-text)'; }}
                 onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.color = 'var(--color-text-faint)'; }}
@@ -142,14 +150,14 @@ export function QueueBoard() {
                 onMouseEnter={(e) => {
                   const el = e.currentTarget;
                   el.style.borderColor = 'var(--color-brand)';
-                  el.style.background  = 'var(--color-brand-subtle)';
-                  el.style.color       = 'var(--color-brand-text)';
+                  el.style.background = 'var(--color-brand-subtle)';
+                  el.style.color = 'var(--color-brand-text)';
                 }}
                 onMouseLeave={(e) => {
                   const el = e.currentTarget;
                   el.style.borderColor = 'rgba(255,255,255,0.16)';
-                  el.style.background  = 'transparent';
-                  el.style.color       = 'var(--color-text-faint)';
+                  el.style.background = 'transparent';
+                  el.style.color = 'var(--color-text-faint)';
                 }}
               >
                 <UserPlus size={15} />
@@ -175,7 +183,7 @@ export function QueueBoard() {
                 <div className="flex gap-2">
                   <button
                     onClick={handleAdd}
-                    disabled={!name.trim()}
+                    disabled={saving || !name.trim()}
                     className="flex-1 py-2.5 rounded-xl text-ui font-bold"
                     style={{
                       background: !name.trim() ? 'rgba(255,255,255,0.06)' : 'var(--color-brand)',
@@ -269,7 +277,7 @@ export function QueueBoard() {
       )}
 
       {tab === 'history' && <HistoryView />}
-      {tab === 'public'  && <PublicSettingsView />}
+      {tab === 'public' && <PublicSettingsView />}
 
       {/* Cloud sync status (always visible at the bottom) */}
       <SyncPanel />

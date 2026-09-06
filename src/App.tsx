@@ -8,17 +8,28 @@ import logoImg from './assets/logo.png';
 export function App() {
   const loadAll = useStore((s) => s.loadAll);
   const loaded = useStore((s) => s.loaded);
+  const [actionError, setActionError] = useState<string | null>(null);
+  useEffect(() => {
+    const handler = (e: PromiseRejectionEvent) => { e.preventDefault(); setActionError(e.reason instanceof Error ? e.reason.message : 'Could not save the change. Please retry.'); };
+    window.addEventListener('unhandledrejection', handler);
+    return () => window.removeEventListener('unhandledrejection', handler);
+  }, []);
   const [initError, setInitError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadAll()
-      .then(() => startSyncWatcher())
-      .catch((e: unknown) => {
-        setInitError(e instanceof Error ? e.message : 'Failed to load database');
-      });
+    let closed = false;
+    const initialize = async () => {
+      if (closed) return;
+      await loadAll();
+      if (!closed) startSyncWatcher();
+    };
+    void initialize().catch((e: unknown) => {
+      if (!closed) setInitError(e instanceof Error ? e.message : 'Failed to load database');
+    });
+    return () => { closed = true; };
   }, [loadAll]);
 
-  if (!loaded) {
+  if (!loaded || initError) {
     return (
       <div
         className="flex h-full items-center justify-center"
@@ -30,7 +41,7 @@ export function App() {
               className="text-heading-sm"
               style={{ color: 'var(--color-error-text)' }}
             >
-              Database error
+              Cashier unavailable
             </p>
             <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
               {initError}
@@ -110,6 +121,7 @@ export function App() {
       className="flex h-full overflow-hidden"
       style={{ background: 'var(--color-base)' }}
     >
+      {actionError && <div role="alert" className="fixed top-2 left-2 right-2 z-50 p-4 bg-red-950 text-white rounded-xl">{actionError} <button onClick={() => setActionError(null)}>Dismiss</button></div>}
       {/* LEFT — Queue Board */}
       <div
         className="w-[420px] min-w-[360px] flex-shrink-0 overflow-y-auto"

@@ -72,6 +72,7 @@ export function WaitingQueueList({ tickets, disabled = false, onReorder }: Props
   const clickGuardTimer = useRef<number | undefined>(undefined);
   const settleTimers = useRef<number[]>([]);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [reorderError, setReorderError] = useState<string | null>(null);
 
   const canDrag = !disabled && tickets.length > 1;
 
@@ -361,15 +362,16 @@ export function WaitingQueueList({ tickets, disabled = false, onReorder }: Props
     if (didMove) {
       const toIndex = finalOrder.indexOf(s.dragId);
       try {
+        setReorderError(null);
         // onReorder updates the store synchronously (optimistic), so the DOM
         // can be committed + FLIP-animated right away — no flash frame —
         // while the IndexedDB write finishes in the background.
-        const p = onReorder(s.dragId, toIndex);
+        await onReorder(s.dragId, toIndex);
         flushSync(() => {});
         settleFrom(oldTops, s.initialOrder, true);
         armClickGuard();
-        await p;
-      } catch {
+      } catch (e) {
+        setReorderError(e instanceof Error ? e.message : 'Could not save the queue order.');
         flushSync(() => {});
         settleFrom(oldTops, s.initialOrder, false);
       }
@@ -442,7 +444,7 @@ export function WaitingQueueList({ tickets, disabled = false, onReorder }: Props
     <div
       ref={listRef}
       role="list"
-      aria-label="Waiting queue — drag a card to reorder"
+      aria-label="Waiting queue — drag to reorder, or focus a ticket and press Alt plus Up or Down"
       className="flex flex-col gap-2 select-none"
       onClickCapture={(e) => {
         // Suppress the ghost click browsers fire right after a drag.
@@ -460,6 +462,7 @@ export function WaitingQueueList({ tickets, disabled = false, onReorder }: Props
         }
       }}
     >
+      {reorderError && <p role="alert" className="text-red-400 text-sm">{reorderError}</p>}
       {tickets.map((t) => {
         const isDragging = draggingId === t.id;
         return (
@@ -474,6 +477,13 @@ export function WaitingQueueList({ tickets, disabled = false, onReorder }: Props
             className="relative"
             style={isDragging ? { zIndex: 40, willChange: 'transform' } : undefined}
             onPointerDown={(e) => handleRowPointerDown(e, t.id)}
+            onKeyDown={async e => {
+              if (!canDrag || !e.altKey || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
+              e.preventDefault();
+              const index = tickets.findIndex(ticket => ticket.id === t.id);
+              try { await onReorder(t.id, index + (e.key === 'ArrowUp' ? -1 : 1)); setReorderError(null); }
+              catch (error) { setReorderError(error instanceof Error ? error.message : 'Could not reorder.'); }
+            }}
           >
             <TicketCard ticket={t} reorderable={canDrag} dragging={isDragging} />
           </div>

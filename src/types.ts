@@ -53,6 +53,16 @@ export interface PublicSettings {
   eventLocation?: string;
   /** Google Maps (or similar) link shown on the public page (optional). */
   eventMapUrl?: string;
+  /** Optional "save the date" headline override (default: "Next pop-up coming soon"). */
+  eventTitle?: string;
+  /** Optional event hours, e.g. "10:00 AM – 8:00 PM". */
+  eventHours?: string;
+  /** Home studio name (shown when no pop-up is active). */
+  studioName?: string;
+  /** Home studio address (shown when no pop-up is active). */
+  studioAddress?: string;
+  /** Home studio Google Maps link. */
+  studioMapUrl?: string;
   /** When true and an eventDate exists, the public page advertises the event. */
   eventActive: boolean;
   updatedAt: number;
@@ -76,8 +86,10 @@ export interface UpgradeOption {
 // --- Backup ---
 
 export interface BackupPayload {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   exportedAt: string;
   tickets: Ticket[];
   items: PiercingItem[];
+  ticketCounter?: number;
+  settings?: PublicSettings | null;
 }

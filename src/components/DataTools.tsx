@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { csvCell, validateBackup } from '../validation';
 import { FileSpreadsheet, Download, Upload, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { useStore } from '../store';
 import type { Ticket, BackupPayload } from '../types';
@@ -17,10 +18,6 @@ interface Props {
   scopeLabel: string;
 }
 
-function csvCell(value: string | number | undefined): string {
-  const s = String(value ?? '');
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
 
 function timestampFileName(prefix: string, ext: string): string {
   const now = new Date();
@@ -87,12 +84,8 @@ export function DataTools({ historyTickets, scopeLabel }: Props) {
   }
 
   // ── Full JSON backup export ──
-  function handleExportJson() {
-    const payload: BackupPayload = {
-      schemaVersion: 1,
-      exportedAt: new Date().toISOString(),
-      ...exportBackup(),
-    };
+  async function handleExportJson() {
+    const payload = await exportBackup();
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -109,15 +102,17 @@ export function DataTools({ historyTickets, scopeLabel }: Props) {
     setPendingPayload(null);
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 25 * 1024 * 1024) { setImportError('Backup exceeds the 25 MB limit.'); return; }
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
         const raw = JSON.parse(ev.target?.result as string) as unknown;
-        setPendingPayload(validatePayload(raw));
+        setPendingPayload(validateBackup(raw));
       } catch (err) {
         setImportError(err instanceof Error ? err.message : 'Invalid backup file');
       }
     };
+    reader.onerror = () => setImportError('Could not read the backup file. Please select it again.');
     reader.readAsText(file);
     e.target.value = '';
   }
@@ -126,7 +121,7 @@ export function DataTools({ historyTickets, scopeLabel }: Props) {
     if (!pendingPayload) return;
     setImporting(true);
     try {
-      await importBackup(pendingPayload.tickets, pendingPayload.items);
+      await importBackup(pendingPayload);
       setPendingPayload(null);
       flash(`Restored ${pendingPayload.tickets.length} tickets, ${pendingPayload.items.length} items.`);
     } catch (err) {
@@ -212,7 +207,7 @@ export function DataTools({ historyTickets, scopeLabel }: Props) {
         >
           <p className="flex items-center gap-1.5 text-body-xs font-semibold" style={{ color: 'var(--color-warn-text)' }}>
             <AlertTriangle size={12} />
-            Restore will replace ALL current data!
+            Restore replaces local tickets, items and settings, then replaces the station cloud copy when connected.
           </p>
           <p className="text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
             {pendingPayload.tickets.length} tickets · {pendingPayload.items.length} items
@@ -249,26 +244,3 @@ export function DataTools({ historyTickets, scopeLabel }: Props) {
     </div>
   );
 }
-
-// ── Backup file validator ──
-function validatePayload(raw: unknown): BackupPayload {
-  if (typeof raw !== 'object' || raw === null) throw new Error('Not a valid JSON object');
-  const obj = raw as Record<string, unknown>;
-
-  if (obj['schemaVersion'] !== 1) throw new Error('Unknown schemaVersion (expected 1)');
-  if (!Array.isArray(obj['tickets'])) throw new Error('Missing "tickets" array');
-  if (!Array.isArray(obj['items']))   throw new Error('Missing "items" array');
-  if (typeof obj['exportedAt'] !== 'string') throw new Error('Missing "exportedAt" string');
-
-  const tickets = obj['tickets'] as unknown[];
-  for (const t of tickets) {
-    if (typeof t !== 'object' || t === null) throw new Error('Invalid ticket entry');
-    const ticket = t as Record<string, unknown>;
-    if (typeof ticket['id']     !== 'string') throw new Error('Ticket missing id');
-    if (typeof ticket['name']   !== 'string') throw new Error('Ticket missing name');
-    if (typeof ticket['status'] !== 'string') throw new Error('Ticket missing status');
-  }
-
-  return obj as unknown as BackupPayload;
-}
-

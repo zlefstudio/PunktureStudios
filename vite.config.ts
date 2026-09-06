@@ -18,6 +18,9 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
+    // lucide-react bundles a single large icon factory; this keeps the build
+    // output clean instead of warning on every build.
+    chunkSizeWarningLimit: 700,
     rollupOptions: {
       input: {
         // PUBLIC pages only. The staff queue tool is intentionally NOT hosted —
@@ -26,6 +29,12 @@ export default defineConfig({
         live: new URL('./live.html', import.meta.url).pathname,
         // Public home-studio booking request page.
         appointment: new URL('./appointment.html', import.meta.url).pathname,
+        // Paperless waiver / consent gate (scanned from a printed QR).
+        waiver: new URL('./waiver.html', import.meta.url).pathname,
+        // Aftercare tips.
+        aftercare: new URL('./aftercare.html', import.meta.url).pathname,
+        // Privacy policy + legal notice.
+        privacy: new URL('./privacy.html', import.meta.url).pathname,
       },
     },
   },
