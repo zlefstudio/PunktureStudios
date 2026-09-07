@@ -8,15 +8,21 @@ export function PrivacyPage() {
         Privacy &amp; Legal
       </h1>
       <p className="text-body-sm mt-1.5 mb-5" style={{ color: 'var(--color-text-muted)' }}>
-        Your privacy matters to us. Here is exactly what we do — and don't — collect.
+        Your privacy matters to us. Here is exactly what we do (and do not) collect.
       </p>
 
       <div className="space-y-4">
         <SectionCard icon="🔒" title="What we collect">
-          <ul className="space-y-1.5 text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-            <li>• <b style={{ color: 'var(--color-text)' }}>Live queue:</b> ticket numbers only — never names.</li>
-            <li>• <b style={{ color: 'var(--color-text)' }}>Waiver:</b> the acknowledgment is used only while this page is open. No identity, signature or acknowledgment record is saved. Each visit asks you to read and acknowledge again.</li>
-            <li>• <b style={{ color: 'var(--color-text)' }}>Booking:</b> name, contact, preferred date and time, and optional notes, used to manage your appointment.</li>
+          <ul className="space-y-2.5 text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+            <li>
+              • <b style={{ color: 'var(--color-text)' }}>Live queue:</b> The public board displays ticket numbers only; your full name is never shown. Giving a nickname or phone number at our booth is completely <b style={{ color: 'var(--color-brand-text)' }}>OPTIONAL</b>:
+              <div className="mt-1 pl-3 text-body-xs space-y-1">
+                <div>• Staying near the booth? Just a ticket number or nickname is plenty.</div>
+                <div>• Leaving to walk around or don't want to constantly refresh the live queue webpage? You can optionally leave your phone number so we can text or call you when you're next in line.</div>
+              </div>
+            </li>
+            <li>• <b style={{ color: 'var(--color-text)' }}>Waiver:</b> The acknowledgment is session-only while this page is open. No identity, signature, or health record is stored. Each visit asks you to read and acknowledge again.</li>
+            <li>• <b style={{ color: 'var(--color-text)' }}>Booking:</b> Name, contact, preferred date and time, and optional notes, used solely to arrange and confirm your appointment.</li>
           </ul>
         </SectionCard>
 
@@ -42,7 +48,19 @@ export function PrivacyPage() {
 
         <SectionCard icon="📮" title="Contact">
           <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-            Questions about privacy? Reach out to us at the studio and we'll be glad to help.
+            Questions about privacy? Reach out to us on Instagram:{' '}
+            <a
+              href="https://www.instagram.com/punkture_studios/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold underline underline-offset-4 transition-colors"
+              style={{
+                color: 'var(--color-brand-text)',
+                textDecorationColor: 'var(--color-brand)',
+              }}
+            >
+              @punkture_studios ↗
+            </a>
           </p>
         </SectionCard>
 
@@ -61,7 +79,7 @@ export function PrivacyPage() {
           </p>
           <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
             Unauthorized copying, reproduction, distribution, or modification of any part of
-            this website — in whole or in part — is strictly prohibited without prior written
+            this website, in whole or in part, is strictly prohibited without prior written
             consent. All other trademarks and logos are the property of their respective owners.
           </p>
         </section>

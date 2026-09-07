@@ -13,11 +13,11 @@ const AFTERCARE_URL = 'https://punkture-studios.web.app/aftercare';
 const PRIVACY_URL = 'https://punkture-studios.web.app/privacy';
 
 const PREVIEW_LINKS = [
-  { label: '🔗 Live queue', href: LIVE_URL },
-  { label: '📅 Booking', href: BOOKING_URL },
-  { label: '🩺 Waiver', href: WAIVER_URL },
-  { label: '🩹 Aftercare', href: AFTERCARE_URL },
-  { label: '🔒 Privacy', href: PRIVACY_URL },
+  { label: 'Live queue', href: LIVE_URL },
+  { label: 'Booking', href: BOOKING_URL },
+  { label: 'Waiver', href: WAIVER_URL },
+  { label: 'Aftercare', href: AFTERCARE_URL },
+  { label: 'Privacy', href: PRIVACY_URL },
 ];
 
 /** 🌐 Public tab — staff controls everything the public pages show. */
@@ -158,13 +158,13 @@ export function PublicSettingsView() {
           <div className="flex items-center gap-2">
             <Megaphone size={14} style={{ color: 'var(--color-brand-text)' }} />
             <p className="text-label-xs" style={{ color: 'var(--color-text)' }}>
-              Next pop-up
+              Next pop-up event
             </p>
           </div>
 
           <label className="block">
             <span className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>Save-the-date headline</span>
-            <input style={inputStyle} placeholder="Next pop-up coming soon" value={settings?.eventTitle ?? ''} onChange={(e) => patch('eventTitle', e.target.value)} />
+            <input style={inputStyle} placeholder="Next pop-up event coming soon" value={settings?.eventTitle ?? ''} onChange={(e) => patch('eventTitle', e.target.value)} />
           </label>
 
           <div className="grid grid-cols-2 gap-2.5">

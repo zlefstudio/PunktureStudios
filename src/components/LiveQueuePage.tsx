@@ -125,14 +125,14 @@ export function LiveQueuePage() {
     : '';
   const mapUrl = safeHttpUrl(publicSettings?.eventMapUrl);
   const studioMapUrl = safeHttpUrl(publicSettings?.studioMapUrl);
-  const eventTitle = publicSettings?.eventTitle?.trim() || 'Next pop-up coming soon';
+  const eventTitle = publicSettings?.eventTitle?.trim() || 'Next pop-up event coming soon';
   const eventHours = publicSettings?.eventHours?.trim();
   const showStage = hasEvent || hasLive;
 
   return (
     <PublicShell page="live" wide>
       {/* Status row */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
         <span
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold"
           style={{
@@ -157,7 +157,7 @@ export function LiveQueuePage() {
       </div>
 
       {hasLive && !fresh && <p role="status" className="mb-4 rounded-xl bg-amber-950 p-3 text-amber-100">Updates are paused. This is the last known queue; please check with staff.</p>}
-      <div className={`grid grid-cols-1 ${showStage ? 'md:grid-cols-2' : ''} gap-6 md:gap-8 items-start`}>
+      <div className={`grid grid-cols-1 ${showStage ? 'sm:grid-cols-2' : ''} gap-5 sm:gap-8 items-start`}>
         {showStage && (
           <div className="w-full flex justify-center md:sticky md:top-6">
             <PiercingRitualAnimation />
@@ -230,7 +230,7 @@ export function LiveQueuePage() {
                     className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-2xl font-bold"
                     style={{ background: 'var(--color-brand)', color: '#fff', boxShadow: 'var(--shadow-brand)', textDecoration: 'none' }}
                   >
-                    📍 Open in Maps
+                    Open in Maps
                   </a>
                 )}
               </div>
@@ -263,7 +263,7 @@ export function LiveQueuePage() {
                     className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-2xl font-bold"
                     style={{ background: 'var(--color-brand)', color: '#fff', boxShadow: 'var(--shadow-brand)', textDecoration: 'none' }}
                   >
-                    📍 View location
+                    View location
                   </a>
                 )}
               </div>
@@ -283,7 +283,7 @@ export function LiveQueuePage() {
                   <p className="text-label-xs mb-1" style={{ color: 'var(--color-brand-text)' }}>
                     {nowServing.status === 'in_progress' ? '⚡ NOW SERVING' : '📣 NOW CALLING'}
                   </p>
-                  <p className="font-black leading-none" style={{ fontSize: 64, fontFamily: 'var(--font-mono)', color: '#fff' }}>
+                  <p className="font-black leading-none" style={{ fontSize: 'clamp(44px, 14vw, 72px)', fontFamily: 'var(--font-mono)', color: '#fff' }}>
                     #{nowServing.ticketNumber}
                   </p>
                   <p className="mt-2 text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
@@ -295,7 +295,7 @@ export function LiveQueuePage() {
               )}
 
               {/* Queue card */}
-              <div className="rounded-3xl p-5 space-y-3" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+              <div className="w-full rounded-3xl p-5 sm:p-6 space-y-3" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
                 {nextUp && (
                   <div
                     className="flex items-center justify-between rounded-2xl px-5 py-4"

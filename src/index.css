@@ -117,6 +117,11 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Prevent horizontal scroll without breaking position:sticky */
+html {
+  overflow-x: hidden;
+}
+
 /* ── Font Utility Classes ── */
 .font-sanguine {
   font-family: var(--font-display);
@@ -216,7 +221,9 @@ button, input, textarea, select {
 }
 
 button,
-[role='button'] {
+[role='button'],
+a[href],
+.clickable-item {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: background-color var(--duration-base) var(--ease-out),
@@ -228,20 +235,31 @@ button,
               filter var(--duration-fast) var(--ease-out);
 }
 
-/* Universal hover: brightness bump + gentle lift on every control */
+/* Universal hover: subtle brightness bump + gentle lift on all interactive controls */
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   button:not(:disabled):hover,
   [role='button']:not([aria-disabled='true']):hover,
-  .clickable-card:hover {
-    transform: translateY(-1px);
+  a[href]:not(.no-hover):hover,
+  .clickable-card:hover,
+  .clickable-item:hover {
+    transform: translateY(-1.5px);
     filter: brightness(1.14) saturate(1.06);
+  }
+
+  /* Interactive cards/pills subtle hover border */
+  button:not(:disabled):hover,
+  a[href].rounded-2xl:hover,
+  a[href].rounded-xl:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   }
 }
 
 button:not(:disabled):active,
 [role='button']:not([aria-disabled='true']):active,
-.clickable-card:active {
-  transform: translateY(0) scale(0.97);
+a[href]:not(.no-hover):active,
+.clickable-card:active,
+.clickable-item:active {
+  transform: translateY(0) scale(0.98);
   filter: brightness(0.95);
 }
 
@@ -527,6 +545,24 @@ button:disabled,
   }
 }
 
+/* Drawer slide-in from left */
+@keyframes pk-drawer-slide {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Overlay fade-in */
+@keyframes pk-overlay-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sonar-ring,
   .clock-live-tick,
@@ -535,4 +571,3 @@ button:disabled,
     animation: none !important;
   }
 }
-
