@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { Menu, X } from 'lucide-react';
 
 /**
@@ -27,14 +27,14 @@ export function PublicShell({
   const showFooterLinks = page !== 'privacy';
   const showLiveAftercare = page === 'live';
 
-  function closeDrawer() {
+  const closeDrawer = useCallback(() => {
     if (isClosing || !drawerOpen) return;
     setIsClosing(true);
     setTimeout(() => {
       setDrawerOpen(false);
       setIsClosing(false);
     }, 240);
-  }
+  }, [drawerOpen, isClosing]);
 
   function openDrawer() {
     setIsClosing(false);
@@ -55,7 +55,7 @@ export function PublicShell({
       window.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [drawerOpen, isClosing]);
+  }, [drawerOpen, closeDrawer]);
 
   const navLinks = [
     { label: 'Home', href: '/home.html', current: page === 'home' },

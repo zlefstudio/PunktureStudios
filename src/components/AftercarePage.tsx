@@ -17,7 +17,6 @@ interface AftercareCopy {
   troubleTitle: string;
   troubleItems: string[];
   troubleContact: string;
-  troubleContactSuffix: string;
 }
 
 const CONTENT: Record<Lang, AftercareCopy> = {
@@ -52,7 +51,7 @@ const CONTENT: Record<Lang, AftercareCopy> = {
       'Severe throbbing pain, worsening swelling, or feeling feverish.',
       'Thick, foul-smelling green discharge.',
     ],
-    troubleContact: 'If an irritation bump persists or your jewelry feels too tight, message us on',
+    troubleContact: 'If an irritation bump persists or your jewelry feels too tight, message us on:',
   },
   fil: {
     title: 'Gabay sa Aftercare',
@@ -86,7 +85,6 @@ const CONTENT: Record<Lang, AftercareCopy> = {
       'Makapal at mabahong berdeng nana o pagkakaroon ng lagnat.',
     ],
     troubleContact: 'Kung hindi nawawala ang bukol o sumisikip ang alahas, mag-message sa amin sa',
-    troubleContactSuffix: 'o bumisita sa booth. Huwag tatanggalin ang alahas nang mag-isa.',
   },
 };
 
@@ -198,7 +196,6 @@ export function AftercarePage() {
                 >
                   @punkture_studios ↗
                 </a>
-                {' '}{t.troubleContactSuffix}
               </span>
             </li>
           </ul>

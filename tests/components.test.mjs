@@ -49,7 +49,6 @@ const { WorkspaceHeader } = await import('../src/components/WorkspaceHeader.tsx'
 const { LiveQueuePage } = await import('../src/components/LiveQueuePage.tsx');
 const { useStore } = await import('../src/store.ts');
 const { db } = await import('../src/db.ts');
-const { manilaDate } = await import('../src/validation.ts');
 let root;
 let container;
 beforeEach(async () => {
@@ -74,10 +73,13 @@ function submit() { container.querySelector('form').dispatchEvent(new dom.window
 
 test('fresh settings form can save its first change', async () => {
   await render(PublicSettingsView);
-  await act(async () => container.querySelector('input[type="checkbox"]').click());
-  await act(async () => submit());
+  const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+  // Second checkbox toggles eventActive
+  await act(async () => checkboxes[1].click());
+  const saveBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Save all changes'));
+  await act(async () => saveBtn.click());
   assert.equal(savedSettings.eventActive, true);
-  assert.match(container.textContent, /Saved/);
+  assert.match(container.textContent, /Settings saved/i);
 });
 test('second ticket cannot start while another session is active', async () => {
   const first = await useStore.getState().addTicket('First');
@@ -91,25 +93,37 @@ test('booking form prevents duplicate submissions while a write is pending', asy
   let finish;
   saveBooking = () => new Promise(resolve => { finish = resolve; });
   await render(AppointmentPage);
-  await fill('input[placeholder="Full name"]', 'Test Person');
-  await fill('input[placeholder="0917 123 4567"]', 'test@example.invalid');
-  await fill('input[type="date"]', manilaDate(Date.now() + 86400000));
-  await fill('input[type="time"]', '12:00');
+  const continueBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('proceed to schedule') || b.textContent.includes('Continue'));
+  await act(async () => continueBtn.click());
+  const dateChip = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Sep'));
+  await act(async () => dateChip.click());
+  const slotBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('PM') || b.textContent.includes('AM'));
+  await act(async () => slotBtn.click());
+  const nextBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Next: Client Details'));
+  await act(async () => nextBtn.click());
+  await fill('input[placeholder="e.g. Maya Santos"]', 'Test Person');
+  await fill('input[placeholder="e.g. 09171234567 or @mayasantos"]', 'test@example.invalid');
+  await act(async () => container.querySelector('#waiver-agree').click());
   await act(async () => { submit(); submit(); });
   assert.equal(bookingWrites.length, 1);
   assert.equal(bookingWrites[0].value.createdAt, 'server-timestamp');
   await act(async () => finish());
-  assert.match(container.textContent, /Request sent/);
+  assert.match(container.textContent, /Booking Request Received/i);
 });
-test('booking form rejects past appointments before contacting the cloud', async () => {
+test('booking form rejects incomplete requests before contacting the cloud', async () => {
   await render(AppointmentPage);
-  await fill('input[placeholder="Full name"]', 'Test Person');
-  await fill('input[placeholder="0917 123 4567"]', 'test@example.invalid');
-  await fill('input[type="date"]', '2020-01-01');
-  await fill('input[type="time"]', '12:00');
+  const continueBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('proceed to schedule') || b.textContent.includes('Continue'));
+  await act(async () => continueBtn.click());
+  const dateChip = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Sep'));
+  await act(async () => dateChip.click());
+  const slotBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('PM') || b.textContent.includes('AM'));
+  await act(async () => slotBtn.click());
+  const nextBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Next: Client Details'));
+  await act(async () => nextBtn.click());
+  await fill('input[placeholder="e.g. Maya Santos"]', 'Test Person');
   await act(async () => submit());
   assert.equal(bookingWrites.length, 0);
-  assert.match(container.textContent, /Choose a future date/);
+  assert.match(container.textContent, /Please enter your name and contact info/);
 });
 test('an old queue heartbeat shows paused updates', async () => {
   queueRows = [{ ticketNumber: 1, status: 'waiting', position: 0, seq: 0, updatedAt: Date.now() }];
