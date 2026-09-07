@@ -25,8 +25,12 @@ export default defineConfig({
       input: {
         // PUBLIC pages only. The staff queue tool is intentionally NOT hosted —
         // staff keep running it locally with `npm run dev`. Never add
-        // `main: index.html` here or the staff UI would become public.
+        // Main public landing page.
+        home: new URL('./home.html', import.meta.url).pathname,
+        // Live queue page for pop-up events.
         live: new URL('./live.html', import.meta.url).pathname,
+        // Next pop-up event info page.
+        popup: new URL('./popup.html', import.meta.url).pathname,
         // Public home-studio booking request page.
         appointment: new URL('./appointment.html', import.meta.url).pathname,
         // Paperless waiver / consent gate (scanned from a printed QR).

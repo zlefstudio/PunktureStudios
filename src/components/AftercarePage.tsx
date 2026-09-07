@@ -53,6 +53,7 @@ const CONTENT: Record<Lang, AftercareCopy> = {
       'Thick, foul-smelling green discharge.',
     ],
     troubleContact: 'If an irritation bump persists or your jewelry feels too tight, message us on',
+    troubleContactSuffix: 'or visit our booth. Never force jewelry out on your own.',
   },
   fil: {
     title: 'Gabay sa Aftercare',

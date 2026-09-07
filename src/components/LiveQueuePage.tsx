@@ -316,39 +316,43 @@ export function LiveQueuePage() {
                       <Ticket size={12} />
                       In line · {data.waiting.length} {data.waiting.length === 1 ? 'person' : 'people'}
                     </p>
-                    {data.waiting.map((w, i) => (
-                      <div
-                        key={`${w.ticketNumber}-${w.position}`}
-                        className="flex items-center gap-3 rounded-2xl px-4 py-3"
-                        style={{
-                          background: 'rgba(255,255,255,0.03)',
-                          border: '1px solid var(--color-border)',
-                          animation: `pk-fade-in 0.4s cubic-bezier(0.16,1,0.3,1) ${Math.min(i * 0.06, 0.5)}s both`,
-                        }}
-                      >
-                        <span
-                          className="w-7 h-7 flex items-center justify-center rounded-full font-mono font-bold flex-shrink-0"
+                    <div
+                      className={`space-y-2 ${data.waiting.length > 7 ? 'max-h-[385px] overflow-y-auto pr-1' : ''}`}
+                    >
+                      {data.waiting.map((w, i) => (
+                        <div
+                          key={`${w.ticketNumber}-${w.position}`}
+                          className="flex items-center gap-3 rounded-2xl px-4 py-3"
                           style={{
-                            background: w.position === 0 ? 'var(--color-brand)' : 'rgba(255,255,255,0.08)',
-                            color: w.position === 0 ? '#fff' : 'var(--color-text-muted)',
-                            fontSize: 11,
+                            background: 'rgba(255,255,255,0.03)',
+                            border: '1px solid var(--color-border)',
+                            animation: `pk-fade-in 0.4s cubic-bezier(0.16,1,0.3,1) ${Math.min(i * 0.06, 0.5)}s both`,
                           }}
                         >
-                          {(w.position ?? i) + 1}
-                        </span>
-                        <span className="font-black font-mono" style={{ fontSize: 15 }}>
-                          #{w.ticketNumber}
-                        </span>
-                        {w.position === 0 && !nowServing && (
                           <span
-                            className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full"
-                            style={{ background: 'rgba(217,119,6,0.15)', color: 'var(--color-warn-text)', border: '1px solid rgba(217,119,6,0.3)' }}
+                            className="w-7 h-7 flex items-center justify-center rounded-full font-mono font-bold flex-shrink-0"
+                            style={{
+                              background: w.position === 0 ? 'var(--color-brand)' : 'rgba(255,255,255,0.08)',
+                              color: w.position === 0 ? '#fff' : 'var(--color-text-muted)',
+                              fontSize: 11,
+                            }}
                           >
-                            NEXT
+                            {(w.position ?? i) + 1}
                           </span>
-                        )}
-                      </div>
-                    ))}
+                          <span className="font-black font-mono" style={{ fontSize: 15 }}>
+                            #{w.ticketNumber}
+                          </span>
+                          {w.position === 0 && !nowServing && (
+                            <span
+                              className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full"
+                              style={{ background: 'rgba(217,119,6,0.15)', color: 'var(--color-warn-text)', border: '1px solid rgba(217,119,6,0.3)' }}
+                            >
+                              NEXT
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

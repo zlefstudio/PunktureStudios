@@ -7,11 +7,11 @@ import { Menu, X } from 'lucide-react';
  * customer experience feels like one premium, minimalist product.
  */
 
-export type PublicPage = 'live' | 'appointment' | 'aftercare' | 'privacy' | 'waiver';
+export type PublicPage = 'home' | 'live' | 'appointment' | 'aftercare' | 'privacy' | 'waiver' | 'popup';
 
 interface PublicShellProps {
   children: ReactNode;
-  /** Which page this is — controls the back link, quick actions and footer links. */
+  /** Which page this is — controls active nav link, quick actions and footer links. */
   page?: PublicPage;
   /** Use a wider container (for the live queue's stage + queue layout). */
   wide?: boolean;
@@ -19,18 +19,31 @@ interface PublicShellProps {
 
 export function PublicShell({
   children,
-  page = 'live',
+  page = 'home',
   wide = false,
 }: PublicShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const isWaiver = page === 'waiver';
-  const showBack = page !== 'live' && !isWaiver;
+  const [isClosing, setIsClosing] = useState(false);
   const showFooterLinks = page !== 'privacy';
   const showLiveAftercare = page === 'live';
 
+  function closeDrawer() {
+    if (isClosing || !drawerOpen) return;
+    setIsClosing(true);
+    setTimeout(() => {
+      setDrawerOpen(false);
+      setIsClosing(false);
+    }, 240);
+  }
+
+  function openDrawer() {
+    setIsClosing(false);
+    setDrawerOpen(true);
+  }
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setDrawerOpen(false);
+      if (e.key === 'Escape') closeDrawer();
     }
     if (drawerOpen) {
       window.addEventListener('keydown', handleKeyDown);
@@ -42,14 +55,15 @@ export function PublicShell({
       window.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
     };
-  }, [drawerOpen]);
+  }, [drawerOpen, isClosing]);
 
   const navLinks = [
+    { label: 'Home', href: '/home.html', current: page === 'home' },
+    { label: 'Before we pierce', href: '/waiver.html', current: page === 'waiver' },
     { label: 'Live queue', href: '/live.html', current: page === 'live' },
     { label: 'Book an appointment', href: '/appointment.html', current: page === 'appointment' },
     { label: 'Aftercare guide', href: '/aftercare.html', current: page === 'aftercare' },
-    { label: 'Next pop-up event', href: '/live.html#next-popup' },
-    { label: 'Studio waiver', href: '/waiver.html', current: page === 'waiver' },
+    { label: 'Next pop-up event', href: '/popup.html', current: page === 'popup' },
     { label: 'Privacy & legal', href: '/privacy.html', current: page === 'privacy' },
   ];
 
@@ -78,7 +92,7 @@ export function PublicShell({
         <div className={`mx-auto w-full flex items-center justify-center relative min-h-[52px] ${wide ? 'md:max-w-4xl lg:max-w-5xl px-4 sm:px-6' : 'max-w-md px-5'}`}>
           <button
             type="button"
-            onClick={() => setDrawerOpen(true)}
+            onClick={openDrawer}
             aria-label="Open navigation menu"
             className="absolute left-5 p-2 rounded-xl flex items-center justify-center transition-colors"
             style={{
@@ -91,7 +105,7 @@ export function PublicShell({
             <Menu size={20} />
           </button>
 
-          <a href="/live.html" className="flex items-center gap-2.5 no-underline">
+          <a href="/home.html" className="flex items-center gap-2.5 no-underline">
             <img
               src="/logo.png"
               alt="PUNKTURE STUDIOS"
@@ -111,15 +125,6 @@ export function PublicShell({
         className={`mx-auto w-full ${wide ? 'md:max-w-4xl lg:max-w-5xl px-4 sm:px-6 py-6 md:py-8' : 'max-w-md px-5 py-7'}`}
         style={{ animation: 'pk-fade-in 0.5s cubic-bezier(0.16,1,0.3,1) both' }}
       >
-        {showBack && (
-          <a
-            href="/live.html"
-            className="inline-flex items-center gap-1 text-body-xs font-semibold mb-5 hover:text-white transition-colors"
-            style={{ color: 'var(--color-text-muted)', textDecoration: 'none' }}
-          >
-            ← Back to live queue
-          </a>
-        )}
 
         {children}
 
@@ -169,9 +174,11 @@ export function PublicShell({
           style={{
             background: 'rgba(0, 0, 0, 0.70)',
             backdropFilter: 'blur(6px)',
-            animation: 'pk-overlay-fade 0.25s ease-out both',
+            animation: isClosing
+              ? 'pk-overlay-fade-out 0.24s ease-in forwards'
+              : 'pk-overlay-fade 0.25s ease-out both',
           }}
-          onClick={() => setDrawerOpen(false)}
+          onClick={closeDrawer}
         >
           <div
             className="w-72 max-w-[85vw] h-full flex flex-col justify-between p-5 sm:p-6"
@@ -179,7 +186,9 @@ export function PublicShell({
               background: 'var(--color-surface)',
               borderRight: '1px solid var(--color-border-strong)',
               boxShadow: '12px 0 48px rgba(0,0,0,0.65)',
-              animation: 'pk-drawer-slide 0.32s cubic-bezier(0.16, 1, 0.3, 1) both',
+              animation: isClosing
+                ? 'pk-drawer-slide-out 0.24s cubic-bezier(0.4, 0, 1, 1) forwards'
+                : 'pk-drawer-slide 0.32s cubic-bezier(0.16, 1, 0.3, 1) both',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -194,8 +203,8 @@ export function PublicShell({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setDrawerOpen(false)}
-                  className="p-1.5 rounded-lg"
+                  onClick={closeDrawer}
+                  className="p-1.5 rounded-lg transition-transform active:scale-90"
                   style={{
                     background: 'rgba(255,255,255,0.06)',
                     border: 'none',
@@ -213,7 +222,7 @@ export function PublicShell({
                   <a
                     key={item.label}
                     href={item.href}
-                    onClick={() => setDrawerOpen(false)}
+                    onClick={closeDrawer}
                     className="flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-ui-sm transition-all"
                     style={{
                       background: item.current ? 'rgba(255,255,255,0.08)' : 'transparent',

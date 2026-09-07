@@ -103,11 +103,11 @@ export function AppointmentPage() {
             {contact.trim()}. 📅 {date} · {time}
           </p>
           <a
-            href="/live.html"
+            href="/home.html"
             className="inline-block px-5 py-2.5 rounded-xl text-ui font-bold mt-1"
-            style={{ background: 'var(--color-success)', color: '#fff' }}
+            style={{ background: 'var(--color-brand)', color: '#fff', textDecoration: 'none' }}
           >
-            Back to live queue
+            Done
           </a>
         </div>
       ) : (

@@ -11,8 +11,8 @@
       { "key": "X-Frame-Options", "value": "DENY" }
     ] }],
     "redirects": [
-      { "source": "/", "destination": "/live.html", "type": 301 },
-      { "source": "/index.html", "destination": "/live.html", "type": 301 }
+      { "source": "/", "destination": "/home.html", "type": 301 },
+      { "source": "/index.html", "destination": "/home.html", "type": 301 }
     ]
   }
 }
