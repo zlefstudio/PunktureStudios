@@ -63,10 +63,17 @@ npm run build
 # Run Firestore security rules test suite (uses local Firestore emulator at 127.0.0.1:8180)
 npm run test:rules
 
-# Deploy public pages and Firestore rules to Firebase Hosting
+# Deploy public pages and Firestore rules to Firebase Hosting manually
 npm run firebase:login
 npm run deploy
 ```
+
+### Automated CI/CD (GitHub Actions)
+A workflow is configured in `.github/workflows/deploy.yml`. On every `git push origin main`, GitHub Actions automatically:
+1. Runs `npm run lint` and `npm test` (all tests must pass).
+2. Runs `npm run build` to compile the 7 public customer pages.
+3. Automatically deploys the public pages to **Firebase Hosting** and updates **Firestore Security Rules**.
+*(Requires adding `FIREBASE_TOKEN` via `npx firebase login:ci` or `FIREBASE_SERVICE_ACCOUNT` into GitHub Repository Secrets).*
 
 > [!IMPORTANT]
 > **PINNED PORT 5174**: The staff cashier must always be served at `http://localhost:5174`. IndexedDB storage is strictly scoped per origin (`protocol + domain + port`). If Vite were to switch to port 5175, it would open a completely blank database, making history and active queues appear wiped out. `strictPort: true` is configured in `vite.config.ts`.
@@ -268,7 +275,7 @@ When modifying or extending this codebase, adhere strictly to these rules:
 
 | Date | Update Summary | Author / Agent |
 | --- | --- | --- |
-| **2026-09-08** | Full system analysis & documentation overhaul. Resolved TypeScript error in `AftercarePage.tsx` (`troubleContactSuffix`), updated component test suite to 100% passing (23/23), documented 7 public pages, 3-step visual booking system, and established the AI Agent Maintenance Protocol. | Antigravity AI |
+| **2026-09-08** | Setup automated CI/CD (`.github/workflows/deploy.yml`) for push-to-deploy to Firebase Hosting & Rules. Documented sales cloud persistence. Full system analysis & documentation overhaul. Resolved TypeScript error in `AftercarePage.tsx` (`troubleContactSuffix`), updated component test suite to 100% passing (23/23), documented 7 public pages, 3-step visual booking system, and established the AI Agent Maintenance Protocol. | Antigravity AI |
 | **2026-09-07** | Added visual anatomical diagrams (Ear, Face, Body) and multi-step booking wizard for appointments. | Staff / Assistant |
 | **2026-09-06** | Added public home landing page, pop-up info page, and enhanced loading animations. | Staff / Assistant |
 | **2026-09-05** | Initial rebrand to Punkture Studios, offline-first IndexedDB lock, and Firestore sync engine. | Staff / Assistant |

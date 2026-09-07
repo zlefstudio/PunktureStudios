@@ -1,0 +1,50 @@
+name: Deploy to Firebase Hosting & Rules
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify code quality (Lint)
+        run: npm run lint
+
+      - name: Run test suite
+        run: npm test
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Deploy to Firebase (Hosting & Firestore Rules)
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_PUNKTURE_STUDIOS || secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/gcp-key.json"
+            export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/gcp-key.json"
+            npx --yes firebase-tools@15.29.0 deploy --only hosting,firestore:rules --project punkture-studios
+          elif [ -n "$FIREBASE_TOKEN" ]; then
+            npx --yes firebase-tools@15.29.0 deploy --only hosting,firestore:rules --token "$FIREBASE_TOKEN"
+          else
+            echo "::error::Missing deployment secret! Please add FIREBASE_TOKEN or FIREBASE_SERVICE_ACCOUNT in GitHub Repository Secrets."
+            exit 1
+          fi
