@@ -80,7 +80,7 @@ service cloud.firestore {
     match /public/public {
       allow read: if true;
       allow create, update: if isStaff()
-        && request.resource.data.keys().hasOnly(['key', 'eventActive', 'updatedAt', 'eventDate', 'eventLocation', 'eventMapUrl', 'eventTitle', 'eventHours', 'studioName', 'studioAddress', 'studioMapUrl'])
+        && request.resource.data.keys().hasOnly(['key', 'eventActive', 'updatedAt', 'eventDate', 'eventLocation', 'eventMapUrl', 'eventTitle', 'eventHours', 'studioName', 'studioAddress', 'studioMapUrl', 'bookingEnabled', 'bookingDays', 'bookingSlots', 'blockedDates', 'bookingNoticeDays'])
         && request.resource.data.key == 'public' && request.resource.data.eventActive is bool
         && request.resource.data.updatedAt is number
         && optionalString(request.resource.data, 'eventDate', 2000)
@@ -90,7 +90,12 @@ service cloud.firestore {
         && optionalString(request.resource.data, 'eventHours', 2000)
         && optionalString(request.resource.data, 'studioName', 2000)
         && optionalString(request.resource.data, 'studioAddress', 2000)
-        && optionalString(request.resource.data, 'studioMapUrl', 2000);
+        && optionalString(request.resource.data, 'studioMapUrl', 2000)
+        && (!('bookingEnabled' in request.resource.data) || request.resource.data.bookingEnabled is bool)
+        && (!('bookingDays' in request.resource.data) || request.resource.data.bookingDays is list)
+        && (!('bookingSlots' in request.resource.data) || request.resource.data.bookingSlots is list)
+        && (!('blockedDates' in request.resource.data) || request.resource.data.blockedDates is list)
+        && (!('bookingNoticeDays' in request.resource.data) || (request.resource.data.bookingNoticeDays is int && request.resource.data.bookingNoticeDays >= 0));
     }
     match /public/heartbeat {
       allow read: if true;

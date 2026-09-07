@@ -21,6 +21,7 @@ await mock.module('../src/firebase.ts', { namedExports: { auth: {}, firestore: {
 await mock.module('../src/sync.ts', { namedExports: {
   getLocalPublicSettings: async () => null,
   saveLocalPublicSettings: async patch => { savedSettings = patch; return { ...patch, key: 'public', updatedAt: 1 }; },
+  syncNow: async () => {},
 } });
 await mock.module('firebase/auth', { namedExports: {
   onAuthStateChanged: (_auth, callback) => { callback(null); return () => {}; },

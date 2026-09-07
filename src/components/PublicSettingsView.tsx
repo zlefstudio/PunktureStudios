@@ -27,7 +27,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { auth, firestore } from '../firebase';
-import { getLocalPublicSettings, saveLocalPublicSettings } from '../sync';
+import { getLocalPublicSettings, saveLocalPublicSettings, syncNow } from '../sync';
 import type { PublicSettings } from '../types';
 
 const LIVE_URL = '/live.html';
@@ -145,6 +145,7 @@ export function PublicSettingsView() {
   const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [savedMessage, setSavedMessage] = useState('Settings saved successfully!');
   const [user, setUser] = useState<User | null>(null);
   const [appointmentLimit, setAppointmentLimit] = useState(30);
   const [appointmentError, setAppointmentError] = useState<string | null>(null);
@@ -281,8 +282,14 @@ export function PublicSettingsView() {
         bookingNoticeDays: settings.bookingNoticeDays ?? 1,
       });
       setSettings(next);
+      if (user) {
+        await syncNow();
+        setSavedMessage('Settings saved and synced live to customer websites!');
+      } else {
+        setSavedMessage('Settings saved locally! (Connect to Cloud in the bottom sync bar to sync to live customer websites.)');
+      }
       setSaved(true);
-      window.setTimeout(() => setSaved(false), 2500);
+      window.setTimeout(() => setSaved(false), 3500);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Could not save settings.');
     } finally {
@@ -374,7 +381,7 @@ export function PublicSettingsView() {
       {saved && (
         <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-800 text-emerald-200 text-body-xs flex items-center gap-2 animate-pulse">
           <CheckCircle size={16} />
-          <span>Settings saved successfully! Syncs to live cloud website.</span>
+          <span>{savedMessage}</span>
         </div>
       )}
 

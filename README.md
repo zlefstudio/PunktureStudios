@@ -269,13 +269,3 @@ When modifying or extending this codebase, adhere strictly to these rules:
    - Run `npm run build` (TypeScript check + Vite production bundle must succeed).
    - Run `npm run test:rules` when modifying Firestore rules.
 
----
-
-## 9. Changelog & System Updates
-
-| Date | Update Summary | Author / Agent |
-| --- | --- | --- |
-| **2026-09-08** | Setup automated CI/CD (`.github/workflows/deploy.yml`) for push-to-deploy to Firebase Hosting & Rules. Documented sales cloud persistence. Full system analysis & documentation overhaul. Resolved TypeScript error in `AftercarePage.tsx` (`troubleContactSuffix`), updated component test suite to 100% passing (23/23), documented 7 public pages, 3-step visual booking system, and established the AI Agent Maintenance Protocol. | Antigravity AI |
-| **2026-09-07** | Added visual anatomical diagrams (Ear, Face, Body) and multi-step booking wizard for appointments. | Staff / Assistant |
-| **2026-09-06** | Added public home landing page, pop-up info page, and enhanced loading animations. | Staff / Assistant |
-| **2026-09-05** | Initial rebrand to Punkture Studios, offline-first IndexedDB lock, and Firestore sync engine. | Staff / Assistant |

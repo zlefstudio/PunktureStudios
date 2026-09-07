@@ -80,7 +80,16 @@ test('heartbeat is public, contains only a server timestamp, and cannot be forge
   await assertFails(setDoc(doc(staff(), 'public', 'heartbeat'), { publishedAt: 1 }));
 });
 test('settings are readable by document and writable with the supported shape', async () => {
-  await assertSucceeds(setDoc(doc(staff(), 'public', 'public'), { key: 'public', eventActive: false, updatedAt: 1 }));
+  await assertSucceeds(setDoc(doc(staff(), 'public', 'public'), {
+    key: 'public',
+    eventActive: false,
+    updatedAt: 1,
+    bookingEnabled: true,
+    bookingDays: [1, 2, 3],
+    bookingSlots: ['13:00'],
+    blockedDates: ['2026-09-15'],
+    bookingNoticeDays: 1,
+  }));
   await assertSucceeds(getDoc(doc(anon(), 'public', 'public')));
   await assertSucceeds(getDoc(doc(staff(), 'public', 'public')));
   await assertFails(getDocs(collection(staff(), 'public')));
