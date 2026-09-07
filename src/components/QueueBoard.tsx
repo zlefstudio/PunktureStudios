@@ -5,16 +5,16 @@ import { sortWaiting } from '../queue';
 import { TicketCard } from './TicketCard';
 import { WaitingQueueList } from './WaitingQueueList';
 import { HistoryView } from './HistoryView';
-import { PublicSettingsView } from './PublicSettingsView';
+import { SettingsSidebar } from './PublicSettingsView';
 import { SyncPanel } from './SyncPanel';
 import logoImg from '../assets/logo.png';
 
-type Tab = 'active' | 'history' | 'public';
+type Tab = 'active' | 'history' | 'settings';
 
 const TAB_META: { id: Tab; label: string }[] = [
   { id: 'active', label: '🗂 Queue' },
   { id: 'history', label: '📋 History' },
-  { id: 'public', label: '🌐 Public' },
+  { id: 'settings', label: '⚙️ Settings' },
 ];
 
 export function QueueBoard() {
@@ -22,11 +22,12 @@ export function QueueBoard() {
   const addTicket = useStore((s) => s.addTicket);
   const setActiveTicket = useStore((s) => s.setActiveTicket);
   const moveWaitingTicket = useStore((s) => s.moveWaitingTicket);
+  const tab = useStore((s) => s.activeTab);
+  const setTab = useStore((s) => s.setActiveTab);
 
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useState<Tab>('active');
   const savingRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -277,7 +278,11 @@ export function QueueBoard() {
       )}
 
       {tab === 'history' && <HistoryView />}
-      {tab === 'public' && <PublicSettingsView />}
+      {tab === 'settings' && (
+        <div className="flex-1 overflow-hidden">
+          <SettingsSidebar />
+        </div>
+      )}
 
       {/* Cloud sync status (always visible at the bottom) */}
       <SyncPanel />

@@ -46,6 +46,8 @@ interface AppState {
   deleteItemsByTicket: (ticketId: string) => Promise<void>;
 
   // UI
+  activeTab: 'active' | 'history' | 'settings';
+  setActiveTab: (tab: 'active' | 'history' | 'settings') => void;
   setActiveTicket: (id: string | null) => void;
 
   // Backup
@@ -83,6 +85,7 @@ export const useStore = create<AppState>((set, get) => ({
   tickets: [],
   items: [],
   activeTicketId: null,
+  activeTab: 'active',
   loaded: false,
 
   loadAll: async () => {
@@ -457,6 +460,7 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => ({ items: s.items.filter((i) => i.ticketId !== ticketId) }));
   },
 
+  setActiveTab: (tab) => set({ activeTab: tab }),
   setActiveTicket: (id) => set({ activeTicketId: id }),
 
   exportBackup: async () => db.transaction('r', db.tickets, db.items, db.meta, db.settings, async () => ({

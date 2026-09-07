@@ -59,7 +59,24 @@ export function validateSettings(value: unknown): PublicSettings {
     const epoch = Date.parse(date + 'T12:00:00+08:00');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(epoch) || manilaDate(epoch) !== date) throw new Error('Invalid event date.');
   }
-  return pick(s, ['key', 'eventActive', 'updatedAt', 'eventDate', 'eventLocation', 'eventMapUrl', 'eventTitle', 'eventHours', 'studioName', 'studioAddress', 'studioMapUrl']) as unknown as PublicSettings;
+  return pick(s, [
+    'key',
+    'eventActive',
+    'updatedAt',
+    'eventDate',
+    'eventLocation',
+    'eventMapUrl',
+    'eventTitle',
+    'eventHours',
+    'studioName',
+    'studioAddress',
+    'studioMapUrl',
+    'bookingEnabled',
+    'bookingDays',
+    'bookingSlots',
+    'blockedDates',
+    'bookingNoticeDays',
+  ]) as unknown as PublicSettings;
 }
 function pick(value: Record<string, unknown>, fields: string[]): Record<string, unknown> {
   return Object.fromEntries(fields.filter(key => value[key] !== undefined).map(key => [key, value[key]]));

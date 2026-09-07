@@ -3,11 +3,13 @@ import { useStore } from './store';
 import { startSyncWatcher } from './sync';
 import { QueueBoard } from './components/QueueBoard';
 import { TicketWorkspace } from './components/TicketWorkspace';
+import { PublicSettingsView } from './components/PublicSettingsView';
 import logoImg from './assets/logo.png';
 
 export function App() {
   const loadAll = useStore((s) => s.loadAll);
   const loaded = useStore((s) => s.loaded);
+  const activeTab = useStore((s) => s.activeTab);
   const [actionError, setActionError] = useState<string | null>(null);
   useEffect(() => {
     const handler = (e: PromiseRejectionEvent) => { e.preventDefault(); setActionError(e.reason instanceof Error ? e.reason.message : 'Could not save the change. Please retry.'); };
@@ -130,9 +132,9 @@ export function App() {
         <QueueBoard />
       </div>
 
-      {/* RIGHT — Active Ticket Workspace */}
+      {/* RIGHT — Active Ticket Workspace or Settings */}
       <div className="flex-1 overflow-y-auto">
-        <TicketWorkspace />
+        {activeTab === 'settings' ? <PublicSettingsView /> : <TicketWorkspace />}
       </div>
     </div>
   );

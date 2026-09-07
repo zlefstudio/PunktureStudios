@@ -569,7 +569,26 @@ button:disabled,
   }
 }
 
-/* Overlay fade-in */
+/* Modal bottom-sheet slide-up */
+@keyframes pk-modal-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-height: 680px) {
+  /* On very short viewports, shrink the anatomy graphic so the action bar stays visible */
+  .spot-location-graphic {
+    height: 96px !important;
+  }
+}
+
+
 @keyframes pk-overlay-fade {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -587,5 +606,33 @@ button:disabled,
   .time-pill-glow,
   .next-pill-glow {
     animation: none !important;
+  }
+}
+
+/* ── Modal Positioner ──────────────────────────────────────────────────────
+   This class handles the POSITIONING of the piercing spot modal.
+   It is intentionally NEVER animated — separating layout from animation
+   prevents animation fill-mode from overriding centering transforms.
+
+   Mobile:  bottom-anchored full-width sheet (bottom: 0)
+   Desktop: centered in viewport using top/left + translate
+   ────────────────────────────────────────────────────────────────────────── */
+.modal-positioner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .modal-positioner {
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    max-width: 32rem; /* max-w-lg = 512px */
   }
 }

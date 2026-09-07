@@ -150,7 +150,7 @@ export function WaiverPage() {
 
       <div className="space-y-4">
         {/* Health Check: Cannot pierce & Disclose */}
-        <SectionCard icon="🩺" title="Health & Safety Check">
+        <SectionCard title="Health & Safety Check">
           <div className="space-y-3.5">
             <div>
               <p className="text-body-xs font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--color-error-text)' }}>
@@ -183,14 +183,14 @@ export function WaiverPage() {
         </SectionCard>
 
         {/* Caffeine check */}
-        <SectionCard icon="☕" title={t.caffeineTitle}>
+        <SectionCard title={t.caffeineTitle}>
           <p className="text-body-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
             {t.caffeineText}
           </p>
         </SectionCard>
 
         {/* 50/50 partnership & jewelry */}
-        <SectionCard icon="🤝" title={t.partnershipTitle}>
+        <SectionCard title={t.partnershipTitle}>
           <div className="space-y-2 text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
             {t.partnershipText.map((p, idx) => (
               <p key={idx} className="leading-relaxed">

@@ -53,7 +53,6 @@ const CONTENT: Record<Lang, AftercareCopy> = {
       'Thick, foul-smelling green discharge.',
     ],
     troubleContact: 'If an irritation bump persists or your jewelry feels too tight, message us on',
-    troubleContactSuffix: 'or visit our booth. Never force jewelry out on your own.',
   },
   fil: {
     title: 'Gabay sa Aftercare',
@@ -131,14 +130,14 @@ export function AftercarePage() {
 
       <div className="space-y-4">
         {/* LITHA method */}
-        <SectionCard icon="✨" title={t.lithaTitle}>
+        <SectionCard title={t.lithaTitle}>
           <p className="text-body-sm leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
             {t.lithaText}
           </p>
         </SectionCard>
 
         {/* Daily routine */}
-        <SectionCard icon="🧼" title={t.routineTitle}>
+        <SectionCard title={t.routineTitle}>
           <ul className="space-y-2 text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
             {t.routineItems.map((item, idx) => (
               <li key={idx} className="flex items-start gap-2">
@@ -150,7 +149,7 @@ export function AftercarePage() {
         </SectionCard>
 
         {/* What's normal */}
-        <SectionCard icon="🌱" title={t.normalTitle}>
+        <SectionCard title={t.normalTitle}>
           <ul className="space-y-2 text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
             {t.normalItems.map((item, idx) => (
               <li key={idx} className="flex items-start gap-2">

@@ -65,7 +65,31 @@ export interface PublicSettings {
   studioMapUrl?: string;
   /** When true and an eventDate exists, the public page advertises the event. */
   eventActive: boolean;
+  /** When false, public appointment requests are paused. Defaults to true. */
+  bookingEnabled?: boolean;
+  /** Allowed days of week for bookings [0 = Sunday, 1 = Monday, ... 6 = Saturday]. */
+  bookingDays?: number[];
+  /** Allowed booking time slots, e.g. ['13:00', '14:30', '16:00', '17:30', '19:00']. */
+  bookingSlots?: string[];
+  /** Blackout dates when studio is unavailable, e.g. ['2026-09-15']. */
+  blockedDates?: string[];
+  /** Minimum days in advance to book (default: 1). */
+  bookingNoticeDays?: number;
   updatedAt: number;
+}
+
+export interface BookingSelectedPiercing {
+  id: string; // unique selection id
+  name: string;
+  category: PlacementCategory;
+  basePrice: number;
+  upgradeLabel?: string;
+  upgradePrice?: number;
+  side?: 'left' | 'right' | 'both';
+  notes?: string;
+  isCustom?: boolean;
+  customNotes?: string;
+  anatomyDependent?: boolean;
 }
 
 // --- Catalog types ---

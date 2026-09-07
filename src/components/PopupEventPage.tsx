@@ -102,7 +102,7 @@ export function PopupEventPage() {
             PUNKTURE STUDIOS
           </p>
           <h1
-            className="font-sanguine text-3xl sm:text-4xl tracking-wide"
+            className="font-black text-3xl sm:text-4xl tracking-tight"
             style={{ color: 'var(--color-text)' }}
           >
             POP-UP EVENT
@@ -155,8 +155,8 @@ export function PopupEventPage() {
 
               <div className="space-y-1">
                 <h2
-                  className="font-sanguine leading-tight text-2xl sm:text-3xl md:text-4xl"
-                  style={{ color: 'var(--color-text)', letterSpacing: '0.04em' }}
+                  className="font-black leading-tight text-2xl sm:text-3xl md:text-4xl"
+                  style={{ color: 'var(--color-text)', letterSpacing: '-0.02em' }}
                 >
                   {eventTitle}
                 </h2>

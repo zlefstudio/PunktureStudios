@@ -206,7 +206,7 @@ export function LiveQueuePage() {
                 <p className="text-label-xs" style={{ color: 'var(--color-warn-text)' }}>
                   SAVE THE DATE
                 </p>
-                <p className="font-sanguine leading-tight" style={{ fontSize: 30, letterSpacing: '0.04em', color: 'var(--color-text)' }}>
+                <p className="font-black leading-tight tracking-tight" style={{ fontSize: 28, color: 'var(--color-text)' }}>
                   {eventTitle}
                 </p>
                 <p className="font-black" style={{ fontSize: 20 }}>
@@ -247,7 +247,7 @@ export function LiveQueuePage() {
                 <p className="text-label-xs" style={{ color: 'var(--color-warn-text)' }}>
                   SAVE THE DATE
                 </p>
-                <p className="font-sanguine leading-tight" style={{ fontSize: 30, letterSpacing: '0.04em', color: 'var(--color-text)' }}>
+                <p className="font-black leading-tight tracking-tight" style={{ fontSize: 28, color: 'var(--color-text)' }}>
                   {eventTitle}
                 </p>
                 {publicSettings?.studioAddress && (
