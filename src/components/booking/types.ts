@@ -5,6 +5,9 @@ export interface PiercingHotspot {
   name: string;
   basePrice: number;
   category: PlacementCategory;
+  /** Allowed "Initial Jewelry Material" price tiers shown on the booking modal.
+   *  When omitted, all tiers (0/50/150/200) are offered. */
+  jewelryPrices?: number[];
   x: number; // percentage (0 - 100) or SVG coords
   y: number; // percentage (0 - 100) or SVG coords
   healingInfo: string;
@@ -18,7 +21,7 @@ export const EAR_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'lobe',
     name: 'Lobe',
-    basePrice: 250,
+    basePrice: 300,
     category: 'EAR',
     x: 52,
     y: 86,
@@ -29,7 +32,7 @@ export const EAR_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'auricle',
     name: 'Auricle',
-    basePrice: 300,
+    basePrice: 350,
     category: 'EAR',
     x: 77,
     y: 63,
@@ -40,7 +43,7 @@ export const EAR_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'helix',
     name: 'Helix',
-    basePrice: 350,
+    basePrice: 400,
     category: 'EAR',
     x: 68,
     y: 20,
@@ -51,7 +54,7 @@ export const EAR_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'forward_helix',
     name: 'Forward Helix',
-    basePrice: 350,
+    basePrice: 400,
     category: 'EAR',
     x: 32,
     y: 26,
@@ -62,7 +65,7 @@ export const EAR_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'flat',
     name: 'Flat',
-    basePrice: 350,
+    basePrice: 400,
     category: 'EAR',
     x: 52,
     y: 24,
@@ -73,7 +76,7 @@ export const EAR_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'conch',
     name: 'Conch',
-    basePrice: 350,
+    basePrice: 400,
     category: 'EAR',
     x: 56,
     y: 50,
@@ -84,7 +87,7 @@ export const EAR_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'tragus',
     name: 'Tragus',
-    basePrice: 400,
+    basePrice: 500,
     category: 'EAR',
     x: 29,
     y: 52,
@@ -95,7 +98,7 @@ export const EAR_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'anti_tragus',
     name: 'Anti Tragus',
-    basePrice: 450,
+    basePrice: 500,
     category: 'EAR',
     x: 46,
     y: 72,
@@ -106,8 +109,10 @@ export const EAR_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'rook',
     name: 'Rook',
-    basePrice: 400,
+    basePrice: 450,
     category: 'EAR',
+    // Rook: no rhinestone option; only the 150 titanium tier is available.
+    jewelryPrices: [150],
     x: 40,
     y: 35,
     healingInfo: '6–12 months',
@@ -119,7 +124,7 @@ export const EAR_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'daith',
     name: 'Daith',
-    basePrice: 400,
+    basePrice: 450,
     category: 'EAR',
     x: 42,
     y: 46,
@@ -132,7 +137,7 @@ export const EAR_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'snug',
     name: 'Snug',
-    basePrice: 400,
+    basePrice: 500,
     category: 'EAR',
     x: 63,
     y: 56,
@@ -145,7 +150,7 @@ export const EAR_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'industrial',
     name: 'Industrial',
-    basePrice: 600,
+    basePrice: 700,
     category: 'EAR',
     x: 48,
     y: 14,
@@ -161,7 +166,7 @@ export const FACE_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'nostril',
     name: 'Nostril',
-    basePrice: 350,
+    basePrice: 400,
     category: 'FACE',
     x: 42,
     y: 44,
@@ -172,7 +177,7 @@ export const FACE_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'septum',
     name: 'Septum',
-    basePrice: 400,
+    basePrice: 450,
     category: 'FACE',
     x: 50,
     y: 48,
@@ -183,7 +188,7 @@ export const FACE_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'eyebrow',
     name: 'Eyebrow',
-    basePrice: 400,
+    basePrice: 450,
     category: 'FACE',
     x: 35,
     y: 20,
@@ -194,7 +199,7 @@ export const FACE_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'medusa',
     name: 'Medusa',
-    basePrice: 300,
+    basePrice: 350,
     category: 'ORAL',
     x: 50,
     y: 62,
@@ -205,7 +210,7 @@ export const FACE_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'labret',
     name: 'Labret',
-    basePrice: 300,
+    basePrice: 350,
     category: 'ORAL',
     x: 50,
     y: 74,
@@ -216,7 +221,7 @@ export const FACE_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'monroe',
     name: 'Monroe',
-    basePrice: 300,
+    basePrice: 350,
     category: 'ORAL',
     x: 38,
     y: 64,
@@ -227,7 +232,7 @@ export const FACE_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'smiley',
     name: 'Smiley',
-    basePrice: 350,
+    basePrice: 400,
     category: 'ORAL',
     x: 50,
     y: 57,
@@ -238,7 +243,7 @@ export const FACE_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'tongue',
     name: 'Tongue',
-    basePrice: 400,
+    basePrice: 500,
     category: 'ORAL',
     x: 50,
     y: 67,
@@ -265,8 +270,10 @@ export const BODY_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'navel',
     name: 'Navel',
-    basePrice: 450,
+    basePrice: 500,
     category: 'BODY',
+    // Navel jewelry is intentionally free-only (stainless studs included).
+    jewelryPrices: [0],
     x: 50,
     y: 48,
     healingInfo: '6–12 months',
@@ -278,8 +285,10 @@ export const BODY_HOTSPOTS: PiercingHotspot[] = [
   {
     id: 'floating_navel',
     name: 'Floating Navel',
-    basePrice: 500,
+    basePrice: 550,
     category: 'BODY',
+    // Floating navel jewelry is the +200 tier only (not included in base).
+    jewelryPrices: [200],
     x: 50,
     y: 56,
     healingInfo: '6–12 months',

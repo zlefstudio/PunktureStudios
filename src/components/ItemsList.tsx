@@ -1,6 +1,6 @@
 import { Trash2, Plus, Minus } from 'lucide-react';
 import { useStore } from '../store';
-import { UPGRADES } from '../constants';
+import { UPGRADES, shortUpgradeLabel } from '../constants';
 import { peso } from './utils';
 import type { Ticket, PiercingItem } from '../types';
 
@@ -141,7 +141,7 @@ export function ItemsList({ ticket, items, readOnly = false }: Props) {
                           : '1px solid var(--color-border)',
                       }}
                     >
-                      {u.label === 'Free' ? 'Free' : (u.price === 50 ? '+50' : u.label.replace(' Jewelry', ''))}
+                      {shortUpgradeLabel(u.price, u.label)}
                     </button>
                   );
                 })}

@@ -95,12 +95,6 @@ export function PopupEventPage() {
       <div className="space-y-6">
         {/* Page Header */}
         <div className="text-center space-y-1.5">
-          <p
-            className="text-label-xs tracking-wider uppercase font-bold"
-            style={{ color: 'var(--color-brand-text)' }}
-          >
-            PUNKTURE STUDIOS
-          </p>
           <h1
             className="font-black text-3xl sm:text-4xl tracking-tight"
             style={{ color: 'var(--color-text)' }}

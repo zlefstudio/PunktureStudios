@@ -90,7 +90,7 @@ test('second ticket cannot start while another session is active', async () => {
   const start = [...container.querySelectorAll('button')].find(button => button.textContent === 'Another session is active');
   assert.ok(start); assert.equal(start.disabled, true);
 });
-test('booking form prevents duplicate submissions while a write is pending', async () => {
+test('booking form requires waiver consent inside the review modal before submitting', async () => {
   let finish;
   saveBooking = () => new Promise(resolve => { finish = resolve; });
   await render(AppointmentPage);
@@ -104,8 +104,23 @@ test('booking form prevents duplicate submissions while a write is pending', asy
   await act(async () => nextBtn.click());
   await fill('input[placeholder="e.g. Maya Santos"]', 'Test Person');
   await fill('input[placeholder="e.g. 09171234567 or @mayasantos"]', 'test@example.invalid');
-  await act(async () => container.querySelector('#waiver-agree').click());
-  await act(async () => { submit(); submit(); });
+
+  // Submitting opens the waiver consent modal — no request is written yet.
+  await act(async () => { submit(); });
+  const modalBox = container.querySelector('#waiver-modal-agree');
+  assert.ok(modalBox, 'waiver consent modal should open on submit');
+  assert.equal(bookingWrites.length, 0);
+
+  // The confirm button stays disabled until the checkbox is ticked.
+  const confirmBefore = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Confirm & Submit Appointment'));
+  assert.ok(confirmBefore);
+  assert.equal(confirmBefore.disabled, true);
+
+  await act(async () => modalBox.click());
+
+  // Double-clicking confirm must not create duplicate requests while pending.
+  const confirmBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Confirm & Submit Appointment'));
+  await act(async () => { confirmBtn.click(); confirmBtn.click(); });
   assert.equal(bookingWrites.length, 1);
   assert.equal(bookingWrites[0].value.createdAt, 'server-timestamp');
   await act(async () => finish());

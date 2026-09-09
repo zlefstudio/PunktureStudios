@@ -2,8 +2,17 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { PiercingHotspot } from './types';
 import type { BookingSelectedPiercing } from '../../types';
-import { X, Sparkles, Shield, Clock, Plus, Trash2, Check, AlertTriangle } from 'lucide-react';
+import { X, Shield, Clock, Plus, Trash2, Check, AlertTriangle } from 'lucide-react';
 import { UPGRADES } from '../../constants';
+
+/** All initial-jewelry price tiers offered when a spot doesn't restrict them. */
+const DEFAULT_JEWELRY_PRICES = [0, 50, 150, 200];
+
+function allowedJewelryPrices(spot: PiercingHotspot): number[] {
+  return spot.jewelryPrices && spot.jewelryPrices.length > 0
+    ? spot.jewelryPrices
+    : DEFAULT_JEWELRY_PRICES;
+}
 
 interface PiercingSpotModalProps {
   spot: PiercingHotspot;
@@ -48,9 +57,6 @@ function SpotLocationGraphic({ spot }: { spot: PiercingHotspot }) {
           <circle cx={cx} cy={cy} r="8" fill="rgba(139,92,246,0.5)" stroke="#a78bfa" strokeWidth="1.5" />
           <circle cx={cx} cy={cy} r="3.5" fill="#34d399" />
         </svg>
-        <div className="absolute bottom-2 right-2.5 px-2 py-0.5 rounded-lg bg-zinc-900/90 border border-zinc-700/70 text-[10px] font-mono font-bold text-emerald-300 shadow">
-          📍 {spot.name}
-        </div>
       </div>
     );
   }
@@ -83,9 +89,6 @@ function SpotLocationGraphic({ spot }: { spot: PiercingHotspot }) {
           <circle cx={cx} cy={cy} r="8" fill="rgba(139,92,246,0.5)" stroke="#a78bfa" strokeWidth="1.5" />
           <circle cx={cx} cy={cy} r="3.5" fill="#34d399" />
         </svg>
-        <div className="absolute bottom-2 right-2.5 px-2 py-0.5 rounded-lg bg-zinc-900/90 border border-zinc-700/70 text-[10px] font-mono font-bold text-emerald-300 shadow">
-          📍 {spot.name}
-        </div>
       </div>
     );
   }
@@ -115,9 +118,6 @@ function SpotLocationGraphic({ spot }: { spot: PiercingHotspot }) {
         <circle cx={cx} cy={cy} r="8" fill="rgba(139,92,246,0.5)" stroke="#a78bfa" strokeWidth="1.5" />
         <circle cx={cx} cy={cy} r="3.5" fill="#34d399" />
       </svg>
-      <div className="absolute bottom-2 right-2.5 px-2 py-0.5 rounded-lg bg-zinc-900/90 border border-zinc-700/70 text-[10px] font-mono font-bold text-emerald-300 shadow">
-        📍 {spot.name}
-      </div>
     </div>
   );
 }
@@ -130,9 +130,16 @@ export function PiercingSpotModal({
   onRemove,
   onClose,
 }: PiercingSpotModalProps) {
-  const [selectedUpgrade, setSelectedUpgrade] = useState<number>(
-    existingSelection?.upgradePrice ?? 0
-  );
+  const [selectedUpgrade, setSelectedUpgrade] = useState<number>(() => {
+    const allowed = allowedJewelryPrices(spot);
+    if (
+      existingSelection?.upgradePrice !== undefined &&
+      allowed.includes(existingSelection.upgradePrice)
+    ) {
+      return existingSelection.upgradePrice;
+    }
+    return allowed.includes(0) ? 0 : allowed[0];
+  });
   const [side, setSide] = useState<'left' | 'right' | 'both'>(
     existingSelection?.side ?? initialSide
   );
@@ -155,6 +162,9 @@ export function PiercingSpotModal({
     };
   }, []);
 
+  const availableUpgrades = UPGRADES.filter((u) =>
+    allowedJewelryPrices(spot).includes(u.price)
+  );
   const upgradeObj = UPGRADES.find((u) => u.price === selectedUpgrade) ?? UPGRADES[0];
   const sideMultiplier = side === 'both' ? 2 : 1;
   const totalPrice = (spot.basePrice + selectedUpgrade) * sideMultiplier;
@@ -358,12 +368,14 @@ export function PiercingSpotModal({
               <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                 Initial Jewelry Material
               </label>
-              <span className="text-[10px] font-bold text-violet-400 flex items-center gap-1">
-                <Sparkles size={10} /> Implant grade
-              </span>
             </div>
+            {availableUpgrades.length > 0 && !availableUpgrades.some((u) => u.price === 0) && (
+              <p className="text-[10px] font-semibold text-amber-300 leading-snug">
+                Jewelry is not included for this piercing — the added price below is part of your estimate.
+              </p>
+            )}
             <div className="space-y-1.5">
-              {UPGRADES.map((u) => {
+              {availableUpgrades.map((u) => {
                 const isSelected = selectedUpgrade === u.price;
                 return (
                   <button

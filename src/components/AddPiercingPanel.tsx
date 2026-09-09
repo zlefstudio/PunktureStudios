@@ -1,15 +1,26 @@
 import { useState } from 'react';
 import { useStore } from '../store';
-import { PLACEMENTS, UPGRADES, JEWELRY_OPTIONS } from '../constants';
+import {
+  PLACEMENTS,
+  UPGRADES,
+  JEWELRY_OPTIONS,
+  OTHER_SERVICES,
+  serviceItemName,
+  servicePriceLabel,
+  shortUpgradeLabel,
+} from '../constants';
 import type { Ticket, PlacementCategory } from '../types';
 
-const CATEGORIES: PlacementCategory[] = ['EAR', 'ORAL', 'FACE', 'BODY', 'CUSTOM', 'JEWELRY'];
+type PanelTab = PlacementCategory | 'SERVICES';
 
-const TAB_LABELS: Record<PlacementCategory, string> = {
+const CATEGORIES: PanelTab[] = ['EAR', 'ORAL', 'FACE', 'BODY', 'SERVICES', 'CUSTOM', 'JEWELRY'];
+
+const TAB_LABELS: Record<PanelTab, string> = {
   EAR: 'EAR',
   ORAL: 'ORAL',
   FACE: 'FACE',
   BODY: 'BODY',
+  SERVICES: '🧰 SERVICES',
   CUSTOM: 'CUSTOM',
   JEWELRY: '💍 JEWELRY',
 };
@@ -21,7 +32,7 @@ interface Props {
 export function AddPiercingPanel({ ticket }: Props) {
   const addItem = useStore((s) => s.addItem);
 
-  const [category, setCategory] = useState<PlacementCategory>('EAR');
+  const [category, setCategory] = useState<PanelTab>('EAR');
   const [customName, setCustomName] = useState('');
   const [customPrice, setCustomPrice] = useState('');
 
@@ -61,7 +72,7 @@ export function AddPiercingPanel({ ticket }: Props) {
   return (
     <div className="px-5 py-4">
       <p className="text-label-xs mb-2.5" style={{ color: 'var(--color-text-faint)' }}>
-        {category === 'JEWELRY' ? 'Add Jewelry' : 'Add Piercing'}
+        {category === 'JEWELRY' ? 'Add Jewelry' : category === 'SERVICES' ? 'Add Services' : 'Add Piercing'}
       </p>
 
       {/* ── Category tabs ── */}
@@ -136,11 +147,70 @@ export function AddPiercingPanel({ ticket }: Props) {
                 }}
               >
                 <span>💍</span>
-                <span>{j.label.replace(' Jewelry', '')}</span>
+                <span>{shortUpgradeLabel(j.price, j.label)}</span>
                 <span style={{ color: 'var(--color-warn)', fontSize: '10px' }}>₱{j.price}</span>
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── SERVICES tab ── */}
+      {category === 'SERVICES' && (
+        <div className="space-y-2.5">
+          <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
+            Add-on services &amp; aftercare — “My Work” means the piercing or jewelry was originally done here at Punkture.
+          </p>
+          {OTHER_SERVICES.map((svc) => (
+            <div
+              key={svc.name}
+              className="rounded-xl p-3 space-y-2"
+              style={{ background: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-body-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {svc.name}
+                </span>
+                {svc.startingAt && (
+                  <span className="text-[10px] font-semibold" style={{ color: 'var(--color-warn-text)' }}>
+                    starts at
+                  </span>
+                )}
+              </div>
+              {svc.description && (
+                <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
+                  {svc.description}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {svc.tiers.map((t) => (
+                  <button
+                    key={t.label}
+                    onClick={() => handleAddPiercing(serviceItemName(svc, t), t.price)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-body-xs font-semibold transition-all"
+                    style={{
+                      background: 'var(--color-brand-subtle)',
+                      border: '1px solid var(--color-border)',
+                      color: 'var(--color-brand-text)',
+                    }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget;
+                      el.style.background = 'var(--color-brand)';
+                      el.style.color = '#fff';
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget;
+                      el.style.background = 'var(--color-brand-subtle)';
+                      el.style.color = 'var(--color-brand-text)';
+                    }}
+                  >
+                    {svc.single ? 'Add' : t.label}
+                    <span style={{ fontSize: '10px', color: 'inherit' }}>{servicePriceLabel(svc, t)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

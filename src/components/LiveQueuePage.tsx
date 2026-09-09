@@ -266,6 +266,22 @@ export function LiveQueuePage() {
                     View location
                   </a>
                 )}
+                <div className="flex flex-col sm:flex-row items-stretch justify-center gap-2 pt-1">
+                  <a
+                    href="/appointment.html"
+                    className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-2xl font-bold"
+                    style={{ background: 'var(--color-brand)', color: '#fff', boxShadow: 'var(--shadow-brand)', textDecoration: 'none' }}
+                  >
+                    Book an appointment
+                  </a>
+                  <a
+                    href="/popup.html"
+                    className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-2xl font-bold"
+                    style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--color-text)', border: '1px solid var(--color-border)', textDecoration: 'none' }}
+                  >
+                    Next pop-up event
+                  </a>
+                </div>
               </div>
             )
           ) : (

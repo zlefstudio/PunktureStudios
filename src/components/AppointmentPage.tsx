@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { firestore } from '../firebase';
 import type { PublicSettings, BookingSelectedPiercing } from '../types';
-import { UPGRADES } from '../constants';
+import { OTHER_SERVICES, serviceItemName, servicePriceLabel } from '../constants';
+import type { OtherService } from '../constants';
+import { WaiverReviewModal } from './booking/WaiverReviewModal';
 import { PublicShell } from './PublicShell';
 import { EarDiagram } from './booking/EarDiagram';
 import { FaceDiagram } from './booking/FaceDiagram';
@@ -21,7 +23,6 @@ import {
   CheckCircle2,
   Send,
   X,
-  ShieldCheck,
   ChevronLeft,
   ChevronRight,
   Search,
@@ -33,7 +34,7 @@ import {
 } from 'lucide-react';
 import { validAppointmentDate } from '../validation';
 
-type VisualCategory = 'EAR' | 'FACE' | 'BODY' | 'CUSTOM';
+type VisualCategory = 'EAR' | 'FACE' | 'BODY' | 'OTHERS';
 type ViewMode = 'diagram' | 'list';
 
 const DEFAULT_SLOTS = ['13:00', '14:30', '16:00', '17:30', '19:00'];
@@ -47,6 +48,11 @@ function format12Hour(time24: string): string {
   return `${hour12}:${m < 10 ? '0' + m : m} ${ampm}`;
 }
 
+// Other Services tab order — Aftercare Solution pinned to the top.
+const BOOKING_SERVICES: OtherService[] = [...OTHER_SERVICES].sort((a, b) =>
+  a.single ? -1 : b.single ? 1 : 0
+);
+
 export function AppointmentPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedPiercings, setSelectedPiercings] = useState<BookingSelectedPiercing[]>([]);
@@ -57,15 +63,6 @@ export function AppointmentPage() {
     spot: PiercingHotspot;
     side?: 'left' | 'right';
   } | null>(null);
-
-  // Custom Piercing Form State
-  const [customName, setCustomName] = useState('');
-  const [customCategory, setCustomCategory] = useState<'EAR' | 'FACE' | 'BODY' | 'ORAL' | 'CUSTOM'>('EAR');
-  const [customSide, setCustomSide] = useState<'left' | 'right' | 'both' | 'none'>('none');
-  const [customPrice] = useState(350);
-  const [customUpgrade, setCustomUpgrade] = useState<number>(0);
-  const [customNotes, setCustomNotes] = useState('');
-  const [customAddedFlash, setCustomAddedFlash] = useState(false);
 
   // Public Settings from Firestore
   const [publicSettings, setPublicSettings] = useState<PublicSettings | null>(null);
@@ -134,27 +131,14 @@ export function AppointmentPage() {
     setSelectedPiercings((prev) => prev.filter((p) => p.id !== id));
   }
 
-  function handleAddCustomPiercing() {
-    const trimmed = customName.trim();
-    if (!trimmed) return;
-    const upgradeObj = UPGRADES.find((u) => u.price === customUpgrade) ?? UPGRADES[0];
-    const sideMultiplier = customSide === 'both' ? 2 : 1;
+  function handleAddOtherService(itemName: string, basePrice: number) {
     const item: BookingSelectedPiercing = {
       id: crypto.randomUUID(),
-      name: trimmed,
-      category: customCategory,
-      basePrice: customPrice * sideMultiplier,
-      upgradeLabel: upgradeObj.price > 0 ? upgradeObj.label : undefined,
-      upgradePrice: upgradeObj.price > 0 ? upgradeObj.price * sideMultiplier : undefined,
-      side: customSide !== 'none' ? customSide : undefined,
-      isCustom: true,
-      customNotes: customNotes.trim() || undefined,
+      name: itemName,
+      category: 'CUSTOM',
+      basePrice,
     };
     handleAddPiercing(item);
-    setCustomName('');
-    setCustomNotes('');
-    setCustomAddedFlash(true);
-    setTimeout(() => setCustomAddedFlash(false), 2500);
   }
 
   const ALL_HOTSPOTS = [...EAR_HOTSPOTS, ...FACE_HOTSPOTS, ...BODY_HOTSPOTS];
@@ -172,10 +156,10 @@ export function AppointmentPage() {
     ? FACE_HOTSPOTS
     : BODY_HOTSPOTS;
 
-  // Submission handler
-  async function handleSubmitBooking(e: React.FormEvent) {
+  // Step-3 review gating — validates contact info, then opens the waiver consent modal.
+  function handleReviewStart(e: React.FormEvent) {
     e.preventDefault();
-    if (pending.current) return;
+    if (pending.current || busy) return;
     if (!name.trim() || !contact.trim()) {
       setError('Please enter your name and contact info.');
       return;
@@ -184,12 +168,14 @@ export function AppointmentPage() {
       setError('Please select a valid future date and time slot.');
       return;
     }
-    if (!waiverAgreed) {
-      setError('Please review and accept the studio safety guidelines.');
-      setShowWaiverModal(true);
-      return;
-    }
+    setError(null);
+    setWaiverAgreed(false);
+    setShowWaiverModal(true);
+  }
 
+  async function submitRequest() {
+    if (pending.current) return;
+    if (!waiverAgreed) return;
     pending.current = true;
     setBusy(true);
     setError(null);
@@ -225,6 +211,7 @@ export function AppointmentPage() {
         requestedFor: Date.parse(`${date}T${time}:00+08:00`),
       });
 
+      setShowWaiverModal(false);
       setDone(true);
     } catch (err) {
       const code =
@@ -589,21 +576,22 @@ export function AppointmentPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setActiveCategory('CUSTOM');
+                      setActiveCategory('OTHERS');
                       setSearchQuery('');
                       setViewMode('diagram');
                     }}
                     className="flex-1 py-2.5 px-3 rounded-xl text-ui-sm font-bold transition-all flex items-center justify-center whitespace-nowrap"
                     style={{
-                      background: activeCategory === 'CUSTOM' && !isSearching ? 'var(--color-brand)' : 'transparent',
-                      color: activeCategory === 'CUSTOM' && !isSearching ? '#fff' : 'var(--color-text-muted)',
+                      background: activeCategory === 'OTHERS' && !isSearching ? 'var(--color-brand)' : 'transparent',
+                      color: activeCategory === 'OTHERS' && !isSearching ? '#fff' : 'var(--color-text-muted)',
                     }}
                   >
-                    Custom Piercing
+                    Others
                   </button>
                 </div>
 
                 {/* Search Bar - auto switches to list when typed, restores on exit/clear/escape */}
+                {activeCategory !== 'OTHERS' && (
                 <div className="relative">
                   <Search
                     size={16}
@@ -648,9 +636,10 @@ export function AppointmentPage() {
                     </button>
                   )}
                 </div>
+                )}
 
-                {/* View Mode Toggle & Anatomy Advisory (when not in custom mode and not searching) */}
-                {activeCategory !== 'CUSTOM' && !isSearching && (
+                {/* View Mode Toggle & Anatomy Advisory (when not searching) */}
+                {activeCategory !== 'OTHERS' && !isSearching && (
                   <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
                     {/* Segmented Graphic vs List toggle */}
                     <div
@@ -711,7 +700,7 @@ export function AppointmentPage() {
                 )}
 
                 {/* RENDER: Graphic Diagram View (when not searching and diagram mode is active) */}
-                {viewMode === 'diagram' && !isSearching && activeCategory !== 'CUSTOM' && (
+                {viewMode === 'diagram' && !isSearching && activeCategory !== 'OTHERS' && (
                   <div className="flex flex-col items-center pt-2">
                     {activeCategory === 'EAR' && (
                       <EarDiagram
@@ -735,7 +724,7 @@ export function AppointmentPage() {
                 )}
 
                 {/* RENDER: List Directory View (either by mode or during live search) */}
-                {(viewMode === 'list' || isSearching) && activeCategory !== 'CUSTOM' && (
+                {(viewMode === 'list' || isSearching) && activeCategory !== 'OTHERS' && (
                   <div className="w-full space-y-2">
                     {displayHotspots.map((spot) => {
                       const isSelected = selectedNames.includes(spot.name);
@@ -805,23 +794,13 @@ export function AppointmentPage() {
                         style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--color-border)' }}
                       >
                         <p className="text-zinc-400 text-body-xs">No matching piercings found for "{searchQuery}".</p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSearchQuery('');
-                            setActiveCategory('CUSTOM');
-                          }}
-                          className="text-xs font-bold text-violet-400 hover:underline"
-                        >
-                          Request a custom piercing instead →
-                        </button>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* RENDER: Custom Piercing Tab */}
-                {activeCategory === 'CUSTOM' && (
+                {/* RENDER: Other Services & Aftercare Tab */}
+                {activeCategory === 'OTHERS' && (
                   <div
                     className="w-full rounded-3xl p-5 sm:p-6 space-y-4"
                     style={{
@@ -830,171 +809,67 @@ export function AppointmentPage() {
                       boxShadow: '0 12px 36px rgba(0,0,0,0.4)',
                     }}
                   >
-                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-zinc-800">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-violet-400">
-                          Personalized Request
-                        </span>
-                        <h3 className="font-bold text-xl text-white tracking-tight">
-                          Custom Piercing or Curation Project
-                        </h3>
-                        <p className="text-body-xs text-zinc-400 mt-1">
-                          Have a unique placement in mind, stacked lobe, or custom curations? Type your request below.
-                        </p>
-                      </div>
-                      <div className="p-2.5 rounded-2xl bg-violet-500/10 text-violet-400">
-                        <Sparkles size={20} />
-                      </div>
+                    <div className="space-y-1.5">
+                      <h3 className="font-bold text-body text-white flex items-center gap-2">
+                        <Sparkles size={16} className="text-violet-400" />
+                        Other Services &amp; Aftercare
+                      </h3>
+                      <p className="text-[11px] text-zinc-400 leading-relaxed">
+                        Add downsizing, jewelry changes, cleanings or aftercare to your booking.
+                        <span className="text-zinc-300 font-semibold"> “My Work”</span> means the piercing or jewelry
+                        was originally done here at Punkture. Prices marked{' '}
+                        <span className="text-zinc-300 font-semibold">“from”</span> are starting rates — the piercer
+                        confirms the final price during your appointment.
+                      </p>
                     </div>
 
-                    <div className="space-y-3.5">
-                      {/* Placement Name */}
-                      <div>
-                        <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-                          Placement Name or Project Title *
-                        </label>
-                        <input
-                          type="text"
-                          value={customName}
-                          onChange={(e) => setCustomName(e.target.value)}
-                          placeholder="e.g. Stacked Upper Lobe, Surface Tragus, Snake Eyes, Dermal Anchor"
-                          className="w-full px-4 py-3 rounded-xl text-body-sm text-white"
-                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)' }}
-                        />
-                      </div>
-
-                      {/* Target Anatomy Area */}
-                      <div>
-                        <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-                          Anatomy Area
-                        </label>
-                        <div className="grid grid-cols-4 gap-1.5">
-                          {(['EAR', 'FACE', 'BODY', 'ORAL'] as const).map((cat) => (
-                            <button
-                              key={cat}
-                              type="button"
-                              onClick={() => setCustomCategory(cat)}
-                              className="py-2 px-2 rounded-xl text-body-xs font-bold transition-all text-center"
-                              style={{
-                                background: customCategory === cat ? 'var(--color-brand)' : 'rgba(255,255,255,0.04)',
-                                color: customCategory === cat ? '#fff' : 'var(--color-text-muted)',
-                                border: customCategory === cat ? '1px solid var(--color-brand-light)' : '1px solid var(--color-border)',
-                              }}
-                            >
-                              {cat === 'EAR' ? 'Ear' : cat === 'FACE' ? 'Face' : cat === 'BODY' ? 'Body' : 'Oral'}
-                            </button>
-                          ))}
+                    <div className="space-y-2.5">
+                      {BOOKING_SERVICES.map((svc) => (
+                        <div
+                          key={svc.name}
+                          className="rounded-2xl p-4 space-y-2.5"
+                          style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--color-border)' }}
+                        >
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span className="font-bold text-white text-[13px]">{svc.name}</span>
+                            {svc.startingAt && (
+                              <span className="text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-md px-2 py-0.5">
+                                Prices start at
+                              </span>
+                            )}
+                          </div>
+                          {svc.description && (
+                            <p className="text-[11px] text-zinc-400 leading-relaxed">{svc.description}</p>
+                          )}
+                          <div className="flex flex-wrap gap-1.5">
+                            {svc.tiers.map((t) => {
+                              const itemName = serviceItemName(svc, t);
+                              const added = selectedNames.includes(itemName);
+                              return (
+                                <button
+                                  key={t.label}
+                                  type="button"
+                                  onClick={() => handleAddOtherService(itemName, t.price)}
+                                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95"
+                                  style={{
+                                    background: added ? 'rgba(16,185,129,0.18)' : 'rgba(139,92,246,0.16)',
+                                    border: added
+                                      ? '1px solid rgba(52,211,153,0.55)'
+                                      : '1px solid rgba(167,139,250,0.35)',
+                                    color: added ? '#6ee7b7' : '#fff',
+                                  }}
+                                >
+                                  {added ? <CheckCircle2 size={12} /> : <Plus size={12} />}
+                                  <span>
+                                    {svc.single ? 'Add' : t.label}
+                                    {added ? '' : ` · ${servicePriceLabel(svc, t)}`}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-
-                      {/* Side Selector */}
-                      <div>
-                        <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-                          Placement Side (Optional)
-                        </label>
-                        <div className="grid grid-cols-4 gap-1.5">
-                          {(
-                            [
-                              { id: 'none', label: 'N/A · Center' },
-                              { id: 'left', label: 'Left' },
-                              { id: 'right', label: 'Right' },
-                              { id: 'both', label: 'Both (2×)' },
-                            ] as const
-                          ).map((s) => (
-                            <button
-                              key={s.id}
-                              type="button"
-                              onClick={() => setCustomSide(s.id)}
-                              className="py-2 px-1 rounded-xl text-[11px] font-bold transition-all text-center truncate"
-                              style={{
-                                background: customSide === s.id ? 'var(--color-brand)' : 'rgba(255,255,255,0.04)',
-                                color: customSide === s.id ? '#fff' : 'var(--color-text-muted)',
-                                border: customSide === s.id ? '1px solid var(--color-brand-light)' : '1px solid var(--color-border)',
-                              }}
-                            >
-                              {s.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Jewelry Material */}
-                      <div>
-                        <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-                          Initial Jewelry Material
-                        </label>
-                        <div className="space-y-1.5">
-                          {UPGRADES.map((u) => {
-                            const isSelected = customUpgrade === u.price;
-                            return (
-                              <button
-                                key={u.price}
-                                type="button"
-                                onClick={() => setCustomUpgrade(u.price)}
-                                className="w-full flex items-center justify-between p-2.5 rounded-xl text-body-xs font-semibold transition-all text-left"
-                                style={{
-                                  background: isSelected ? 'rgba(139,92,246,0.18)' : 'rgba(255,255,255,0.03)',
-                                  border: isSelected ? '1px solid var(--color-brand-light)' : '1px solid var(--color-border)',
-                                  color: isSelected ? '#fff' : 'var(--color-text-muted)',
-                                }}
-                              >
-                                <span>{u.label}</span>
-                                <span className="font-mono font-bold">
-                                  {u.price === 0 ? 'Included' : `+₱${u.price}`}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Placement Details / Description */}
-                      <div>
-                        <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
-                          Notes / Anatomy Specifics (Optional)
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={customNotes}
-                          onChange={(e) => setCustomNotes(e.target.value)}
-                          placeholder="e.g. Squeezing a third lobe between existing holes; checking if industrial bar fits my scapha."
-                          className="w-full px-4 py-2.5 rounded-xl text-body-xs text-white"
-                          style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)' }}
-                        />
-                      </div>
-
-                      {/* Anatomy Reminder Note */}
-                      <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2 text-body-xs text-amber-200">
-                        <AlertTriangle size={15} className="flex-shrink-0 mt-0.5 text-amber-400" />
-                        <p className="text-[11px] leading-relaxed">
-                          <strong>Anatomy Consultation:</strong> Custom or unusual placements require in-person tissue evaluation. Starting estimate is ₱{customPrice * (customSide === 'both' ? 2 : 1)} (final price confirmed before piercing).
-                        </p>
-                      </div>
-
-                      {/* Add Custom Button */}
-                      <button
-                        type="button"
-                        disabled={!customName.trim()}
-                        onClick={handleAddCustomPiercing}
-                        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-bold text-ui-sm transition-transform active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                        style={{
-                          background: customAddedFlash ? 'var(--color-success)' : 'var(--color-brand)',
-                          color: '#fff',
-                          boxShadow: 'var(--shadow-brand)',
-                        }}
-                      >
-                        {customAddedFlash ? (
-                          <>
-                            <CheckCircle2 size={16} />
-                            <span>Added to Session Cart!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Plus size={16} />
-                            <span>Add Custom Piercing (₱{customPrice * (customSide === 'both' ? 2 : 1) + customUpgrade * (customSide === 'both' ? 2 : 1)})</span>
-                          </>
-                        )}
-                      </button>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1112,7 +987,7 @@ export function AppointmentPage() {
 
             {/* ════ STEP 3: CLIENT DETAILS & WAIVER ════ */}
             {step === 3 && (
-              <form onSubmit={handleSubmitBooking} className="space-y-5">
+              <form onSubmit={handleReviewStart} className="space-y-5">
                 <div className="flex items-center justify-between">
                   <h2 className="font-bold text-body text-white">Review &amp; Contact Details</h2>
                   <button
@@ -1208,31 +1083,6 @@ export function AppointmentPage() {
                   </label>
                 </div>
 
-                {/* Waiver Agreement Checkbox */}
-                <div
-                  className="p-3.5 rounded-2xl flex items-start gap-3"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)' }}
-                >
-                  <input
-                    type="checkbox"
-                    id="waiver-agree"
-                    checked={waiverAgreed}
-                    onChange={(e) => setWaiverAgreed(e.target.checked)}
-                    className="mt-1 w-4 h-4 rounded text-violet-600 focus:ring-violet-500"
-                  />
-                  <label htmlFor="waiver-agree" className="text-body-xs text-zinc-300 cursor-pointer">
-                    I confirm that I am at least 18 years old (or accompanied by a legal guardian), not pregnant or nursing, and agree to the studio's{' '}
-                    <button
-                      type="button"
-                      onClick={() => setShowWaiverModal(true)}
-                      className="font-bold underline text-violet-400"
-                    >
-                      Health &amp; Safety Waiver
-                    </button>
-                    .
-                  </label>
-                </div>
-
                 {error && (
                   <p className="text-body-xs font-semibold text-red-400">
                     {error}
@@ -1279,58 +1129,18 @@ export function AppointmentPage() {
           onProceed={() => setStep(2)}
         />
 
-        {/* ── Waiver Modal ── */}
+        {/* ── Waiver Review Modal (mirrors /waiver.html content) ── */}
         {showWaiverModal && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(6px)' }}
-            onClick={() => setShowWaiverModal(false)}
-          >
-            <div
-              className="relative w-full max-w-lg rounded-3xl p-6 space-y-4 max-h-[85vh] overflow-y-auto"
-              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck size={22} className="text-violet-400" />
-                  <h3 className="font-bold text-body text-white">Before We Pierce — Studio Waiver</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowWaiverModal(false)}
-                  className="p-1 text-zinc-400 hover:text-white"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="space-y-3 text-body-xs text-zinc-300 leading-relaxed">
-                <p>
-                  <strong>Health Check:</strong> We use single-use sterile medical needles for every piercing. Clients must not be under the influence of drugs or alcohol, pregnant or nursing, or dealing with skin infections at the site.
-                </p>
-                <p>
-                  <strong>Age Verification:</strong> You must present a valid government-issued ID. Minors require an in-person parent or legal guardian with IDs.
-                </p>
-                <p>
-                  <strong>50/50 Healing Rule:</strong> We ensure 100% sterile procedure and correct anatomy placement. Proper aftercare (saline spray 2× every other day and LITHA) is your responsibility.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setWaiverAgreed(true);
-                  setShowWaiverModal(false);
-                }}
-                className="w-full py-3 rounded-xl font-bold text-body-sm text-white"
-                style={{ background: 'var(--color-brand)' }}
-              >
-                I Understand &amp; Agree
-              </button>
-            </div>
-          </div>
+          <WaiverReviewModal
+            agreed={waiverAgreed}
+            onAgreedChange={setWaiverAgreed}
+            busy={busy}
+            error={error}
+            onClose={() => setShowWaiverModal(false)}
+            onSubmit={submitRequest}
+          />
         )}
+
       </div>
     </PublicShell>
   );

@@ -12,7 +12,7 @@ export function PrivacyPage() {
       </p>
 
       <div className="space-y-4">
-        <SectionCard icon="🔒" title="What we collect">
+        <SectionCard title="What we collect">
           <ul className="space-y-2.5 text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
             <li>
               • <b style={{ color: 'var(--color-text)' }}>Live queue:</b> The public board displays ticket numbers only; your full name is never shown. Giving a nickname or phone number at our booth is completely <b style={{ color: 'var(--color-brand-text)' }}>OPTIONAL</b>:
@@ -26,27 +26,27 @@ export function PrivacyPage() {
           </ul>
         </SectionCard>
 
-        <SectionCard icon="🎯" title="Why we use it">
+        <SectionCard title="Why we use it">
           <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
             We process data only to run the queue and confirm bookings. We do not sell your information or use it for advertising. Booking and staff records are stored using Google Firebase; access is restricted to authorized staff.
           </p>
         </SectionCard>
 
-        <SectionCard icon="🗄️" title="Retention">
+        <SectionCard title="Retention">
           <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
             Staff can delete booking requests when they are no longer needed. Staff queue records include client names, notes and order details and are retained in local history and cloud backups until staff remove them. Archived history is retained; resetting ticket numbers does not delete it.
             You may ask us to delete your data anytime.
           </p>
         </SectionCard>
 
-        <SectionCard icon="🛡️" title="Your rights">
+        <SectionCard title="Your rights">
           <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
             Under the Data Privacy Act of 2012 (RA 10173), you have the right to access,
             correct, and request deletion of your personal data.
           </p>
         </SectionCard>
 
-        <SectionCard icon="📮" title="Contact">
+        <SectionCard title="Contact">
           <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
             Questions about privacy? Reach out to us on Instagram:{' '}
             <a
@@ -71,7 +71,7 @@ export function PrivacyPage() {
           style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)' }}
         >
           <h2 className="text-label-xs" style={{ color: 'var(--color-warn-text)' }}>
-            ⚖️ Copyright &amp; legal notice
+            Copyright &amp; legal notice
           </h2>
           <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
             © PUNKTURE STUDIOS. All rights reserved. The brand name, logo, text, graphics,

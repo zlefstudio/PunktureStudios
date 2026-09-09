@@ -116,7 +116,7 @@ PunktureStudios/
     ├── waiver.tsx              # Entry point for waiver.html
     ├── aftercare.tsx           # Entry point for aftercare.html
     ├── privacy.tsx             # Entry point for privacy.html
-    ├── constants.ts            # Piercing catalog, pricing defaults, and jewelry upgrades
+    ├── constants.ts            # POP-UP piercing catalog, add-on services catalog, jewelry upgrades
     ├── dataLock.ts             # Mutex lock (`withDataLock`) serializing local IndexedDB transactions
     ├── db.ts                   # Dexie database definitions, ticket number generator, deletion log
     ├── firebase.ts             # Firebase app client initialization
@@ -127,8 +127,9 @@ PunktureStudios/
     ├── timeEstimate.ts         # Waiting time estimation algorithms
     ├── types.ts                # Core TypeScript interfaces (Ticket, PiercingItem, PublicSettings)
     ├── validation.ts           # Input sanitization, CSV escaping, Manila timezone validations
+    ├── waiverContent.ts        # Bilingual (EN/Fil) waiver copy shared by /waiver.html & booking modal
     └── components/
-        ├── AddPiercingPanel.tsx       # Staff placement selector & pricing calculator
+        ├── AddPiercingPanel.tsx       # Staff placement & add-on service selector (pop-up rates)
         ├── AftercarePage.tsx          # Bilingual aftercare guide component
         ├── AppointmentPage.tsx        # 3-step interactive booking funnel with calendar
         ├── BreakdownModal.tsx         # Detailed price/item breakdown modal
@@ -158,6 +159,7 @@ PunktureStudios/
             ├── EarDiagram.tsx         # Interactive SVG diagram for ear placements (Lobe, Helix, etc.)
             ├── FaceDiagram.tsx        # Interactive SVG diagram for facial placements (Nostril, Septum, etc.)
             ├── PiercingSpotModal.tsx  # Placement detail modal (pain level, healing, upgrades, side)
+            ├── WaiverReviewModal.tsx  # Step-3 consent modal mirroring waiver page content
             └── types.ts               # Hotspot coordinates, healing notes, and catalog definitions
 ```
 
@@ -169,12 +171,22 @@ PunktureStudios/
 1. **Add Ticket**: Enter client name and optional notes. Creates ticket with status `waiting`.
 2. **Reordering Queue**: Drag cards or press **Alt+Up / Alt+Down** while focused on a waiting ticket. Rearranging updates `queueOrder` across all waiting cards.
 3. **Call Client**: Marks status as `called`. Only **ONE** active session (called or in-progress) is allowed at any time.
-4. **Order Assembly**: Add piercing placements or standalone jewelry items (`PiercingItem`). Set base price, upgrades (Titanium, 14K Gold, etc.), member discounts, and quantities.
+4. **Order Assembly**: Add piercing placements, standalone jewelry items, or add-on services (`PiercingItem`). Initial jewelry material options: Free Stainless Studs, +50 Rhinestone Stainless, 150/200 Titanium. Set member discounts and quantities.
 5. **Start Piercing**: Advances status to `in_progress`.
 6. **Finish / Checkout**: Confirms payment and completion. Marks status as `finished`. Jewelry-only purchases do not require a piercing session.
 7. **Cancel Options**:
    - **Cancel Session**: Returns ticket to the front of the waiting queue.
    - **Cancel Ticket**: Terminates the ticket as `cancelled`.
+
+### Rate Cards: Pop-Up vs Studio
+The studio operates **two rate cards** that are hard-split by surface:
+- **Staff Cashier** — the placement chips in `AddPiercingPanel.tsx` (data: `PLACEMENTS` in `src/constants.ts`) always use **Pop-Up rates**.
+- **Public Booking** — the `appointment.html` wizard (data: hotspots in `src/components/booking/types.ts`) always uses **Studio rates**.
+Placements added in the latest rate sheet that are not drawn on the booking diagrams are deliberately **not** added as new graphic hotspots — clients request them through the **Custom Piercing** flow instead.
+**Add-on services** (`OTHER_SERVICES` in `src/constants.ts`: Downsizing, Upsizing, Jewelry Installation/Removal, Piercing Cleaning, Aftercare Solution) appear in both surfaces:
+- Staff cashier → the **🧰 SERVICES** tab inside `AddPiercingPanel.tsx`.
+- Public booking → the **Others** tab, placed immediately before **Custom Piercing**.
+Tier wording: **"My Work"** = the piercing/jewelry was originally done at Punkture (lower tier); **"Not My Work"** = done elsewhere. **"from"** prices (e.g. Jewelry Removal) are starting rates confirmed at checkout. Embedded removal is recorded at its ₱100 floor.
 
 ### Concurrency & Data Locking (`src/dataLock.ts`)
 Local IndexedDB transactions are protected by `withDataLock<T>()`. Multiple tabs open in the same browser will not interleave or corrupt ticket numbers or queue orders. Network sync writes run asynchronously without freezing cashier UI edits.
@@ -209,14 +221,16 @@ The public surface comprises **7 dedicated pages** wrapped in a unified layout c
 1. **Step 1: Placement Selection**:
    - Visual diagrams: Ear (`EarDiagram.tsx`), Face (`FaceDiagram.tsx`), and Body (`BodyDiagram.tsx`).
    - Interactive hotspot modal (`PiercingSpotModal.tsx`) showing pain levels, healing times, side picker (Left/Right/Both), and jewelry upgrades.
-   - Support for custom piercings and custom requests.
+   - The old **Custom Piercing** tab was removed — placements not shown on the diagrams are handled directly with the studio.
+   - **Others tab** (last tab; Aftercare Solution pinned at the top): add-on services — Downsizing / Upsizing / Jewelry Installation & Removal (My Work vs Not My Work tiers), Piercing Cleaning (per ear), and Aftercare Solution. Estimated totals are added to the same floating cart.
+   - Per-placement initial-jewelry rules on the booking modal (hotspot `jewelryPrices`): Navel = free stainless studs only; Floating Navel = +200 tier only; Rook = 150 titanium only (no rhinestone). The staff cashier is unaffected.
    - Sticky / Floating cart (`BookingCartBar.tsx`) calculating running estimated totals.
 2. **Step 2: Schedule & Slots**:
    - Dynamic date chip selector reflecting studio scheduling settings from Firestore (`public/public`).
    - Respects studio operating days (`bookingDays`), time slots (`bookingSlots`), advance notice (`bookingNoticeDays`, default 1 day), and blackout dates (`blockedDates`).
 3. **Step 3: Contact Details & Submission**:
    - Customer name, contact number / social handle, and optional notes.
-   - Mandatory Health & Safety agreement checkbox.
+   - The inline consent checkbox was removed: pressing **Submit** opens a waiver review modal showing the exact `/waiver.html` content (EN/Fil toggle, shared `src/waiverContent.ts`), with a consent checkbox. The appointment is only written to Firestore after the client ticks consent and presses **Confirm & Submit Appointment**.
    - Submits write-only appointment document to Firestore collection `appointments`.
    - Notes field automatically truncated to 300 characters to strictly satisfy Firestore security rule constraints.
 
