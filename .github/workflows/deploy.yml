@@ -32,7 +32,7 @@ jobs:
 
       - name: Build production bundle
         env:
-          VITE_BOOKING_API_URL: ${{ vars.VITE_BOOKING_API_URL }}
+          VITE_BOOKING_API_URL: ${{ vars.VITE_BOOKING_API_URL || 'https://punkture-booking.zlef-dev.workers.dev' }}
         run: npm run build
 
       - name: Deploy to Firebase (Hosting & Firestore Rules)

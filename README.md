@@ -344,3 +344,5 @@ Home and Live Queue feature the earliest published event on or after today's Man
 Event arrays are saved in start-date order. Cloud rules require that order and compare adjacent inclusive ranges, keeping overlap enforcement within Firestore expression limits. Blank optional end dates are omitted before sync.
 
 The Worker decodes nested Firestore event maps, rejects pop-up dates during checkout creation, and returns all configured slots unavailable on those dates. The customer calendar also disables these dates. Draft events do not block bookings; an explicit empty events list overrides legacy fields.
+
+**GitHub booking build URL:** CI defaults `VITE_BOOKING_API_URL` to `https://punkture-booking.zlef-dev.workers.dev` when the repository variable is unset. A nonempty repository variable can override it. This is a public endpoint, not a credential. A previous successful hosting build omitted the URL and compiled booking requests into an immediate configuration error; pushing this workflow fix rebuilds the frontend with the endpoint.
