@@ -1,5 +1,7 @@
 # PUNKTURE STUDIOS — SYSTEM ARCHITECTURE & SOURCE OF TRUTH
 
+**Current booking environment:** Worker launch flag is enabled for acceptance testing, with `PAYMONGO_LIVE=false` enforced. Required secret names are present; their presence is not proof of valid credentials or email delivery. This is not production payment readiness. Set `BOOKING_LAUNCH_READY=false` to pause new checkout creation after testing. Actual payment, webhook and inbox acceptance remain pending.
+
 > 🤖 **MANDATORY AI AGENT DIRECTIVE (TOKEN ECONOMY & SYSTEM BIBLE)**:
 > This `README.md` is the **Single Source of Truth (SSOT)** for the entire repository.
 >
@@ -22,7 +24,7 @@ The application is architected with a strict **dual-surface separation**:
 2. **Public Customer Portal (7 Multi-Page Web Applications)**:
    - Hosted on Firebase Hosting at the production domain.
    - Built with Vite and Tailwind CSS 4 as a multi-page application with 7 independent HTML entries.
-   - Connects directly to Firestore to display live queue status, pop-up events, studio schedules, and accepts appointment booking requests.
+   - Connects directly to Firestore to display live queue status, pop-up events, studio schedules, and uses a separate Cloudflare Worker/D1 backend for paid appointments.
 
 ---
 
@@ -42,7 +44,7 @@ The application is architected with a strict **dual-surface separation**:
 
 ## 3. Quick Start & Developer Commands
 
-Use **Node.js 24+** and **npm**. On Windows PowerShell, use `npm.cmd` if execution policies restrict `.ps1`.
+Use **Node.js 24+** and **npm**. Firestore emulator checks also require **Java 21+** on PATH. On Windows PowerShell, use `npm.cmd` if execution policies restrict `.ps1`.
 
 ```sh
 # Install dependencies
@@ -51,7 +53,7 @@ npm ci
 # Start local staff cashier + dev server (PINNED to port 5174)
 npm run dev
 
-# Run unit and integration tests (23 tests covering db, store, components, and sync)
+# Run unit and integration tests (tests covering payment backend, db, store, components, and sync)
 npm test
 
 # Lint codebase (Oxlint)
@@ -67,6 +69,12 @@ npm run test:rules
 npm run firebase:login
 npm run deploy
 ```
+
+### Terminal setup on this Mac
+
+The default terminal runtime is Node 22, which fails parts of the test suite. From this repository, run `source scripts/use-local-tools.sh` before the commands above. It selects the existing bundled Node 24 and, when present, the temporary Java 21 test runtime and reuses the project CLI download cache for the current terminal only. It does not install software or change your shell profile. Repeat in each new terminal. `.nvmrc` also specifies Node 24 for users of nvm. Other machines need their own Node 24+ and Java 21+ installation.
+
+Cloudflare setup is separate from local validation. `backend/wrangler.jsonc` now contains the verified ID of the existing `punkture-booking` D1 database (checked 2026-09-11); the previous placeholder prevented remote setup. Firebase and Cloudflare logins are present on this Mac. The remote database had zero tables at inspection. Wrangler 4.131.0 deployment dry-run and the 16-command D1 migration on a disposable local database passed; remote migration and publishing remain separate from local checks. See the runbook's command troubleshooting section.
 
 ### Automated CI/CD (GitHub Actions)
 A workflow is configured in `.github/workflows/deploy.yml`. On every `git push origin main`, GitHub Actions automatically:
@@ -103,6 +111,8 @@ PunktureStudios/
 ├── waiver.html                 # Public: Digital Health & Safety Waiver
 ├── aftercare.html              # Public: Piercing Aftercare & LITHA Guide
 ├── privacy.html                # Public: Data Privacy Policy (RA 10173)
+├── backend/                    # Cloudflare Worker, D1 migration and deployment config
+├── docs/booking-workflow.md     # Payment rollout, assumptions, test and operations runbook
 ├── firestore.rules             # Production security rules for Firestore
 ├── firebase.json               # Firebase Hosting & Emulator configuration
 ├── vite.config.ts              # Vite multi-page config, port 5174 pin, Tailwind CSS 4
@@ -116,6 +126,7 @@ PunktureStudios/
     ├── waiver.tsx              # Entry point for waiver.html
     ├── aftercare.tsx           # Entry point for aftercare.html
     ├── privacy.tsx             # Entry point for privacy.html
+    ├── bookingApi.ts           # Public Worker client and disclosed fee policy
     ├── constants.ts            # POP-UP piercing catalog, add-on services catalog, jewelry upgrades
     ├── dataLock.ts             # Mutex lock (`withDataLock`) serializing local IndexedDB transactions
     ├── db.ts                   # Dexie database definitions, ticket number generator, deletion log
@@ -154,6 +165,8 @@ PunktureStudios/
         ├── WaiverPage.tsx             # Bilingual health & safety waiver / consent gate
         ├── WorkspaceHeader.tsx        # Ticket header with Call, Start, Finish, and Cancel actions
         └── booking/                   # Visual booking subsystem
+            ├── PaymentStatus.tsx    # Verified payment / expiry / review / receipt screen
+            ├── PaidBookingsView.tsx # Local staff payment ledger and notification issues
             ├── BodyDiagram.tsx        # Interactive SVG diagram for body placements (Navel, Nipple)
             ├── BookingCartBar.tsx     # Floating booking cart with live cost estimate & proceed action
             ├── EarDiagram.tsx         # Interactive SVG diagram for ear placements (Lobe, Helix, etc.)
@@ -229,10 +242,41 @@ The public surface comprises **7 dedicated pages** wrapped in a unified layout c
    - Dynamic date chip selector reflecting studio scheduling settings from Firestore (`public/public`).
    - Respects studio operating days (`bookingDays`), time slots (`bookingSlots`), advance notice (`bookingNoticeDays`, default 1 day), and blackout dates (`blockedDates`).
 3. **Step 3: Contact Details & Submission**:
-   - Customer name, contact number / social handle, and optional notes.
-   - The inline consent checkbox was removed: pressing **Submit** opens a waiver review modal showing the exact `/waiver.html` content (EN/Fil toggle, shared `src/waiverContent.ts`), with a consent checkbox. The appointment is only written to Firestore after the client ticks consent and presses **Confirm & Submit Appointment**.
-   - Submits write-only appointment document to Firestore collection `appointments`.
-   - Notes field automatically truncated to 300 characters to strictly satisfy Firestore security rule constraints.
+   - Customer name, required confirmation/receipt email, contact number / social handle, and optional notes.
+   - Submit opens the shared health waiver plus explicit **PHP 100.00 reservation deposit** policy. Consent is required before backend checkout creation.
+   - The owner specifies a PHP 100.00 advance deposit deducted from the final total, not an additional charge. Staff must verify the payment reference and collect only the remaining balance; automatic POS deposit redemption is not implemented. Studio absorbs PayMongo transaction fees (explicitly accepted by the owner).
+   - New bookings go exclusively through `src/bookingApi.ts` → Cloudflare Worker/D1. No frontend Firestore booking writes or manual confirmation bypass.
+   - Availability polls every 10 seconds; taken, expired/past, and unavailable-to-verify slot buttons are disabled. Date changes clear the selected time. Backend always revalidates schedule and locks the slot atomically.
+   - After consent, a 15-minute temporary hold and PayMongo hosted checkout are created. The payment/status page is on the same `/appointment.html` entry using a private URL fragment. `creating`, `pending`, failed attempt, `confirmed`, `expired`, `payment_review`, and `cancelled` states are server-driven. A success redirect alone never confirms.
+   - Notes, including the selected-service estimate, are truncated to 300 characters. This estimate is informational; backend amount is always 10000 centavos.
+
+### Verified payment backend (`backend/worker.mjs`)
+
+Cloudflare **Workers Free + D1 Free** handles checkout creation, atomic slot ownership, raw-body signed PayMongo webhooks, server-side checkout retrieval, expiry and notification retries. No Firebase Functions/Blaze plan is used. PayMongo processing fees apply; no paid service subscription is introduced. Gmail + Google Apps Script MailApp sends customer confirmation/receipt and admin email without buying a domain. The sender is the Google account deploying `backend/apps-script/Code.gs`; a private Google Sheet records delivery intent/status. Personal accounts have a shared 100-recipient/day script quota (about 50 bookings/day before other notices). See [Gmail setup](docs/gmail-setup.md). Resend is no longer required.
+
+**D1 is the source of truth for new bookings**; Firestore `appointments` is a legacy collection. Schema is `backend/migrations/0001_booking.sql`:
+
+| Table | Contract |
+| --- | --- |
+| `bookings` | Private name/email/contact/notes, Manila date/time, `requestedFor`, policy consent snapshot, token hash/request hash, timestamps, checkout/payment references, fixed 10000-centavo (PHP 100.00) amount, status and safe error code. Partial unique `(date,time)` index for creating/pending/confirmed. Unique session/payment IDs. |
+| `legacy_holds` / `deployment_checks` | Staff-imported future legacy requested/confirmed slots; SQL insertion guard prevents new payments for these slots. Completed migration is mandatory before launch. |
+| `webhook_events` | Unique event ID, booking ID and time, for idempotent processing. |
+| `outbox` | Transactionally created customer/admin notification jobs on confirmation/review/cancellation. Independent leases, attempts/backoff, provider IDs and review state. |
+| `audit` / `rate_limits` | Verification/cancellation/migration audit trail and temporary hashed-IP hourly attempt counters. |
+
+Only secret-key verified PHP 100.00 payments can confirm an active hold. Verification after expiry becomes **payment_review** and never takes another booking's slot. Expiry is enforced on API reads/creates and cron so provider failures do not hold slots forever. Cron also retrieves unpaid pending/recent expired sessions for missed-webhook recovery. No automatic refund/rescheduling is claimed.
+
+Customer/admin emails include acknowledgement receipt details after verification, with an additional PayMongo receipt enabled. Provider acceptance is distinguished from actual inbox delivery. The Worker signs messages with `GMAIL_SCRIPT_SECRET` and posts to `GMAIL_SCRIPT_URL` (/exec). A script lock and private sheet deduplicate stable job IDs. Quota exhaustion remains pending and retries after six hours. Ambiguous sends become `needs_review` to avoid blindly sending twice; there is no 23-hour cutoff. The existing D1 outbox schema is unchanged. Required mail configuration is GMAIL_SCRIPT_URL, GMAIL_SCRIPT_SECRET and ADMIN_EMAIL; sender identity comes from Google, not EMAIL_FROM.
+
+`PaidBookingsView` in local staff settings shows paid bookings, gross reservation collections (separate from cashier revenue), late-payment and notification issues, legacy hold import, and cancellation. Staff authorization uses existing Firebase ID tokens + enabled staff registry. Clients cannot manually mark payments paid. The receipt is not represented as a tax invoice.
+
+**Local verification (2026-09-10):** 44 application/backend tests and 11 Firestore emulator tests passed; lint and production build passed. External PayMongo/Resend and deployed Cloudflare/browser acceptance remain untested until studio accounts are configured. Gmail migration adds local script/Worker tests; actual Gmail inbox acceptance is still required.
+
+**Gmail migration (2026-09-11):** `backend/gmail.mjs` and `backend/apps-script/Code.gs` replace Resend. Follow [docs/gmail-setup.md](docs/gmail-setup.md) before enabling bookings. Privacy disclosure includes Google Apps Script and the private delivery ledger. No domain purchase, paid subscription, or new D1 migration is needed. All 51 local tests, lint, production build, and Wrangler deployment dry-run passed. Google authorization/deployment and actual inbox delivery remain untested; the Gmail Worker update has not been published.
+
+**Deployment, exact affected-page list, assumptions, test steps, failure recovery and free-tier limits:** [docs/booking-workflow.md](docs/booking-workflow.md). Configure `backend/wrangler.jsonc`, Worker secrets and public-only `VITE_BOOKING_API_URL` from `.env.example`. Public booking fails closed until launch configuration and legacy import are complete. Existing Firebase CI deploys frontend/rules only; Worker deployment is separate.
+
+**Deployment correction (2026-09-11):** Live Firebase rules still lacked the own-staff-record read required by Worker authorization, causing admin booking/import 403 responses despite an enabled staff record. After 51 application tests, lint, build and 11 emulator rules tests passed, the current `firestore.rules` was successfully deployed to `punkture-studios`. This also disables legacy direct appointment creation/confirmation. The user has deployed the Gmail Worker; authenticated browser retry, legacy import and actual payment/email acceptance remain pending.
 
 ---
 
@@ -243,20 +287,20 @@ The public surface comprises **7 dedicated pages** wrapped in a unified layout c
 - **Manila Timezone (UTC+8)**: Appointments strictly validate that the ISO date and time match the epoch millisecond `requestedFor` in Asia/Manila (+08:00).
 - **Public Privacy Safeguards**:
   - `publicQueue` documents strip all customer names and notes; only `ticketNumber`, `status`, `position`, `seq`, and timestamps are exposed.
-  - Public users can create appointments with status `requested` and `serverTimestamp()`, but cannot list, read, or inspect appointments.
+  - Public users cannot create, list or inspect Firestore appointments. Staff may read/cancel/delete legacy records, but cannot create or confirm them; new payments are backend-only.
 
 ### Firestore Collections Contract
 
 | Collection / Path | Read Permission | Write Permission | Contents / Notes |
 | --- | --- | --- | --- |
-| `staff/{UID}` | Staff only | Console / Admin only | `{ enabled: true }` staff registry. |
+| `staff/{UID}` | Enabled staff can get their own entry only; no list | Console / Admin only | `{ enabled: true }` registry used by Worker authorization. Clients cannot self-authorize. |
 | `tickets/{id}` | Staff only | Staff only | Private ticket data with client names, notes, and lifecycle timestamps. |
 | `items/{id}` | Staff only | Staff only | Order line items, placements, upgrades, quantities, and prices. |
 | `cloudControl/counter` | Staff only | Staff only | Ticket numbering counter `{ value: number }`. |
 | `publicQueue/{id}` | Public | Staff only | Stripped public queue tickets (`waiting`, `called`, `in_progress`). |
 | `public/public` | Public | Staff only | Studio profile, pop-up announcements, and booking rules (`bookingSlots`, `blockedDates`). |
 | `public/heartbeat` | Public | Staff only | Server timestamp `{ publishedAt: request.time }`. |
-| `appointments/{id}` | Staff only | Public (Create only), Staff (Update/Delete) | Customer booking requests. Rules require future dates within 366 days, Manila timezone, status `requested`, notes <= 300 chars. |
+| `appointments/{id}` | Staff only | Staff cancellation/delete only | Legacy requests. New creates and confirmation updates are denied; new bookings live in private D1. Import future legacy slot holds before enabling payments. |
 
 ### Sync Engine Protocol (`src/sync.ts`)
 - **Conflict Resolution**: Last write wins determined by `updatedAt` (epoch milliseconds).
@@ -278,8 +322,25 @@ When modifying or extending this codebase, adhere strictly to these rules:
    - Remember appointment notes are capped at 300 characters in `firestore.rules`.
 6. **Timezone is always Asia/Manila (UTC+8)**: Booking dates, time slots, and schedule rules must use Manila timezone.
 7. **Always verify tests & builds**:
-   - Run `npm test` (all 23 unit tests must pass).
+   - Run `npm test` (all unit and integration tests must pass).
    - Run `npm run lint` (0 errors, 0 warnings).
    - Run `npm run build` (TypeScript check + Vite production bundle must succeed).
    - Run `npm run test:rules` when modifying Firestore rules.
 
+**Staff settings refresh:** Local-only settings now places the page heading and booking overview before operations, with deposit guidance, customer preview and sidebar anchors. Bookings has gross collection/review summaries, manual refresh, search by name/email/date/ID and status filters over loaded records. Import feedback persists separately from load errors; older reservation safeguards are collapsible. Existing schedule and website save behavior is preserved. No payment mode switch or automatic POS deposit credit is implied.
+
+**Settings public links:** The left sidebar is the single public-page link list. All seven links use absolute `https://punkture-studios.web.app/` URLs and show their destination. The duplicate booking preview card is removed; the staff app itself remains local-only.
+
+## Multiple pop-up events
+
+`PublicSettings.events` is an optional array of up to 12 entries with stable `id`, `eventDate` (YYYY-MM-DD), `eventTitle`, `eventHours`, `eventLocation`, `eventMapUrl`, and per-event `eventActive`. Settings supports adding, editing, publishing/unpublishing and removing entries before Save all changes. Title, real date and venue are required, even for saved drafts; map links must be HTTP(S).
+
+`src/popupEvents.ts` migrates the legacy single event in memory only when `events` is absent. An explicit empty array means no events, preventing old data from reappearing. Local save, sync and backup validation preserve the list; Firestore rules restrict writes to staff and validate the bounded list. No IndexedDB version change is needed for the settings document.
+
+Home and Live Queue feature the earliest published event on or after today's Manila date; the pop-up page lists all upcoming events when there are multiple. Only one event/venue is allowed per day; inclusive date ranges cannot overlap, including drafts. Past and draft events stay editable but are excluded from public selection on render. Published pop-up ranges automatically block new studio bookings, alongside manual blackout dates. Existing paid bookings are preserved and require staff review if a newly published event conflicts. Existing reservations, payments and receipts are unaffected. Deploy Firestore rules before saving the new list and deploy the public build for online customers to see multiple events.
+
+**Pop-up date ranges:** Each event has a start `eventDate` and optional inclusive `eventEndDate` (omitted means a single day). The venue and hours apply to every date in that range. Settings and Firestore rules reject overlapping ranges and reversed dates. All public event labels show the range, and an ongoing event remains visible through its final day in Manila. Existing single-day records remain compatible.
+
+Event arrays are saved in start-date order. Cloud rules require that order and compare adjacent inclusive ranges, keeping overlap enforcement within Firestore expression limits. Blank optional end dates are omitted before sync.
+
+The Worker decodes nested Firestore event maps, rejects pop-up dates during checkout creation, and returns all configured slots unavailable on those dates. The customer calendar also disables these dates. Draft events do not block bookings; an explicit empty events list overrides legacy fields.

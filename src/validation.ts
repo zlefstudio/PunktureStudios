@@ -59,7 +59,30 @@ export function validateSettings(value: unknown): PublicSettings {
     const epoch = Date.parse(date + 'T12:00:00+08:00');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(epoch) || manilaDate(epoch) !== date) throw new Error('Invalid event date.');
   }
+  if (s.events !== undefined) {
+    if (!Array.isArray(s.events) || s.events.length > 12) throw new Error('Keep up to 12 pop-up events.');
+    const ranges = s.events.map(entry => object(entry)).sort((a,b) => String(a.eventDate).localeCompare(String(b.eventDate)));
+    for (let i = 1; i < ranges.length; i++) {
+      if (String(ranges[i].eventDate) <= String(ranges[i-1].eventEndDate || ranges[i-1].eventDate)) throw new Error('Pop-up dates overlap. Only one venue is allowed per day.');
+    }
+    const ids = new Set();
+    for (const entry of s.events) {
+      const e = object(entry);
+      text(e.id, 'event ID', 128, true);
+      if (ids.has(e.id)) throw new Error('Duplicate event ID.');
+      ids.add(e.id);
+      if (Object.keys(e).some(k => !['id','eventDate','eventEndDate','eventTitle','eventHours','eventLocation','eventMapUrl','eventActive'].includes(k))) throw new Error('Invalid event fields.');
+      for (const k of ['eventDate','eventTitle','eventHours','eventLocation','eventMapUrl']) if (typeof e[k] !== 'string') throw new Error('Incomplete event.');
+      if (!e.eventDate || !String(e.eventTitle).trim() || !String(e.eventLocation).trim()) throw new Error('Each event needs a date, title, and venue.');
+      validateSettings({ ...e, key: 'public', updatedAt: s.updatedAt });
+      if (e.eventEndDate !== undefined) {
+        validateSettings({key:'public',eventActive:false,updatedAt:s.updatedAt,eventDate:e.eventEndDate});
+        if (typeof e.eventEndDate !== 'string' || e.eventEndDate < String(e.eventDate)) throw new Error('End date must be on or after the start date.');
+      }
+    }
+  }
   return pick(s, [
+    'events',
     'key',
     'eventActive',
     'updatedAt',

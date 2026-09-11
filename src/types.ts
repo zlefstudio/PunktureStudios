@@ -45,10 +45,23 @@ export interface PiercingItem {
  * Public page settings (edited by staff in the 🌐 Public tab, mirrored to the
  * Firestore `public` doc so the public live page / booking page can read it).
  */
+export interface PopupEvent {
+  id: string;
+  eventDate: string;
+  eventEndDate?: string;
+  eventTitle: string;
+  eventHours: string;
+  eventLocation: string;
+  eventMapUrl: string;
+  eventActive: boolean;
+}
 export interface PublicSettings {
+  /** Up to 12 events; an empty list intentionally clears legacy event advertising. */
+  events?: PopupEvent[];
   key: 'public';
   /** Next pop-up date as YYYY-MM-DD (optional). */
   eventDate?: string;
+  eventEndDate?: string;
   /** Venue / location of the next pop-up (optional). */
   eventLocation?: string;
   /** Google Maps (or similar) link shown on the public page (optional). */
@@ -116,4 +129,21 @@ export interface BackupPayload {
   items: PiercingItem[];
   ticketCounter?: number;
   settings?: PublicSettings | null;
+}
+
+/** Server-authoritative D1 booking; no client writes may confirm payment. */
+export interface PaymentBooking {
+  id: string;
+  status: 'creating' | 'pending' | 'confirmed' | 'expired' | 'payment_review' | 'cancelled';
+  date: string;
+  time: string;
+  expiresAt: number;
+  amount: number;
+  currency: string;
+  payment_id: string | null;
+  paidAt: number | null;
+  policy: string;
+  checkout_url: string | null;
+  last_error?: string | null;
+  emails?: { kind: string; status: string }[];
 }

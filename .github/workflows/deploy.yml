@@ -31,6 +31,8 @@ jobs:
         run: npm test
 
       - name: Build production bundle
+        env:
+          VITE_BOOKING_API_URL: ${{ vars.VITE_BOOKING_API_URL }}
         run: npm run build
 
       - name: Deploy to Firebase (Hosting & Firestore Rules)

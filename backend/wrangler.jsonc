@@ -1,0 +1,18 @@
+{
+  "name": "punkture-booking",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "triggers": { "crons": ["* * * * *"] },
+  "observability": { "enabled": true },
+  "d1_databases": [{ "binding": "DB", "database_name": "punkture-booking", "database_id": "ca2abfb4-d889-43e4-a527-43e395e73741", "migrations_dir": "migrations" }],
+  "vars": {
+    "PUBLIC_ORIGIN": "https://punkture-studios.web.app",
+    "ALLOWED_ORIGINS": "https://punkture-studios.web.app,http://localhost:5174",
+    "FIREBASE_PROJECT_ID": "punkture-studios",
+    "FIREBASE_API_KEY": "AIzaSyDQHORJgFp4WS9dK6x9MM2D8ycvE92pvb8",
+    "PAYMONGO_LIVE": "false",
+    "PAYMENT_METHODS": "gcash,card",
+    "BOOKING_LAUNCH_READY": "true"
+  }
+}

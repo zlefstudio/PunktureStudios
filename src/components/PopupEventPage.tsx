@@ -1,3 +1,4 @@
+import { eventDateRange, nextEventSettings, upcomingEvents } from '../popupEvents';
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { firestore } from '../firebase';
@@ -42,7 +43,8 @@ function safeHttpUrl(url: string | undefined | null): string | null {
 }
 
 export function PopupEventPage() {
-  const [publicSettings, setPublicSettings] = useState<PublicSettings | null>(null);
+  const [rawSettings, setPublicSettings] = useState<PublicSettings | null>(null);
+  const publicSettings = nextEventSettings(rawSettings);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -73,17 +75,9 @@ export function PopupEventPage() {
     ps.eventActive === true &&
     typeof ps.eventDate === 'string' &&
     ps.eventDate.length > 0 &&
-    ps.eventDate >= nowStr;
+    (ps.eventEndDate || ps.eventDate) >= nowStr;
 
-  const eventDateLabel =
-    hasEvent && ps?.eventDate
-      ? new Date(ps.eventDate + 'T00:00:00').toLocaleDateString('en-PH', {
-          weekday: 'long',
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        })
-      : '';
+  const eventDateLabel = hasEvent ? eventDateRange(publicSettings) : "";
 
   const mapUrl = safeHttpUrl(ps?.eventMapUrl);
   const studioMapUrl = safeHttpUrl(ps?.studioMapUrl);
@@ -93,6 +87,8 @@ export function PopupEventPage() {
   return (
     <PublicShell page="popup">
       <div className="space-y-6">
+        {upcomingEvents(rawSettings).length > 1 && <section className="rounded-3xl border border-zinc-700 p-5 space-y-4"><h2 className="text-xl font-bold">Upcoming pop-ups</h2><div className="grid gap-3 sm:grid-cols-2">{upcomingEvents(rawSettings).map(event => <article key={event.id} className="rounded-2xl bg-white/5 p-4 space-y-2"><p className="text-sm text-violet-300">{eventDateRange(event)}</p><h3 className="text-lg font-bold">{event.eventTitle}</h3><p>{event.eventLocation}</p>{event.eventHours && <p className="text-sm text-zinc-400">{event.eventHours}</p>}{safeHttpUrl(event.eventMapUrl) && <a href={safeHttpUrl(event.eventMapUrl)!} target="_blank" rel="noopener noreferrer" className="text-violet-300 underline">View venue map</a>}</article>)}</div></section>}
+
         {/* Page Header */}
         <div className="text-center space-y-1.5">
           <h1

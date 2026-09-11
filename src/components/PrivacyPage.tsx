@@ -21,20 +21,20 @@ export function PrivacyPage() {
                 <div>• Leaving to walk around or don't want to constantly refresh the live queue webpage? You can optionally leave your phone number so we can text or call you when you're next in line.</div>
               </div>
             </li>
-            <li>• <b style={{ color: 'var(--color-text)' }}>Waiver:</b> The acknowledgment is session-only while this page is open. No identity, signature, or health record is stored. Each visit asks you to read and acknowledge again.</li>
-            <li>• <b style={{ color: 'var(--color-text)' }}>Booking:</b> Name, contact, preferred date and time, and optional notes, used solely to arrange and confirm your appointment.</li>
+            <li>• <b style={{ color: 'var(--color-text)' }}>Waiver:</b> The acknowledgment is session-only while this page is open. No identity, signature, or health record is stored by the standalone waiver page. Booking records retain the accepted fee policy and creation time as evidence of consent. Each visit asks you to read and acknowledge again.</li>
+            <li>• <b style={{ color: 'var(--color-text)' }}>Booking:</b> Name, email, contact, selected date and time, optional notes, fee-policy consent and payment references, used to process your reservation, email confirmation and receipt, and notify studio staff. Payment details are entered on PayMongo; we do not store card numbers.</li>
           </ul>
         </SectionCard>
 
         <SectionCard title="Why we use it">
           <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-            We process data only to run the queue and confirm bookings. We do not sell your information or use it for advertising. Booking and staff records are stored using Google Firebase; access is restricted to authorized staff.
+            We process data only to run the queue and confirm bookings. We do not sell your information or use it for advertising. Staff and legacy booking records use Google Firebase. New bookings, payment references and notification delivery records use Cloudflare D1. PayMongo processes payments; The studio's Gmail account sends transactional emails through Google Apps Script. A private Google Sheet stores notification job IDs, content hashes and delivery states to prevent duplicate sends; it does not store email bodies. Access to customer records is restricted to authorized staff or your private booking access link.
           </p>
         </SectionCard>
 
         <SectionCard title="Retention">
           <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-            Staff can delete booking requests when they are no longer needed. Staff queue records include client names, notes and order details and are retained in local history and cloud backups until staff remove them. Archived history is retained; resetting ticket numbers does not delete it.
+            Staff can delete legacy booking requests when they are no longer needed. Paid reservation records are retained for reconciliation and receipt support; deletion requests are reviewed by the studio and processed through its administrative data tools. Staff queue records include client names, notes and order details and are retained in local history and cloud backups until staff remove them. Archived history is retained; resetting ticket numbers does not delete it.
             You may ask us to delete your data anytime.
           </p>
         </SectionCard>

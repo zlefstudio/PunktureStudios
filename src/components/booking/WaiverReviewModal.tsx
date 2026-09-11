@@ -1,3 +1,4 @@
+import { RESERVATION_POLICY } from '../../bookingApi';
 import { useState } from 'react';
 import { ShieldCheck, X } from 'lucide-react';
 import { WAIVER_CONTENT, type WaiverLang } from '../../waiverContent';
@@ -138,6 +139,7 @@ export function WaiverReviewModal({
           </p>
         </div>
 
+        <p className="text-body-xs border border-violet-500 rounded-xl p-3">{RESERVATION_POLICY} By continuing, you accept this deposit policy and the waiver below.</p>
         {/* Consent checkbox */}
         <label
           className="flex items-start gap-3 p-3.5 rounded-2xl cursor-pointer"
@@ -168,7 +170,7 @@ export function WaiverReviewModal({
           className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-ui-sm text-white transition-transform active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: 'var(--color-brand)', boxShadow: 'var(--shadow-brand)', border: 'none' }}
         >
-          {busy ? 'Submitting appointment…' : 'Confirm & Submit Appointment'}
+          {busy ? 'Preparing payment…' : 'Agree & Continue to PHP 100.00 Payment'}
         </button>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { eventDateRange, nextEventSettings } from '../popupEvents';
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { firestore } from '../firebase';
@@ -34,7 +35,8 @@ function InstagramIcon({ size = 16, className = '' }: { size?: number; className
 }
 
 export function HomePage() {
-  const [publicSettings, setPublicSettings] = useState<PublicSettings | null>(null);
+  const [rawSettings, setPublicSettings] = useState<PublicSettings | null>(null);
+  const publicSettings = nextEventSettings(rawSettings);
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -53,14 +55,7 @@ export function HomePage() {
     typeof publicSettings.eventDate === 'string' &&
     publicSettings.eventDate.length > 0;
 
-  const eventDateLabel =
-    hasEvent && publicSettings?.eventDate
-      ? new Date(publicSettings.eventDate + 'T00:00:00').toLocaleDateString('en-PH', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
-        })
-      : null;
+  const eventDateLabel = hasEvent ? eventDateRange(publicSettings) : "";
 
   return (
     <PublicShell page="home">

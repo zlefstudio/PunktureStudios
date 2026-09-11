@@ -1,5 +1,8 @@
+import { editableEvents } from '../popupEvents';
 import { useState, useEffect, useRef } from 'react';
-import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { bookingApi, RESERVATION_POLICY } from '../bookingApi';
+import { PaymentStatus } from './booking/PaymentStatus';
 import { firestore } from '../firebase';
 import type { PublicSettings, BookingSelectedPiercing } from '../types';
 import { OTHER_SERVICES, serviceItemName, servicePriceLabel } from '../constants';
@@ -74,15 +77,38 @@ export function AppointmentPage() {
   // Step 3: Client Info & Submission
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
+  const [email, setEmail] = useState('');
+  const [unavailable, setUnavailable] = useState<string[]>([]);
+  const [availabilityReady, setAvailabilityReady] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState('');
   const [notes, setNotes] = useState('');
   const [waiverAgreed, setWaiverAgreed] = useState(false);
   const [showWaiverModal, setShowWaiverModal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [payment, setPayment] = useState(() => {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    return params.get('booking') && params.get('token') ? { id: params.get('booking')!, token: params.get('token')!, cancelled: params.has('cancelled') } : null;
+  });
 
   const pending = useRef(false);
   const requestId = useRef(crypto.randomUUID());
+  const paymentToken = useRef(crypto.randomUUID());
+
+  useEffect(() => {
+    if (!date || payment) return;
+    let active = true;
+    setAvailabilityReady(false);
+    const refresh = async () => {
+      try {
+        const data = await bookingApi<{ unavailable: string[] }>(`/availability?date=${date}`);
+        if (active) { setUnavailable(data.unavailable); setAvailabilityReady(true); setAvailabilityError(''); setTime(t => data.unavailable.includes(t) ? '' : t); }
+      } catch (e) { if (active) { setAvailabilityReady(false); setAvailabilityError(e instanceof Error ? e.message : 'Availability unavailable.'); } }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 10000);
+    return () => { active = false; clearInterval(timer); };
+  }, [date, payment]);
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -164,7 +190,8 @@ export function AppointmentPage() {
       setError('Please enter your name and contact info.');
       return;
     }
-    if (!date || !time || !validAppointmentDate(date, time)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('Please enter a valid email address for your confirmation and receipt.'); return; }
+    if (!availabilityReady || unavailable.includes(time) || !date || !time || !validAppointmentDate(date, time)) {
       setError('Please select a valid future date and time slot.');
       return;
     }
@@ -200,29 +227,16 @@ export function AppointmentPage() {
       // Truncate to 300 chars to strictly satisfy Firestore rules
       const safeNotes = fullNotes.slice(0, 300);
 
-      await setDoc(doc(firestore, 'appointments', requestId.current), {
-        name: name.trim(),
-        contact: contact.trim(),
-        date: date.trim(),
-        time: time.trim(),
-        notes: safeNotes,
-        status: 'requested',
-        createdAt: serverTimestamp(),
-        requestedFor: Date.parse(`${date}T${time}:00+08:00`),
-      });
-
+      await bookingApi('/bookings', { method: 'POST', body: JSON.stringify({
+        id: requestId.current, token: paymentToken.current, name: name.trim(), email: email.trim(),
+        contact: contact.trim(), date, time, notes: safeNotes, consent: true, policy: RESERVATION_POLICY,
+      }) });
+      const next = { id: requestId.current, token: paymentToken.current, cancelled: false };
+      window.history.replaceState(null, '', `#booking=${next.id}&token=${next.token}`);
       setShowWaiverModal(false);
-      setDone(true);
+      setPayment(next);
     } catch (err) {
-      const code =
-        typeof err === 'object' && err !== null && 'code' in err
-          ? String((err as { code: unknown }).code)
-          : '';
-      if (code.includes('permission-denied')) {
-        setError('The request could not be accepted. Please contact the studio directly on Instagram.');
-      } else {
-        setError('Could not save your request. Please check your internet connection and try again.');
-      }
+      setError(err instanceof Error ? err.message : 'Could not prepare your payment. Please retry with the same details.');
     } finally {
       pending.current = false;
       setBusy(false);
@@ -244,15 +258,15 @@ export function AppointmentPage() {
         day: '2-digit',
       }).format(d);
 
-      const dayOfWeek = d.getDay(); // 0 = Sun, 1 = Mon ...
+      const dayOfWeek = new Date(`${dateStr}T12:00:00+08:00`).getUTCDay(); // 0 = Sun, 1 = Mon ...
       const isAllowedDay = allowedDays.includes(dayOfWeek);
-      const isBlocked = blockedDates.has(dateStr);
+      const isBlocked = blockedDates.has(dateStr) || editableEvents(publicSettings).some(e => e.eventActive && e.eventDate <= dateStr && (e.eventEndDate || e.eventDate) >= dateStr);
 
       days.push({
         dateStr,
-        label: d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }),
-        dayName: d.toLocaleDateString('en-PH', { weekday: 'short' }),
-        dayNum: d.getDate(),
+        label: d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' }),
+        dayName: d.toLocaleDateString('en-PH', { weekday: 'short', timeZone: 'Asia/Manila' }),
+        dayNum: Number(dateStr.slice(8)),
         available: isAllowedDay && !isBlocked,
       });
     }
@@ -277,7 +291,7 @@ export function AppointmentPage() {
           </p>
         </div>
 
-        {!bookingEnabled ? (
+        {payment ? <PaymentStatus {...payment} /> : !bookingEnabled ? (
           /* Bookings paused notification */
           <div
             className="rounded-3xl p-6 sm:p-8 text-center space-y-3"
@@ -302,66 +316,6 @@ export function AppointmentPage() {
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
               Message @punkture_studios ↗
-            </a>
-          </div>
-        ) : done ? (
-          /* Confirmation / Success Screen */
-          <div
-            className="rounded-3xl p-6 sm:p-8 text-center space-y-4"
-            style={{
-              background: 'radial-gradient(circle at 50% 0%, rgba(16,185,129,0.15) 0%, rgba(17,21,32,0.95) 70%)',
-              border: '1px solid rgba(52,211,153,0.3)',
-            }}
-          >
-            <CheckCircle2 size={44} className="mx-auto text-emerald-400" />
-            <div className="space-y-1">
-              <h2 className="font-bold text-3xl text-white tracking-tight">Booking Request Received!</h2>
-              <p className="text-body-xs text-zinc-300">
-                Thank you, <span className="font-bold text-white">{name.trim().split(' ')[0]}</span>! We will confirm your session through{' '}
-                <span className="font-bold text-emerald-300">{contact.trim()}</span>.
-              </p>
-            </div>
-
-            {/* Request Summary Card */}
-            <div
-              className="rounded-2xl p-4 text-left space-y-2.5 mx-auto max-w-sm"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)' }}
-            >
-              <div className="flex items-center justify-between pb-2 border-b border-zinc-800 text-body-xs">
-                <span className="text-zinc-400">Date &amp; Time:</span>
-                <span className="font-mono font-bold text-white">
-                  {date} · {format12Hour(time)}
-                </span>
-              </div>
-              {selectedPiercings.length > 0 && (
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                    Requested Piercings ({selectedPiercings.length}):
-                  </span>
-                  {selectedPiercings.map((p) => (
-                    <div key={p.id} className="flex items-center justify-between text-body-xs text-zinc-200">
-                      <span>
-                        {p.name} {p.side ? `(${p.side})` : ''}
-                      </span>
-                      <span className="font-mono text-zinc-400">
-                        ₱{p.basePrice + (p.upgradePrice ?? 0)}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="pt-2 border-t border-zinc-800 flex items-center justify-between font-bold text-white">
-                    <span>Est. Total:</span>
-                    <span className="font-mono text-emerald-400">₱{totalEstimate}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <a
-              href="/home.html"
-              className="inline-block px-6 py-3 rounded-2xl text-ui font-bold text-white transition-transform active:scale-95"
-              style={{ background: 'var(--color-brand)', textDecoration: 'none' }}
-            >
-              Done
             </a>
           </div>
         ) : (
@@ -917,6 +871,8 @@ export function AppointmentPage() {
                         disabled={!day.available}
                         onClick={() => {
                           setDate(day.dateStr);
+                          setTime('');
+                          setAvailabilityReady(false);
                         }}
                         className={`p-3 rounded-2xl flex flex-col items-center justify-center transition-all ${
                           !day.available ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'
@@ -946,6 +902,8 @@ export function AppointmentPage() {
                       <Clock size={18} className="text-violet-400" />
                       2. Choose a Time Slot
                     </h2>
+                    {availabilityError && <p role="alert" className="text-red-300">{availabilityError}</p>}
+                    {!availabilityReady && !availabilityError && <p>Checking slot availability…</p>}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                       {availableSlots.map((slot) => {
                         const isSelected = time === slot;
@@ -953,15 +911,16 @@ export function AppointmentPage() {
                           <button
                             key={slot}
                             type="button"
+                            disabled={!availabilityReady || unavailable.includes(slot) || !validAppointmentDate(date, slot)}
                             onClick={() => setTime(slot)}
-                            className="py-3 px-4 rounded-xl font-mono font-bold text-ui-sm text-center transition-all"
+                            className="py-3 px-4 rounded-xl font-mono font-bold text-ui-sm text-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                             style={{
                               background: isSelected ? 'var(--color-brand)' : 'rgba(255,255,255,0.04)',
                               border: isSelected ? '1px solid var(--color-brand-light)' : '1px solid var(--color-border)',
                               color: isSelected ? '#fff' : 'var(--color-text)',
                             }}
                           >
-                            {format12Hour(slot)}
+                            {format12Hour(slot)}{unavailable.includes(slot) ? ' · Unavailable' : ''}
                           </button>
                         );
                       })}
@@ -973,7 +932,7 @@ export function AppointmentPage() {
                 <div className="pt-3">
                   <button
                     type="button"
-                    disabled={!date || !time}
+                    disabled={!date || !time || !availabilityReady || unavailable.includes(time)}
                     onClick={() => setStep(3)}
                     className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-ui text-white transition-transform active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{ background: 'var(--color-brand)', boxShadow: 'var(--shadow-brand)' }}
@@ -1052,6 +1011,10 @@ export function AppointmentPage() {
                   </label>
 
                   <label className="block space-y-1">
+                    <span className="text-body-xs font-semibold text-zinc-300">Email for confirmation &amp; receipt *</span>
+                    <input type="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" className="w-full p-3.5 rounded-xl text-body-sm text-white bg-zinc-800" />
+                  </label>
+                  <label className="block space-y-1">
                     <span className="text-body-xs font-semibold text-zinc-300">
                       Contact Number or Instagram Handle *
                     </span>
@@ -1089,6 +1052,11 @@ export function AppointmentPage() {
                   </p>
                 )}
 
+                <div className="rounded-xl border border-violet-500 p-4 space-y-2">
+                  <h3 className="font-bold">Due now: PHP 100.00 deposit — deducted from your final total</h3>
+                  <p className="text-body-xs">{RESERVATION_POLICY}</p>
+                  <p className="text-body-xs">The studio absorbs gateway fees. Your payment total is PHP 100.00. The slot is held temporarily for 15 minutes and confirmed only after backend verification.</p>
+                </div>
                 {/* Final Submit Button */}
                 <button
                   type="submit"
@@ -1101,7 +1069,7 @@ export function AppointmentPage() {
                   }}
                 >
                   <Send size={16} />
-                  <span>{busy ? 'Submitting request…' : 'Submit Appointment Request'}</span>
+                  <span>{busy ? 'Preparing payment…' : 'Review & Pay PHP 100.00'}</span>
                 </button>
               </form>
             )}

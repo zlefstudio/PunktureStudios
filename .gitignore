@@ -25,3 +25,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Payment backend local credentials and emulator state
+.env
+.dev.vars
+.wrangler/

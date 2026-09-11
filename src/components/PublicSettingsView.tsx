@@ -1,3 +1,5 @@
+import { editableEvents } from '../popupEvents';
+import { PaidBookingsView } from './booking/PaidBookingsView';
 import { useEffect, useState } from 'react';
 import {
   CalendarCheck,
@@ -30,13 +32,13 @@ import { auth, firestore } from '../firebase';
 import { getLocalPublicSettings, saveLocalPublicSettings, syncNow } from '../sync';
 import type { PublicSettings } from '../types';
 
-const LIVE_URL = '/live.html';
-const HOME_URL = '/home.html';
-const BOOKING_URL = '/appointment.html';
-const POPUP_URL = '/popup.html';
-const WAIVER_URL = '/waiver.html';
-const AFTERCARE_URL = '/aftercare.html';
-const PRIVACY_URL = '/privacy.html';
+const LIVE_URL = 'https://punkture-studios.web.app/live.html';
+const HOME_URL = 'https://punkture-studios.web.app/home.html';
+const BOOKING_URL = 'https://punkture-studios.web.app/appointment.html';
+const POPUP_URL = 'https://punkture-studios.web.app/popup.html';
+const WAIVER_URL = 'https://punkture-studios.web.app/waiver.html';
+const AFTERCARE_URL = 'https://punkture-studios.web.app/aftercare.html';
+const PRIVACY_URL = 'https://punkture-studios.web.app/privacy.html';
 
 const PREVIEW_LINKS = [
   { label: 'Home page', href: HOME_URL },
@@ -91,6 +93,7 @@ export function SettingsSidebar() {
       >
         <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Sections</p>
         <nav className="space-y-1 text-body-xs font-semibold">
+          <a href="#paid-bookings" className="block px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 no-underline">Payments &amp; bookings</a>
           <a
             href="#booking-schedule"
             className="block px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 transition-colors no-underline"
@@ -107,7 +110,7 @@ export function SettingsSidebar() {
             href="#incoming-requests"
             className="block px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 transition-colors no-underline"
           >
-            📥 Booking Requests
+            📥 Legacy reservations
           </a>
         </nav>
       </div>
@@ -119,7 +122,7 @@ export function SettingsSidebar() {
       >
         <div className="flex items-center gap-2">
           <ExternalLink size={14} style={{ color: 'var(--color-brand-text)' }} />
-          <p className="text-label-xs text-white">Live Public Pages</p>
+          <p className="text-label-xs text-white">Live website pages</p>
         </div>
         <div className="flex flex-col gap-1.5">
           {PREVIEW_LINKS.map((l) => (
@@ -130,7 +133,7 @@ export function SettingsSidebar() {
               rel="noopener noreferrer"
               className="flex items-center justify-between px-3 py-2 rounded-xl text-body-xs font-semibold text-zinc-300 hover:text-white hover:bg-white/5 transition-colors no-underline"
             >
-              <span>{l.label}</span>
+              <span className="min-w-0"><span className="block">{l.label}</span><span className="block break-all text-xs font-normal text-zinc-400 mt-1">{l.href}</span></span>
               <span className="text-[11px] text-zinc-500">↗</span>
             </a>
           ))}
@@ -266,6 +269,7 @@ export function PublicSettingsView() {
     setSaved(false);
     try {
       const next = await saveLocalPublicSettings({
+        events: editableEvents(settings).map(event => Object.fromEntries(Object.entries(event).filter(([,value]) => value !== undefined)) as typeof event).sort((a,b) => a.eventDate.localeCompare(b.eventDate)),
         eventDate: settings.eventDate?.trim() ? settings.eventDate.trim() : undefined,
         eventTitle: settings.eventTitle?.trim() ? settings.eventTitle.trim() : undefined,
         eventHours: settings.eventHours?.trim() ? settings.eventHours.trim() : undefined,
@@ -297,7 +301,7 @@ export function PublicSettingsView() {
     }
   }
 
-  async function manageAppointment(id: string, status: 'confirmed' | 'cancelled' | 'delete') {
+  async function manageAppointment(id: string, status: 'cancelled' | 'delete') {
     if (pendingId) return;
     setPendingId(id);
     setAppointmentError(null);
@@ -352,10 +356,10 @@ export function PublicSettingsView() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-5 border-b border-zinc-800">
         <div>
           <h1 className="font-bold text-2xl sm:text-3xl text-white tracking-tight">
-            STUDIO SETTINGS &amp; ONLINE CONTROLS
+            Studio settings
           </h1>
           <p className="text-body-xs text-zinc-400 mt-0.5">
-            Configure live website schedules, time slots, pop-up events, and incoming booking requests.
+            Manage appointments, availability, and what customers see online.
           </p>
         </div>
 
@@ -371,6 +375,11 @@ export function PublicSettingsView() {
         </button>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-2" aria-label="Booking overview">
+        <a href="#booking-schedule" style={cardStyle} className="p-4 no-underline text-white"><span className="text-sm text-zinc-400">Booking form setting</span><p className="text-lg font-semibold mt-1">{settings?.bookingEnabled === false ? 'Paused' : 'Enabled'}</p><p className="text-sm text-zinc-400 mt-1">Schedule controls below · save to apply</p></a>
+        <div style={cardStyle} className="p-4"><span className="text-sm text-zinc-400">Reservation deposit</span><p className="text-lg font-semibold text-white mt-1">₱100 toward the final bill</p><p className="text-sm text-zinc-400 mt-1">Verify payment, then collect the balance.</p></div>
+      </div>
+      <PaidBookingsView />
       {saveError && (
         <div className="p-4 rounded-xl bg-red-950/60 border border-red-800 text-red-200 text-body-xs flex items-center gap-2">
           <AlertCircle size={16} />
@@ -533,77 +542,21 @@ export function PublicSettingsView() {
             <Megaphone size={18} />
           </div>
           <div>
-            <h2 className="font-bold text-body text-white">Next Pop-Up Event &amp; Studio Profile</h2>
+            <h2 className="font-bold text-body text-white">Pop-Up Events &amp; Studio Profile</h2>
             <p className="text-body-xs text-zinc-400">Shown on /popup.html, /live.html, and the home page</p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <label className="block sm:col-span-2">
-            <span className="text-body-xs text-zinc-400 font-semibold">Pop-up Headline / Event Title</span>
-            <input
-              style={inputStyle}
-              placeholder="e.g. Solis Market Pop-Up"
-              value={settings?.eventTitle ?? ''}
-              onChange={(e) => patch('eventTitle', e.target.value)}
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-body-xs text-zinc-400 font-semibold">Event Date (YYYY-MM-DD)</span>
-            <input
-              type="date"
-              style={inputStyle}
-              value={settings?.eventDate ?? ''}
-              onChange={(e) => patch('eventDate', e.target.value)}
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-body-xs text-zinc-400 font-semibold">Operating Hours</span>
-            <input
-              style={inputStyle}
-              placeholder="e.g. 10:00 AM – 8:00 PM"
-              value={settings?.eventHours ?? ''}
-              onChange={(e) => patch('eventHours', e.target.value)}
-            />
-          </label>
-
-          <label className="block sm:col-span-2">
-            <span className="text-body-xs text-zinc-400 font-semibold">Venue Location</span>
-            <input
-              style={inputStyle}
-              placeholder="e.g. The Tent at Acacia Estates, Taguig"
-              value={settings?.eventLocation ?? ''}
-              onChange={(e) => patch('eventLocation', e.target.value)}
-            />
-          </label>
-
-          <label className="block sm:col-span-2">
-            <span className="text-body-xs text-zinc-400 font-semibold">Google Maps Link</span>
-            <input
-              type="url"
-              style={inputStyle}
-              placeholder="https://maps.app.goo.gl/…"
-              value={settings?.eventMapUrl ?? ''}
-              onChange={(e) => patch('eventMapUrl', e.target.value)}
-            />
-          </label>
-
-          <div className="sm:col-span-2 p-3 rounded-xl bg-violet-950/20 border border-violet-800/40">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={settings?.eventActive ?? false}
-                onChange={(e) => patch('eventActive', e.target.checked)}
-                className="w-4 h-4 rounded text-violet-600 focus:ring-violet-500"
-              />
-              <span className="text-body-xs font-semibold text-zinc-200">
-                Advertise this pop-up event live on the website
-              </span>
-            </label>
+        <p className="text-sm text-zinc-400">Add up to 12 events. One venue per day; use a date range for consecutive days at the same venue. Hours apply each day. Overlapping ranges cannot be saved. Published upcoming dates appear in order; past dates disappear from the public schedule. Save all changes to apply. Published pop-ups automatically block studio bookings for every day in their date range. Use blackout dates above for other closures. Existing paid bookings must be reviewed separately.</p>
+        {editableEvents(settings).map((event, index) => <fieldset key={event.id} className="rounded-2xl border border-zinc-700 p-4 space-y-4">
+          <legend className="px-2 font-semibold">Event {index + 1}</legend>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {([['eventTitle','Event title'],['eventDate','Start date'],['eventEndDate','End date (same day if blank)'],['eventHours','Operating hours'],['eventLocation','Venue'],['eventMapUrl','Maps link']] as const).map(([key,label]) => <label key={key} className="block text-sm"><span className="block mb-1 text-zinc-400">{label}</span><input style={inputStyle} type={(key === 'eventDate' || key === 'eventEndDate') ? 'date' : key === 'eventMapUrl' ? 'url' : 'text'} value={event[key] ?? ''} onChange={e => patch('events', editableEvents(settings).map(item => item.id === event.id ? {...item, [key]: key === 'eventEndDate' ? (e.target.value || undefined) : e.target.value} : item))} /></label>)}
           </div>
-        </div>
+          <div className="flex flex-wrap justify-between gap-3"><label className="flex gap-2 items-center text-sm"><input type="checkbox" checked={event.eventActive} onChange={e => patch('events', editableEvents(settings).map(item => item.id === event.id ? {...item, eventActive:e.target.checked} : item))} />Publish this event</label><button type="button" className="text-sm text-red-300 underline" onClick={() => patch('events', editableEvents(settings).filter(item => item.id !== event.id))}>Remove event {index + 1}</button></div>
+        </fieldset>)}
+        {editableEvents(settings).length === 0 && <p className="text-zinc-400">No events scheduled. Add your next pop-up below.</p>}
+        <button type="button" disabled={editableEvents(settings).length >= 12} className="rounded-xl bg-violet-600 px-4 py-2 font-semibold disabled:opacity-40" onClick={() => patch('events', [...editableEvents(settings), {id:crypto.randomUUID(),eventDate:'',eventTitle:'',eventHours:'',eventLocation:'',eventMapUrl:'',eventActive:false}])}>Add pop-up event</button>
 
         {/* Home Studio Details */}
         <div className="pt-4 border-t border-zinc-800 space-y-3">
@@ -653,8 +606,9 @@ export function PublicSettingsView() {
               <CalendarCheck size={18} />
             </div>
             <div>
-              <h2 className="font-bold text-body text-white">Incoming Customer Appointments</h2>
-              <p className="text-body-xs text-zinc-400">Review, confirm, and manage customer booking requests</p>
+              <h2 className="font-bold text-body text-white">Legacy unpaid appointment requests</h2>
+              <p className="text-xs text-amber-300">Import legacy slot safeguards above before launch; refresh after cancelling or deleting a legacy booking. These records do not prove payment. New paid bookings appear above.</p>
+              <p className="text-body-xs text-zinc-400">Review older reservations and manage cancellations</p>
             </div>
           </div>
 
@@ -761,17 +715,6 @@ export function PublicSettingsView() {
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
-                      {status !== 'confirmed' && (
-                        <button
-                          type="button"
-                          disabled={pendingId !== null}
-                          onClick={() => manageAppointment(id, 'confirmed')}
-                          className="px-3 py-1.5 rounded-xl font-bold text-body-xs bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/30 transition-colors"
-                        >
-                          Confirm
-                        </button>
-                      )}
-
                       {status !== 'cancelled' && (
                         <button
                           type="button"

@@ -1,3 +1,4 @@
+import { eventDateRange, nextEventSettings } from '../popupEvents';
 import { useEffect, useMemo, useState } from 'react';
 import { onSnapshot, collection, query, doc } from 'firebase/firestore';
 import { firestore } from '../firebase';
@@ -52,7 +53,8 @@ export function LiveQueuePage() {
   }, () => setHeartbeat(0)), []);
   const [rows, setRows] = useState<PublicRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [publicSettings, setPublicSettings] = useState<PublicSettings | null>(null);
+  const [rawSettings, setPublicSettings] = useState<PublicSettings | null>(null);
+  const publicSettings = nextEventSettings(rawSettings);
 
   useEffect(() => {
     const q = query(collection(firestore, 'publicQueue'));
@@ -114,15 +116,8 @@ export function LiveQueuePage() {
     ps !== null &&
     ps.eventActive === true &&
     typeof ps.eventDate === 'string' &&
-    ps.eventDate.length > 0 && ps.eventDate >= new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-  const eventDateLabel = hasEvent && publicSettings?.eventDate
-    ? new Date(publicSettings.eventDate + 'T00:00:00').toLocaleDateString('en-PH', {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric',
-      })
-    : '';
+    ps.eventDate.length > 0 && (ps.eventEndDate || ps.eventDate) >= new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  const eventDateLabel = hasEvent ? eventDateRange(publicSettings) : "";
   const mapUrl = safeHttpUrl(publicSettings?.eventMapUrl);
   const studioMapUrl = safeHttpUrl(publicSettings?.studioMapUrl);
   const eventTitle = publicSettings?.eventTitle?.trim() || 'Next pop-up event coming soon';

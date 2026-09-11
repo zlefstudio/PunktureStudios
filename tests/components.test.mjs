@@ -16,6 +16,8 @@ let bookingWrites;
 let saveBooking;
 let queueRows;
 let heartbeat;
+let unavailableSlots;
+let availabilityFails;
 const docRef = (_db, col, id) => ({ kind: 'doc', col, id });
 await mock.module('../src/firebase.ts', { namedExports: { auth: {}, firestore: {} } });
 await mock.module('../src/sync.ts', { namedExports: {
@@ -41,6 +43,14 @@ await mock.module('firebase/firestore', { namedExports: {
     return () => {};
   },
 } });
+await mock.module('../src/bookingApi.ts', { namedExports: {
+  RESERVATION_POLICY: 'PHP 100.00 reservation fee',
+  bookingApi: async (path, options = {}) => {
+    if (path.startsWith('/availability')) { if (availabilityFails) throw new Error('Availability unavailable'); return { unavailable: unavailableSlots }; }
+    if (path === '/bookings') { const value = JSON.parse(options.body); bookingWrites.push({ value }); await saveBooking(); return { id: value.id, status: 'pending' }; }
+    return { id: 'booking', status: 'pending', date: '2026-09-20', time: '13:00', expiresAt: Date.now()+900000, policy: 'PHP 100.00 reservation fee', emails: [] };
+  },
+} });
 await mock.module('../src/components/PiercingRitualAnimation.tsx', { namedExports: {
   PiercingRitualAnimation: () => React.createElement('div', null, 'Animation'),
 } });
@@ -53,7 +63,8 @@ const { db } = await import('../src/db.ts');
 let root;
 let container;
 beforeEach(async () => {
-  savedSettings = null; bookingWrites = []; saveBooking = async () => {}; queueRows = []; heartbeat = 0;
+  window.history.replaceState(null, '', '/');
+  savedSettings = null; bookingWrites = []; saveBooking = async () => {}; queueRows = []; heartbeat = 0; unavailableSlots = []; availabilityFails = false;
   await db.transaction('rw', db.tickets, db.items, db.meta, db.settings, async () => {
     await Promise.all([db.tickets.clear(), db.items.clear(), db.meta.clear(), db.settings.clear()]);
   });
@@ -75,11 +86,11 @@ function submit() { container.querySelector('form').dispatchEvent(new dom.window
 test('fresh settings form can save its first change', async () => {
   await render(PublicSettingsView);
   const checkboxes = container.querySelectorAll('input[type="checkbox"]');
-  // Second checkbox toggles eventActive
-  await act(async () => checkboxes[1].click());
+  // Booking availability remains independently editable.
+  await act(async () => checkboxes[0].click());
   const saveBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Save all changes'));
   await act(async () => saveBtn.click());
-  assert.equal(savedSettings.eventActive, true);
+  assert.equal(savedSettings.bookingEnabled, false);
   assert.match(container.textContent, /Settings saved/i);
 });
 test('second ticket cannot start while another session is active', async () => {
@@ -96,7 +107,7 @@ test('booking form requires waiver consent inside the review modal before submit
   await render(AppointmentPage);
   const continueBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('proceed to schedule') || b.textContent.includes('Continue'));
   await act(async () => continueBtn.click());
-  const dateChip = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Sep'));
+  const dateChip = [...container.querySelectorAll('button')].find(b => b.querySelector('.text-lg.font-black') && !b.disabled);
   await act(async () => dateChip.click());
   const slotBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('PM') || b.textContent.includes('AM'));
   await act(async () => slotBtn.click());
@@ -105,6 +116,8 @@ test('booking form requires waiver consent inside the review modal before submit
   await fill('input[placeholder="e.g. Maya Santos"]', 'Test Person');
   await fill('input[placeholder="e.g. 09171234567 or @mayasantos"]', 'test@example.invalid');
 
+  await fill('input[type="email"]', 'test@example.invalid');
+
   // Submitting opens the waiver consent modal — no request is written yet.
   await act(async () => { submit(); });
   const modalBox = container.querySelector('#waiver-modal-agree');
@@ -112,25 +125,27 @@ test('booking form requires waiver consent inside the review modal before submit
   assert.equal(bookingWrites.length, 0);
 
   // The confirm button stays disabled until the checkbox is ticked.
-  const confirmBefore = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Confirm & Submit Appointment'));
+  const confirmBefore = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Agree & Continue to PHP 100.00 Payment'));
   assert.ok(confirmBefore);
   assert.equal(confirmBefore.disabled, true);
 
   await act(async () => modalBox.click());
 
   // Double-clicking confirm must not create duplicate requests while pending.
-  const confirmBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Confirm & Submit Appointment'));
+  const confirmBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Agree & Continue to PHP 100.00 Payment'));
   await act(async () => { confirmBtn.click(); confirmBtn.click(); });
   assert.equal(bookingWrites.length, 1);
-  assert.equal(bookingWrites[0].value.createdAt, 'server-timestamp');
+  assert.equal(bookingWrites[0].value.consent, true);
+  assert.equal(bookingWrites[0].value.email, 'test@example.invalid');
+  assert.equal(bookingWrites[0].value.policy, 'PHP 100.00 reservation fee');
   await act(async () => finish());
-  assert.match(container.textContent, /Booking Request Received/i);
+  assert.match(container.textContent, /Waiting for verified payment/i);
 });
 test('booking form rejects incomplete requests before contacting the cloud', async () => {
   await render(AppointmentPage);
   const continueBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('proceed to schedule') || b.textContent.includes('Continue'));
   await act(async () => continueBtn.click());
-  const dateChip = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Sep'));
+  const dateChip = [...container.querySelectorAll('button')].find(b => b.querySelector('.text-lg.font-black') && !b.disabled);
   await act(async () => dateChip.click());
   const slotBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('PM') || b.textContent.includes('AM'));
   await act(async () => slotBtn.click());
@@ -147,4 +162,26 @@ test('an old queue heartbeat shows paused updates', async () => {
   await render(LiveQueuePage);
   assert.match(container.textContent, /UPDATES PAUSED/);
   assert.match(container.textContent, /last known queue/);
+});
+
+test('taken slots and availability failures disable schedule buttons', async () => {
+  unavailableSlots = ['13:00'];
+  await render(AppointmentPage);
+  const proceed = [...container.querySelectorAll('button')].find(b => b.textContent.includes('proceed to schedule') || b.textContent.includes('Continue'));
+  await act(async () => proceed.click());
+  const dates = [...container.querySelectorAll('button')].filter(b => b.querySelector('.text-lg.font-black') && !b.disabled);
+  await act(async () => dates[0].click());
+  const taken = [...container.querySelectorAll('button')].find(b => b.textContent.includes('1:00 PM'));
+  assert.equal(taken.disabled, true); assert.match(taken.textContent, /Unavailable/);
+  availabilityFails = true;
+  await act(async () => dates[1].click());
+  const slots = [...container.querySelectorAll('button')].filter(b => /\d:\d\d (AM|PM)/.test(b.textContent));
+  assert.ok(slots.length > 0); assert.ok(slots.every(b => b.disabled));
+  assert.match(container.textContent, /Availability unavailable/);
+});
+test('unpaid success return does not display booking confirmation', async () => {
+  window.history.replaceState(null, '', '/appointment.html#booking=unpaid&token=private');
+  await render(AppointmentPage);
+  assert.match(container.textContent, /Waiting for verified payment/);
+  assert.doesNotMatch(container.textContent, /Booking confirmed|Payment acknowledgement receipt/);
 });

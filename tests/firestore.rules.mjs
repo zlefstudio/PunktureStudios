@@ -26,8 +26,8 @@ function appointment() {
   const date = new Date(requestedFor + 8 * 3600000).toISOString();
   return { name: 'Test customer', contact: 'test@example.invalid', date: date.slice(0, 10), time: date.slice(11, 16), requestedFor, status: 'requested', createdAt: serverTimestamp() };
 }
-test('public may create bookings but cannot read or enumerate customer records', async () => {
-  await assertSucceeds(setDoc(doc(anon(), 'appointments', 'request'), appointment()));
+test('public cannot bypass payment by creating or reading Firestore bookings', async () => {
+  await assertFails(setDoc(doc(anon(), 'appointments', 'request'), appointment()));
   await assertFails(getDoc(doc(anon(), 'appointments', 'request')));
   await assertFails(getDocs(collection(anon(), 'appointments')));
   await assertFails(getDocs(collection(anon(), 'tickets')));
@@ -39,11 +39,14 @@ test('booking fields, requested time, status and server timestamp are enforced',
     { status: 'confirmed' }, { createdAt: 1 }, { requestedFor: 1 },
     { date: '2027-02-30' }, { time: '25:00' }, { contact: '' },
   ]) await assertFails(setDoc(doc(anon(), 'appointments', crypto.randomUUID()), { ...appointment(), ...patch }));
-  await assertSucceeds(setDoc(doc(staff(), 'appointments', 'staff-booking'), appointment()));
+  await assertFails(setDoc(doc(staff(), 'appointments', 'staff-booking'), appointment()));
 });
 test('staff can manage bookings and delete personal data; outsiders cannot', async () => {
-  await setDoc(doc(anon(), 'appointments', 'request'), appointment());
-  await assertSucceeds(updateDoc(doc(staff(), 'appointments', 'request'), { status: 'confirmed', updatedAt: serverTimestamp() }));
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'appointments', 'request'), appointment());
+  });
+  await assertFails(updateDoc(doc(staff(), 'appointments', 'request'), { status: 'confirmed', updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(staff(), 'appointments', 'request'), { status: 'cancelled', updatedAt: serverTimestamp() }));
   await assertFails(updateDoc(doc(anon(), 'appointments', 'request'), { status: 'cancelled', updatedAt: serverTimestamp() }));
   await assertFails(updateDoc(doc(staff(), 'appointments', 'request'), { name: 'changed' }));
   await assertSucceeds(deleteDoc(doc(staff(), 'appointments', 'request')));
@@ -104,4 +107,35 @@ test('valid ticket lifecycle writes pass and unsupported statuses fail', async (
   await assertSucceeds(updateDoc(ref, { status: 'in_progress', startedAt: 2, updatedAt: 2 }));
   await assertSucceeds(updateDoc(ref, { status: 'finished', finishedAt: 3, updatedAt: 3 }));
   await assertFails(updateDoc(ref, { status: 'unknown' }));
+});
+
+test('payment backend can verify enabled caller registry without exposing or editing staff list', async () => {
+  await assertSucceeds(getDoc(doc(staff(), 'staff', 'allowed')));
+  await assertFails(getDocs(collection(staff(), 'staff')));
+  await assertFails(getDoc(doc(anon(), 'staff', 'allowed')));
+  await assertFails(getDoc(doc(env.authenticatedContext('outsider').firestore(), 'staff', 'allowed')));
+  await assertFails(setDoc(doc(env.authenticatedContext('outsider').firestore(), 'staff', 'outsider'), { enabled: true }));
+  await assertFails(updateDoc(doc(staff(), 'staff', 'allowed'), { enabled: false }));
+  await env.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), 'staff', 'allowed'), { enabled: false });
+  });
+  await assertFails(getDoc(doc(staff(), 'staff', 'allowed')));
+});
+
+test('staff can save multiple pop-ups; invalid lists and public edits are rejected', async () => {
+  const event={id:'one',eventDate:'2026-09-20',eventTitle:'Market',eventLocation:'Manila',eventHours:'10 AM',eventMapUrl:'https://example.com',eventActive:true};
+  const s={key:'public',eventActive:false,updatedAt:1,events:[event,{...event,id:'two',eventDate:'2026-09-21'}]};
+  await assertSucceeds(setDoc(doc(staff(),'public','public'),s));
+  await assertFails(setDoc(doc(env.unauthenticatedContext().firestore(),'public','public'),s));
+  await assertFails(setDoc(doc(staff(),'public','public'),{...s,events:[{...event,eventMapUrl:'javascript:alert(1)'}]}));
+  await assertFails(setDoc(doc(staff(),'public','public'),{...s,events:Array.from({length:13},()=>event)}));
+  await assertSucceeds(setDoc(doc(staff(),'public','public'),{...s,events:[]}));
+});
+
+test('event ranges cannot overlap or end before they start', async () => {
+ const e={id:'range',eventDate:'2026-09-14',eventEndDate:'2026-09-15',eventTitle:'Espana',eventLocation:'Espana Boulevard',eventHours:'11 AM–10 PM',eventMapUrl:'',eventActive:true};
+ const s={key:'public',eventActive:false,updatedAt:1,events:[e]};
+ await assertSucceeds(setDoc(doc(staff(),'public','public'),s));
+ await assertFails(setDoc(doc(staff(),'public','public'),{...s,events:[e,{...e,id:'other',eventDate:'2026-09-15'}]}));
+ await assertFails(setDoc(doc(staff(),'public','public'),{...s,events:[{...e,eventEndDate:'2026-09-13'}]}));
 });
