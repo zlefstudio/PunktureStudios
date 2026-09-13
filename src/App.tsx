@@ -120,20 +120,20 @@ export function App() {
 
   return (
     <div
-      className="flex h-full overflow-hidden"
+      className="staff-shell flex h-full overflow-hidden"
       style={{ background: 'var(--color-base)' }}
     >
       {actionError && <div role="alert" className="fixed top-2 left-2 right-2 z-50 p-4 bg-red-950 text-white rounded-xl">{actionError} <button onClick={() => setActionError(null)}>Dismiss</button></div>}
       {/* LEFT — Queue Board */}
       <div
-        className="w-[420px] min-w-[360px] flex-shrink-0 overflow-y-auto"
+        className="staff-sidebar w-[420px] min-w-[360px] flex-shrink-0 overflow-y-auto"
         style={{ borderRight: '1px solid var(--color-border)' }}
       >
         <QueueBoard />
       </div>
 
       {/* RIGHT — Active Ticket Workspace or Settings */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="staff-workspace flex-1 overflow-y-auto">
         {activeTab === 'settings' ? <PublicSettingsView /> : <TicketWorkspace />}
       </div>
     </div>

@@ -1,413 +1,92 @@
-import { eventDateRange, nextEventSettings } from '../popupEvents';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { animate } from 'motion/mini';
+import Lenis from 'lenis';
+import { ArrowUpRight, ArrowRight } from 'lucide-react';
 import { firestore } from '../firebase';
+import { eventDateRange, nextEventSettings } from '../popupEvents';
 import type { PublicSettings } from '../types';
 import { PublicShell } from './PublicShell';
-import {
-  Radio,
-  Calendar,
-  Sparkles,
-  ShieldCheck,
-  FileText,
-  ArrowRight,
-  MapPin,
-} from 'lucide-react';
-
-function InstagramIcon({ size = 16, className = '' }: { size?: number; className?: string }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-    </svg>
-  );
-}
+import { OrbitHero } from './home/OrbitHero';
+import { MediaViewer } from './home/MediaViewer';
+import { Media } from './home/Media';
+import { mediaItems, type MediaItem } from './home/mediaItems.js';
+import './home/home.css';
 
 export function HomePage() {
   const [rawSettings, setPublicSettings] = useState<PublicSettings | null>(null);
+  const [selected, setSelected] = useState<{ item: MediaItem; source: HTMLButtonElement } | null>(null);
+  const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const root = useRef<HTMLDivElement>(null);
+  const lenis = useRef<Lenis | null>(null);
+  const magnetic = useRef<ReturnType<typeof animate> | null>(null);
+  const close = useCallback(() => setSelected(null), []);
+  const open = useCallback((item: MediaItem, source: HTMLButtonElement) => setSelected({ item, source }), []);
   const publicSettings = nextEventSettings(rawSettings);
-
+  const hasEvent = publicSettings?.eventActive === true && !!publicSettings.eventDate;
+  useEffect(() => onSnapshot(doc(firestore, 'public', 'public'), snap => setPublicSettings(snap.exists() ? snap.data() as PublicSettings : null), () => setPublicSettings(null)), []);
   useEffect(() => {
-    const unsub = onSnapshot(
-      doc(firestore, 'public', 'public'),
-      (snap) => {
-        setPublicSettings(snap.exists() ? (snap.data() as PublicSettings) : null);
-      },
-      () => setPublicSettings(null)
-    );
-    return unsub;
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const change = () => setReduced(query.matches);
+    query.addEventListener('change', change);
+    return () => query.removeEventListener('change', change);
   }, []);
-
-  const hasEvent =
-    publicSettings !== null &&
-    publicSettings.eventActive === true &&
-    typeof publicSettings.eventDate === 'string' &&
-    publicSettings.eventDate.length > 0;
-
-  const eventDateLabel = hasEvent ? eventDateRange(publicSettings) : "";
-
-  return (
-    <PublicShell page="home">
-      <div className="space-y-6 sm:space-y-8">
-        {/* ── Hero Section ── */}
-        <div
-          className="relative overflow-hidden rounded-3xl p-6 sm:p-8 text-center space-y-4"
-          style={{
-            background:
-              'radial-gradient(120% 120% at 50% 10%, rgba(139,92,246,0.22) 0%, rgba(17,21,32,0.85) 75%)',
-            border: '1px solid rgba(168,85,247,0.30)',
-            boxShadow: '0 20px 50px -20px rgba(139,92,246,0.35)',
-          }}
-        >
-          {/* Glowing Top Pill */}
-          <div
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-bold tracking-wider uppercase"
-            style={{
-              background: 'rgba(139,92,246,0.15)',
-              border: '1px solid rgba(168,85,247,0.35)',
-              color: 'var(--color-brand-text)',
-            }}
-          >
-            <Sparkles size={13} className="animate-pulse" />
-            Sterile · Minimalist · Body Piercing
-          </div>
-
-          {/* Logo & Headline */}
-          <div className="space-y-2">
-            <h1
-              className="font-sanguine leading-none select-none tracking-wider text-3xl sm:text-4xl md:text-5xl"
-              style={{
-                color: 'var(--color-text)',
-                textShadow: '0 4px 20px rgba(139,92,246,0.4)',
-              }}
-            >
-              PUNKTURE STUDIOS
-            </h1>
-            <p
-              className="text-body-sm sm:text-body max-w-sm sm:max-w-md mx-auto"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              Your modern piercing companion. Live pop-up queue, home studio bookings, and verified aftercare guides.
-            </p>
-          </div>
-
-          {/* Quick CTA row */}
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <a
-              href="/live.html"
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-bold text-ui-sm transition-transform active:scale-95"
-              style={{
-                background: 'var(--color-brand)',
-                color: '#fff',
-                boxShadow: 'var(--shadow-brand)',
-                textDecoration: 'none',
-              }}
-            >
-              <Radio size={16} />
-              Live queue
-            </a>
-            <a
-              href="/appointment.html"
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-bold text-ui-sm transition-transform active:scale-95"
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                color: 'var(--color-text)',
-                border: '1px solid var(--color-border-strong)',
-                textDecoration: 'none',
-              }}
-            >
-              <Calendar size={16} />
-              Book appointment
-            </a>
-          </div>
-        </div>
-
-        {/* ── Active Pop-Up Callout Banner (if scheduled) ── */}
-        {hasEvent && (
-          <a
-            href="/popup.html"
-            className="block no-underline rounded-2xl p-4 sm:p-5 transition-all hover:border-violet-500/50"
-            style={{
-              background: 'linear-gradient(135deg, rgba(139,92,246,0.18), rgba(217,119,6,0.12))',
-              border: '1px solid rgba(168,85,247,0.40)',
-            }}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-start gap-3 min-w-0">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'rgba(139,92,246,0.25)', color: 'var(--color-brand-text)' }}
-                >
-                  <MapPin size={20} />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md"
-                      style={{ background: 'rgba(217,119,6,0.2)', color: 'var(--color-warn-text)' }}
-                    >
-                      Next Pop-up
-                    </span>
-                    {eventDateLabel && (
-                      <span className="text-body-xs font-mono font-bold" style={{ color: '#fff' }}>
-                        {eventDateLabel}
-                      </span>
-                    )}
-                  </div>
-                  <p className="font-bold text-body truncate mt-0.5" style={{ color: 'var(--color-text)' }}>
-                    {publicSettings?.eventTitle || 'Pop-up Event'}
-                  </p>
-                  {publicSettings?.eventLocation && (
-                    <p className="text-body-xs truncate" style={{ color: 'var(--color-text-muted)' }}>
-                      📍 {publicSettings.eventLocation}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <ArrowRight size={18} className="flex-shrink-0" style={{ color: 'var(--color-brand-text)' }} />
-            </div>
-          </a>
-        )}
-
-        {/* ── Quick Action Cards ── */}
-        <div className="grid grid-cols-1 gap-3.5 sm:gap-4">
-          {/* Card 1: Live Queue */}
-          <a
-            href="/live.html"
-            className="group block rounded-2xl p-5 no-underline transition-all hover:translate-y-[-1px]"
-            style={{
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-            }}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3.5 min-w-0">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors group-hover:bg-violet-600/30"
-                  style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--color-brand-text)' }}
-                >
-                  <Radio size={20} />
-                </div>
-                <div className="min-w-0 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-bold text-body" style={{ color: 'var(--color-text)' }}>
-                      Live Queue
-                    </h2>
-                    <span
-                      className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                      style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399', border: '1px solid rgba(16,185,129,0.25)' }}
-                    >
-                      Real-time
-                    </span>
-                  </div>
-                  <p className="text-body-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                    Check your place in line at our active pop-up events and see who is on deck.
-                  </p>
-                </div>
-              </div>
-              <ArrowRight
-                size={18}
-                className="flex-shrink-0 transition-transform group-hover:translate-x-1"
-                style={{ color: 'var(--color-text-faint)', marginTop: 4 }}
-              />
-            </div>
-          </a>
-
-          {/* Card 2: Book Appointment */}
-          <a
-            href="/appointment.html"
-            className="group block rounded-2xl p-5 no-underline transition-all hover:translate-y-[-1px]"
-            style={{
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-            }}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3.5 min-w-0">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors group-hover:bg-violet-600/30"
-                  style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--color-brand-text)' }}
-                >
-                  <Calendar size={20} />
-                </div>
-                <div className="min-w-0 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-bold text-body" style={{ color: 'var(--color-text)' }}>
-                      Book an Appointment
-                    </h2>
-                    <span
-                      className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                      style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--color-brand-text)', border: '1px solid rgba(168,85,247,0.3)' }}
-                    >
-                      Home Studio
-                    </span>
-                  </div>
-                  <p className="text-body-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                    Schedule a private, dedicated piercing session or styling consultation at our studio.
-                  </p>
-                </div>
-              </div>
-              <ArrowRight
-                size={18}
-                className="flex-shrink-0 transition-transform group-hover:translate-x-1"
-                style={{ color: 'var(--color-text-faint)', marginTop: 4 }}
-              />
-            </div>
-          </a>
-
-          {/* Card 3: Next Pop-Up Event */}
-          <a
-            href="/popup.html"
-            className="group block rounded-2xl p-5 no-underline transition-all hover:translate-y-[-1px]"
-            style={{
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-            }}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3.5 min-w-0">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors group-hover:bg-violet-600/30"
-                  style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--color-brand-text)' }}
-                >
-                  <Sparkles size={20} />
-                </div>
-                <div className="min-w-0 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-bold text-body" style={{ color: 'var(--color-text)' }}>
-                      Next Pop-up Event
-                    </h2>
-                  </div>
-                  <p className="text-body-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                    See upcoming event locations, dates, venue hours, and Google Maps directions.
-                  </p>
-                </div>
-              </div>
-              <ArrowRight
-                size={18}
-                className="flex-shrink-0 transition-transform group-hover:translate-x-1"
-                style={{ color: 'var(--color-text-faint)', marginTop: 4 }}
-              />
-            </div>
-          </a>
-
-          {/* Card 4: Aftercare Guide */}
-          <a
-            href="/aftercare.html"
-            className="group block rounded-2xl p-5 no-underline transition-all hover:translate-y-[-1px]"
-            style={{
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-            }}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3.5 min-w-0">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors group-hover:bg-violet-600/30"
-                  style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--color-brand-text)' }}
-                >
-                  <ShieldCheck size={20} />
-                </div>
-                <div className="min-w-0 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-bold text-body" style={{ color: 'var(--color-text)' }}>
-                      Aftercare Guide
-                    </h2>
-                  </div>
-                  <p className="text-body-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                    The LITHA method, saline spray frequency, the 50/50 rule, and normal healing signs.
-                  </p>
-                </div>
-              </div>
-              <ArrowRight
-                size={18}
-                className="flex-shrink-0 transition-transform group-hover:translate-x-1"
-                style={{ color: 'var(--color-text-faint)', marginTop: 4 }}
-              />
-            </div>
-          </a>
-
-          {/* Card 5: Before We Pierce (Waiver) */}
-          <a
-            href="/waiver.html"
-            className="group block rounded-2xl p-5 no-underline transition-all hover:translate-y-[-1px]"
-            style={{
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-            }}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3.5 min-w-0">
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors group-hover:bg-violet-600/30"
-                  style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--color-brand-text)' }}
-                >
-                  <FileText size={20} />
-                </div>
-                <div className="min-w-0 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-bold text-body" style={{ color: 'var(--color-text)' }}>
-                      Before We Pierce
-                    </h2>
-                  </div>
-                  <p className="text-body-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-                    Consent guidelines, health checks, titanium jewelry info, and age requirements.
-                  </p>
-                </div>
-              </div>
-              <ArrowRight
-                size={18}
-                className="flex-shrink-0 transition-transform group-hover:translate-x-1"
-                style={{ color: 'var(--color-text-faint)', marginTop: 4 }}
-              />
-            </div>
-          </a>
-        </div>
-
-        {/* ── Social / Instagram Banner ── */}
-        <div
-          className="rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left"
-          style={{
-            background: 'linear-gradient(145deg, rgba(255,255,255,0.03), rgba(139,92,246,0.08))',
-            border: '1px solid var(--color-border)',
-          }}
-        >
-          <div className="space-y-1">
-            <p className="font-bold text-body-sm" style={{ color: 'var(--color-text)' }}>
-              Follow our work & piercing portfolio
-            </p>
-            <p className="text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
-              Pop-up schedules, healed client photos, and piercing care updates.
-            </p>
-          </div>
-          <a
-            href="https://www.instagram.com/punkture_studios/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-ui-sm transition-transform active:scale-95 flex-shrink-0"
-            style={{
-              background: 'rgba(255,255,255,0.08)',
-              color: 'var(--color-brand-text)',
-              border: '1px solid rgba(168,85,247,0.3)',
-              textDecoration: 'none',
-            }}
-          >
-            <InstagramIcon size={16} />
-            @punkture_studios ↗
-          </a>
-        </div>
-      </div>
-    </PublicShell>
-  );
+  useEffect(() => {
+    if (reduced) return;
+    const scroll = new Lenis({ lerp: 0.085, smoothWheel: true, syncTouch: false, anchors: true });
+    lenis.current = scroll;
+    let frame = 0;
+    const tick = (time: number) => { scroll.raf(time); frame = requestAnimationFrame(tick); };
+    frame = requestAnimationFrame(tick);
+    // The existing navigation owns its body lock. Respect it without modifying the shared shell.
+    const locks = new MutationObserver(() => { if (document.body.style.overflow === 'hidden') scroll.stop(); else scroll.start(); });
+    locks.observe(document.body, { attributes: true, attributeFilter: ['style'] });
+    return () => { cancelAnimationFrame(frame); locks.disconnect(); scroll.destroy(); lenis.current = null; };
+  }, [reduced]);
+  useEffect(() => {
+    if (selected) lenis.current?.stop(); else lenis.current?.start();
+  }, [selected]);
+  useEffect(() => {
+    const nodes = root.current!.querySelectorAll<HTMLElement>('[data-reveal]');
+    if (reduced) { nodes.forEach(node => { node.style.opacity = '1'; node.style.transform = 'none'; }); return; }
+    const animations: ReturnType<typeof animate>[] = [];
+    const observer = new IntersectionObserver(entries => entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const el = entry.target as HTMLElement;
+      animations.push(animate(el, { opacity: [0, 1], transform: ['translateY(36px)', 'translateY(0px)'] }, { duration: 0.9, delay: Number(el.dataset.reveal || 0) * 0.1, ease: [0.16, 1, 0.3, 1] }));
+      observer.unobserve(el);
+    }), { threshold: 0.12 });
+    nodes.forEach(node => { node.style.opacity = '0'; observer.observe(node); });
+    return () => { observer.disconnect(); animations.forEach(animation => animation.stop()); magnetic.current?.stop(); };
+  }, [reduced]);
+  return <PublicShell page="home"><div ref={root} className="pk-home">
+    <OrbitHero onOpen={open} open={!!selected} reduced={reduced} />
+    <div className="pk-status-strip"><span className="pk-eyebrow"><i /> YOUR NEXT CHAPTER STARTS HERE</span><a href={hasEvent ? '/popup.html' : '/appointment.html'}>{hasEvent ? `${publicSettings.eventTitle || 'Next pop-up'} — ${eventDateRange(publicSettings)}` : 'Private studio sessions · By appointment'}<ArrowUpRight size={17} /></a></div>
+    <section className="pk-intro pk-section" id="pk-selected">
+      <p className="pk-eyebrow" data-reveal="0">01 / THE PUNKTURE PERSPECTIVE</p>
+      <div><h2 data-reveal="1">Not just a piercing.<br />A point of <em>expression.</em></h2><div className="pk-intro-bottom" data-reveal="2"><span className="pk-asterisk" aria-hidden="true">✳</span><p>A quiet statement. A bold beginning. A little piece of who you are. We make space for self-expression, one considered detail at a time.</p><a href="/appointment.html" className="pk-text-link">Find your next piercing <ArrowUpRight size={18} /></a></div></div>
+    </section>
+    <section className="pk-gallery pk-section" aria-labelledby="pk-gallery-title">
+      <div className="pk-section-heading" data-reveal="0"><h2 id="pk-gallery-title" className="pk-eyebrow">SELECTED STUDIES / 001—004</h2><span className="pk-eyebrow">PIERCING, IN YOUR OWN WAY</span></div>
+      <div className="pk-editorial-grid">
+        {[mediaItems[0], mediaItems[2], mediaItems[8], mediaItems[6]].map((item, i) => <figure className={`pk-study pk-study-${i + 1}`} key={`${item.id}-gallery`} data-reveal={i % 2}>
+          <button type="button" onClick={e => open(item, e.currentTarget)} aria-label={`View concept study: ${item.caption}`}><Media item={item} /><span className="pk-study-tag">{i === 0 || i === 3 ? 'EAR CURATION' : 'JEWELRY STUDY'}</span><span className="pk-study-arrow"><ArrowUpRight size={24} /></span></button>
+          <figcaption><span><small>0{i + 1} / CONCEPT STUDY</small>{['An ear. A whole universe.', 'Less, but with intention.', 'A perfect little rebellion.', 'Beautifully individual.'][i]}</span><span>{['CURATED', 'ESSENTIAL', 'TIMELESS', 'PERSONAL'][i]}</span></figcaption>
+        </figure>)}
+      </div><p className="pk-placeholder-note">Concept illustrations & sample films. Our real studio portfolio is coming soon.</p>
+    </section>
+    <div className="pk-marquee" aria-label="Your body. Your story. Your expression."><div aria-hidden="true">{[0, 1].map(i => <span key={i}>YOUR BODY. <b>✳</b> YOUR STORY. <b>✳</b> YOUR EXPRESSION. <b>✳</b> </span>)}</div></div>
+    <section className="pk-care pk-section"><div data-reveal="0"><p className="pk-eyebrow">02 / GOOD ENERGY. CONSIDERED CARE.</p><h2>A little edge.<br /><em>A lot of care.</em></h2></div><div className="pk-care-links" data-reveal="1">{[
+      ['01', 'Before the moment', 'Everything to know before your session.', '/waiver.html'],
+      ['02', 'After the sparkle', 'Give your new piercing the care it deserves.', '/aftercare.html'],
+      ['03', 'Out in the world', 'Find the next Punkture pop-up.', '/popup.html'],
+      ['04', 'Your place in line', 'Follow the live studio queue.', '/live.html'],
+    ].map(([n, title, description, href]) => <a href={href} key={n}><small>{n}</small><span><strong>{title}</strong><p>{description}</p></span><ArrowUpRight size={22} /></a>)}</div></section>
+    <section className="pk-footer-cta pk-section"><p className="pk-eyebrow" data-reveal="0"><i /> A NEW CHAPTER LOOKS GOOD ON YOU</p><h2 data-reveal="1">Make it<br /><em>personal.</em></h2><a className="pk-magnetic" href="/appointment.html"
+      onPointerMove={e => { if (reduced || e.pointerType !== 'mouse') return; const el = e.currentTarget, rect = el.getBoundingClientRect(); magnetic.current?.stop(); magnetic.current = animate(el, { transform: `translate(${(e.clientX - rect.left - rect.width / 2) * 0.13}px, ${(e.clientY - rect.top - rect.height / 2) * 0.13}px)` }, { duration: 0.3, ease: [0.16, 1, 0.3, 1] }); }}
+      onPointerLeave={e => { magnetic.current?.stop(); magnetic.current = animate(e.currentTarget, { transform: 'translate(0px, 0px)' }, { duration: 0.5, ease: [0.16, 1, 0.3, 1] }); }}>BOOK YOUR SESSION <ArrowUpRight size={26} /></a>
+      <div className="pk-footer-meta"><a href="https://www.instagram.com/punkture_studios/" target="_blank" rel="noopener noreferrer">FOLLOW THE STUDIO <ArrowRight size={15} /></a><span>STERILE. CONSIDERED. UNIQUELY YOU.</span><a href="#public-content">BACK TO TOP ↑</a></div>
+    </section>
+    {selected && <MediaViewer {...selected} reduced={reduced} onClose={close} />}
+  </div></PublicShell>;
 }

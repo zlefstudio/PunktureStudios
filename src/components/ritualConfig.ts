@@ -72,7 +72,7 @@ export const RITUAL_CONFIG: RitualConfigType = {
   stageSize: 400, // Fixed logical 400x400 unit stage
 
   // Contact point on the logo (upper-right helix/cartilage of the right ear)
-  piercePoint: { x: 278, y: 188 },
+  piercePoint: { x: 294, y: 201 },
 
   durations: {
     idle: 1.5,
@@ -100,7 +100,7 @@ export const RITUAL_CONFIG: RitualConfigType = {
       src: '/animations/cottonbuds.png',
       naturalWidth: 1408,
       naturalHeight: 768,
-      displayHeight: 270,
+      displayHeight: 170,
       anchor: { x: 704, y: 147 }, // Top bud center
       contactAngle: -22,          // Angle held when wiping
     },
@@ -108,7 +108,7 @@ export const RITUAL_CONFIG: RitualConfigType = {
       src: '/animations/marker.png',
       naturalWidth: 1408,
       naturalHeight: 768,
-      displayHeight: 250,
+      displayHeight: 160,
       anchor: { x: 706, y: 65 },  // Pen tip
       contactAngle: -25,          // Angle held when marking
     },
@@ -116,7 +116,7 @@ export const RITUAL_CONFIG: RitualConfigType = {
       src: '/animations/mirror.png',
       naturalWidth: 1408,
       naturalHeight: 768,
-      displayHeight: 260,
+      displayHeight: 170,
       anchor: { x: 701, y: 276 }, // Center of glass face
       inspectAngle: 18,           // Angle held when inspecting
     },
@@ -129,7 +129,7 @@ export const RITUAL_CONFIG: RitualConfigType = {
       ],
       naturalWidth: 1376,
       naturalHeight: 768,
-      displayHeight: 260,
+      displayHeight: 170,
       anchor: { x: 689, y: 44 },  // Jaw contact point (identical across all 4 frames)
       contactAngle: 16,           // Natural upright contact tilt
     },
@@ -137,7 +137,7 @@ export const RITUAL_CONFIG: RitualConfigType = {
       src: '/animations/needle.png',
       naturalWidth: 1408,
       naturalHeight: 768,
-      displayHeight: 230,
+      displayHeight: 150,
       anchor: { x: 713, y: 68 },  // Beveled piercing tip
       contactAngle: -26,          // Sharp entry angle
     },
@@ -145,7 +145,7 @@ export const RITUAL_CONFIG: RitualConfigType = {
       src: '/animations/forecepwithjew.png',
       naturalWidth: 1408,
       naturalHeight: 768,
-      displayHeight: 260,
+      displayHeight: 170,
       anchor: { x: 703, y: 72 },  // Gold stud center
       contactAngle: 16,           // Placed at matching angle
     },

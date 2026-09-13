@@ -861,7 +861,7 @@ export function AppointmentPage() {
                 </div>
 
                 {/* Available Date Chips / Horizontal Picker */}
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
                   {upcomingDays.map((day) => {
                     const isSelected = date === day.dateStr;
                     return (

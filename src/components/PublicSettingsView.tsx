@@ -82,7 +82,7 @@ export function SettingsSidebar() {
           <span>SETTINGS &amp; ONLINE CONTROL</span>
         </div>
         <p className="text-body-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-          Use the main workspace on the right to manage public schedules, slots, pop-up events, and incoming booking requests.
+          Use the studio settings workspace to manage public schedules, slots, pop-up events, and incoming booking requests.
         </p>
       </div>
 
@@ -613,7 +613,7 @@ export function PublicSettingsView() {
           </div>
 
           {/* Status Filter Buttons */}
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-zinc-900 border border-zinc-800">
+          <div className="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-zinc-900 border border-zinc-800">
             {(['all', 'requested', 'confirmed', 'cancelled'] as const).map((st) => (
               <button
                 key={st}

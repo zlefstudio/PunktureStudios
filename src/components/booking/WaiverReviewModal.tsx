@@ -54,7 +54,7 @@ export function WaiverReviewModal({
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg rounded-3xl p-6 space-y-4 max-h-[85vh] overflow-y-auto"
+        className="relative w-full max-w-lg rounded-3xl p-4 sm:p-6 space-y-4 max-h-[calc(100dvh-2rem)] overflow-y-auto"
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)' }}
         onClick={(e) => e.stopPropagation()}
       >

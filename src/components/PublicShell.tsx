@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { Menu, X } from 'lucide-react';
 
 /**
@@ -22,6 +22,8 @@ export function PublicShell({
   page = 'home',
   wide = false,
 }: PublicShellProps) {
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const drawer = useRef<HTMLDivElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const showFooterLinks = page !== 'privacy';
@@ -33,6 +35,7 @@ export function PublicShell({
     setTimeout(() => {
       setDrawerOpen(false);
       setIsClosing(false);
+      menuButton.current?.focus();
     }, 240);
   }, [drawerOpen, isClosing]);
 
@@ -44,8 +47,16 @@ export function PublicShell({
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') closeDrawer();
+      if (e.key === 'Tab') {
+        const items = drawer.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])');
+        if (!items?.length) return;
+        const first = items[0], last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
     }
     if (drawerOpen) {
+      drawer.current?.querySelector<HTMLButtonElement>('button')?.focus();
       window.addEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'hidden';
     } else {
@@ -69,7 +80,7 @@ export function PublicShell({
 
   return (
     <div
-      className="min-h-dvh w-full"
+      className={`public-shell min-h-dvh w-full ${page !== 'home' ? 'studio-premium' : ''}`}
       style={{
         background:
           'radial-gradient(1000px 500px at 50% -10%, rgba(139,92,246,0.18) 0%, transparent 60%), var(--color-base)',
@@ -78,6 +89,7 @@ export function PublicShell({
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
+      <a href="#public-content" className="skip-content">Skip to content</a>
       {/* ── Sticky Brand header ── */}
       <div
         className="sticky top-0 z-40 w-full"
@@ -89,12 +101,15 @@ export function PublicShell({
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
-        <div className={`mx-auto w-full flex items-center justify-center relative min-h-[52px] ${wide ? 'md:max-w-4xl lg:max-w-5xl px-4 sm:px-6' : 'max-w-md px-5'}`}>
+        <div className="public-header w-full flex items-center justify-center relative">
           <button
             type="button"
             onClick={openDrawer}
+            ref={menuButton}
+            aria-expanded={drawerOpen}
+            aria-controls="public-navigation"
             aria-label="Open navigation menu"
-            className="absolute left-5 p-2 rounded-xl flex items-center justify-center transition-colors"
+            className="public-menu-toggle absolute rounded-xl flex items-center justify-center transition-colors"
             style={{
               background: 'rgba(255,255,255,0.06)',
               border: '1px solid var(--color-border)',
@@ -105,7 +120,7 @@ export function PublicShell({
             <Menu size={20} />
           </button>
 
-          <a href="/home.html" className="flex items-center gap-2.5 no-underline">
+          <a href="/home.html" className="public-brand flex items-center gap-2 no-underline">
             <img
               src="/logo.png"
               alt="PUNKTURE STUDIOS"
@@ -113,7 +128,7 @@ export function PublicShell({
             />
             <span
               className="font-sanguine select-none"
-              style={{ fontSize: 18, letterSpacing: '0.12em', color: 'var(--color-text)' }}
+              style={{ fontSize: 'clamp(12px, 2.7vw, 18px)', letterSpacing: '0.12em', color: 'var(--color-text)' }}
             >
               PUNKTURE STUDIOS
             </span>
@@ -121,8 +136,8 @@ export function PublicShell({
         </div>
       </div>
 
-      <div
-        className={`mx-auto w-full ${wide ? 'md:max-w-4xl lg:max-w-5xl px-4 sm:px-6 py-6 md:py-8' : 'max-w-md px-5 py-7'}`}
+      <main id="public-content" tabIndex={-1}
+        className={`public-content mx-auto w-full ${wide ? 'md:max-w-4xl lg:max-w-5xl px-4 sm:px-6 py-6 md:py-8' : 'max-w-2xl px-4 sm:px-6 py-6 sm:py-9'}`}
         style={{ animation: 'pk-fade-in 0.5s cubic-bezier(0.16,1,0.3,1) both' }}
       >
 
@@ -165,7 +180,7 @@ export function PublicShell({
             Made by ZLEF
           </p>
         </footer>
-      </div>
+      </main>
 
       {/* ── Slide-out Navigation Drawer ── */}
       {drawerOpen && (
@@ -181,7 +196,12 @@ export function PublicShell({
           onClick={closeDrawer}
         >
           <div
-            className="w-72 max-w-[85vw] h-full flex flex-col justify-between p-5 sm:p-6"
+            ref={drawer}
+            id="public-navigation"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Site navigation"
+            className="public-drawer w-80 max-w-[90vw] h-dvh overflow-y-auto overscroll-contain flex flex-col justify-between gap-6 p-5 sm:p-6"
             style={{
               background: 'var(--color-surface)',
               borderRight: '1px solid var(--color-border-strong)',
@@ -204,7 +224,7 @@ export function PublicShell({
                 <button
                   type="button"
                   onClick={closeDrawer}
-                  className="p-1.5 rounded-lg transition-transform active:scale-90"
+                  className="min-w-11 min-h-11 flex items-center justify-center rounded-lg transition-transform active:scale-90"
                   style={{
                     background: 'rgba(255,255,255,0.06)',
                     border: 'none',
@@ -220,6 +240,7 @@ export function PublicShell({
               <nav className="mt-5 space-y-1.5">
                 {navLinks.map((item) => (
                   <a
+                    aria-current={item.current ? 'page' : undefined}
                     key={item.label}
                     href={item.href}
                     onClick={closeDrawer}

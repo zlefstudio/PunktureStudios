@@ -148,7 +148,7 @@ PunktureStudios/
         ├── DataTools.tsx              # Backup import/export (v2 JSON) and CSV download
         ├── EarningsDashboard.tsx      # Revenue totals (Day, Month, All-Time)
         ├── HistoryView.tsx            # Historical ticket ledger, reopen ticket, reset #1
-        ├── HomePage.tsx               # Public landing page with hero, ethos, and dynamic cards
+        ├── HomePage.tsx               # Public orbital landing page; home/ owns media, motion and styles
         ├── ItemsList.tsx              # Active order item list with inline adjustments
         ├── LiveQueuePage.tsx          # Public real-time queue display with heartbeat check
         ├── PiercingRitualAnimation.tsx# Visual animation feedback during active sessions
@@ -222,7 +222,7 @@ The public surface comprises **7 dedicated pages** wrapped in a unified layout c
 
 | Page | URL | Description |
 | --- | --- | --- |
-| **Home** | `/home.html` | Studio landing page. Shows active pop-up banner or home studio address, brand ethos, and service cards. |
+| **Home** | `/home.html` | Full-viewport orbital media experience, editorial piercing studies, live pop-up callout, care links and booking CTA. |
 | **Live Queue** | `/live.html` | Real-time queue monitor for pop-up attendees. Displays currently called ticket and waiting queue. |
 | **Next Pop-up** | `/popup.html` | Dedicated event information page with venue details, map link, hours, and attendee checklist. |
 | **Appointment** | `/appointment.html` | 3-step visual booking wizard for home studio appointments. |
@@ -346,3 +346,62 @@ Event arrays are saved in start-date order. Cloud rules require that order and c
 The Worker decodes nested Firestore event maps, rejects pop-up dates during checkout creation, and returns all configured slots unavailable on those dates. The customer calendar also disables these dates. Draft events do not block bookings; an explicit empty events list overrides legacy fields.
 
 **GitHub booking build URL:** CI defaults `VITE_BOOKING_API_URL` to `https://punkture-booking.zlef-dev.workers.dev` when the repository variable is unset. A nonempty repository variable can override it. This is a public endpoint, not a credential. A previous successful hosting build omitted the URL and compiled booking requests into an immediate configuration error; pushing this workflow fix rebuilds the frontend with the endpoint.
+
+**Public responsive UI:** The shared public header spans the viewport, with a 44px menu target at its safe-area-aware left edge and centered adaptive branding. Public content widens to 42rem on larger screens; booking date cells retain readable widths. Navigation scrolls on short screens, exposes dialog/current-page semantics, traps keyboard focus and returns focus to the trigger. Mobile form fields use 16px text, waiver height follows dynamic viewport, and reduced-motion preferences are respected. Backend, prices, consent and payment state logic are unchanged.
+
+**Premium public styling:** The `studio-premium` scope applies only when PublicShell page is not `home`. It refines heading scale, text contrast, spacing, form focus, navigation and surfaces across booking, pop-up, live queue and guides. Home uses its isolated orbital landing experience described below. No data, routing, booking, payment, pricing, consent or scheduling behavior changes.
+
+**Live ritual alignment:** Original `/logo.png` avatar is preserved. The fixed-stage ear contact point is (294,201); the avatar has a subtle 2.2px vertical float shared by all tools and contact effects, preserving alignment. Marker approach no longer overshoots, and needle approach/penetration/withdrawal follows its shaft axis. Reduced-motion view uses a neutral session label. This loop is decorative, not a measurement of actual procedure phase or a training demonstration; queue state and timing are unchanged.
+
+The ritual float completes two seven-second cycles per 14-second loop, without a reset jump. Contact offsets follow the additional reactions described below; reduced-motion mode remains static.
+
+**Avatar reactions:** `ritualMotion.ts` adds a soft yes-nod after marker lift (4.65–5.45s) and two diminishing happy hops after jewelry release (13–14s). Contact offsets account for the nod scale about the avatar origin so tools, mark and stud remain attached. Original avatar asset and live queue behavior are unchanged; reduced motion stays static.
+
+**Expressive ritual acting:** Two visible approval nods follow marking; a single brief recoil at 9.95–10.19s resolves gently, then two happy hops finish the reveal. Contact points use the full avatar translation, rotation and scale around its CSS origin so jewelry and tool tips track the ear. Original avatar pixels and queue/payment functionality are unchanged.
+
+**Clamp artwork:** Restored the original four clamp frames and jewelry forceps asset, with their original anchors and frame transitions. Avatar reactions and contact tracking remain in place.
+
+**Shared UI polish:** All seven public pages (including Home), booking/payment views, and local staff controls share softer hover/press feedback without universal control movement. Keyboard skip navigation targets a semantic public main region; footer contrast, form focus and touch feedback are consistent. Reduced-motion preferences cover staff and public CSS animations. Staff queue/workspace stack below 1024px instead of clipping the second pane; desktop layout is preserved. Checkout summary height follows the dynamic viewport. This pass changes presentation only, with no data, payment, queue, routing or pricing changes.
+
+**Responsive audit refinement:** Staff panes stack at tablet widths below 1024px; desktop sidebar width adapts from 320–420px. Settings grids use the available workspace container width, and legacy status filters wrap on narrow screens. Public branding compacts below 360px. No state or persistence changes.
+
+Responsive browser checks (2026-09-13): public page layout measurements at 320, 390, 768, 1024 and 1440px; populated staff settings also checked at 900px after the fixes, with no measured controls beyond the viewport. Verified the mobile settings section jump and scrollable navigation at 667×375 landscape. These are local browser checks, not certification of every device or data state. Public booking was paused by the loaded settings, so all checkout states still need a separate visual pass when available. Unit tests, lint and production build passed after these changes.
+
+
+## Home page: orbital studio experience (2026-09-14)
+
+`src/components/HomePage.tsx` composes `home/OrbitHero.tsx`, `MediaViewer.tsx`, `Media.tsx`, the editorial gallery, marquee, care links and magnetic booking CTA. `home/home.css` is imported only by HomePage and scopes all layout overrides to `.pk-home` / the shell containing it. The existing PublicShell navigation, brand header, design tokens and legal footer are reused without editing the shared component. Existing public settings subscription and next-event selection remain read-only and unchanged. Other routes, auth, backend, state actions and Firestore rules are untouched by this change.
+
+**Interaction contract:** Twelve mixed-aspect cards use one requestAnimationFrame loop outside React rendering. Ellipse angle supplies position, scale, opacity, stacking and depth softness. Depth blur crossfades a statically blurred poster, keeping the continuously animated properties to transforms and opacity; z-index is discrete. At most two front-facing orbit videos play. Video sources are loaded on first use and retained when paused. Offscreen, hidden-tab, paused and modal states stop video playback; reduced motion suppresses automatic rotation, inertia, videos, smooth scrolling, marquee and reveal animation. Manual dragging and opening remain available. Horizontal pointer capture supports mouse, touch and pen while `touch-action: pan-y pinch-zoom` preserves native vertical touch scrolling. Cancellation never opens a card. Keyboard focus pauses rotation for card selection.
+
+The native modal dialog is a 92vw × 92dvh panel with transform-based FLIP expansion/reversal, a dimmed blurred backdrop, muted looping inline video, Escape / close button / backdrop dismissal, trapped focus, inert background, source focus restoration and saved body/scroll restoration. Closing during expansion retargets the current animation. ResizeObserver recalculates the paused orbit geometry for closing after viewport rotation. Lenis respects both this modal and the existing navigation drawer's scroll locks.
+
+### Animation tool decision
+
+| Tool evaluated | Decision for this build |
+| --- | --- |
+| Motion / Framer Motion | **Use `motion/mini` (MIT)**: small native Web Animations wrapper for FLIP, custom easing, reveals and magnetic CTA; React is already installed. |
+| Lenis | **Use (MIT)**: smooth wheel/anchor scrolling, lifecycle cleanup and explicit modal locks; touch scrolling stays native. |
+| GSAP | Capable, but its free standard license is not MIT; Motion meets the requested licensing constraint. |
+| Rive, Lottie | Skip: no authored state-machine/vector animation assets to justify runtimes or an asset pipeline. |
+| Spline, Three.js | Skip: the requested depth is achieved with DOM transforms, with no 3D scene or WebGL context. |
+| PixiJS, Curtains.js, OGL | Skip: no particle, shader or canvas requirement; DOM media preserves normal video and button accessibility. |
+| Theatre.js | Skip: no timeline-authoring workflow; a few explicit durations/easings suffice. |
+| Matter.js | Skip: a single angle and analytic exponential decay provide controlled, refresh-rate-independent momentum. |
+| Barba.js | Skip: page transitions would cross the explicit home-only boundary of this multipage app. |
+
+Licenses: [Motion MIT](https://github.com/motiondivision/motion/blob/main/LICENSE.md), [Lenis MIT](https://github.com/darkroomengineering/lenis/blob/main/LICENSE), [GSAP standard license](https://gsap.com/community/standard-license/). These dependencies enter only the home bundle.
+
+### Tuning and swapping media
+
+`src/components/home/orbitMath.ts` exports `ORBIT`: idle **0.075 rad/s** (~84 seconds/revolution), drag sensitivity **−0.0055 rad/pixel** (front cards follow horizontal dragging), max release velocity **4.5 rad/s**, exponential friction **3.2/s**, click limit **7px / 350ms**, stale-release cutoff **90ms**, expansion **780ms**, close **480ms**. Frame delta is capped at 50ms after interruptions. The radius adapts to stage width/height. Scale is 0.48–1; opacity 0.32–1. Expansion uses cubic-bezier(0.22,1,0.36,1); reveals use cubic-bezier(0.16,1,0.3,1), closing uses (0.65,0,0.35,1); Lenis lerp is 0.085. CSS controls card sizes, ring placement and the 28-second marquee.
+
+**One manifest:** edit `src/components/home/mediaItems.js`, preserving each stable `id`. Each entry is `{ id, type: 'video' | 'image', src, aspect: width / height, caption }`. Optional `poster` provides a real thumbnail for videos (also used for the depth-blur layer); without it, the demo uses a Picsum seed. Put studio files under `public/media/` and use `/media/filename.mp4` or an HTTPS CDN URL. Prefer short, compressed, web-playable MP4s; maintain 10–14 entries. Gallery selections reference entries from this same array. The original ear/jewelry SVGs in `public/media/` are illustrative placeholders, not client photography. Sample films use MDN's ~1.1MB CC0 flower clip in different aspect ratios; the suggested Google gtv bucket returned 403 during verification, so it is not used. Captions clearly disclose the concept/demo status.
+
+Validation includes momentum equivalence at 30/60/120Hz, click/drag thresholds, depth order, manifest shape, and mounted React pointer tests for mouse/touch/pen taps, drags and cancellation (`tests/home-orbit.test.mjs`, `tests/home-interactions.test.mjs`). Browser checks verify desktop and phone layouts, native dialog opening/dismissal/focus restoration, active muted looping video, offscreen video pause and gallery reveals. These are local browser and synthetic-pointer checks, not a claim of measured 60fps on physical mid-range phones. No reference screenshots were available in this conversation; visual composition follows the written brief.
+
+Final local validation: **62 tests passed**, lint completed without warnings/errors, and the seven-page production build passed. Responsive checks at 320×667, 390×844, 1280×720 and 1440×900 found no horizontal overflow. A later browser pass recorded the existing Firestore listener's backend-unavailable/network errors; the home callout used its fallback. No new UI exceptions were observed, and the backend/listener configuration was not changed or its logging suppressed. Physical-device performance and screenshot matching remain unverified.
+
+**Home interaction refinement:** Reversed both drag displacement and tracked release velocity so front-facing cards follow the pointer. The orbit center now shows the existing `/logo.png` only; the drawn ring and “The art of becoming” tagline are removed. Hero copy is “Customize your character.” / “Be fierce. Get pierced.” The media viewer measures and initializes FLIP in a layout effect before paint, resets transforms for StrictMode measurements, expands over 780ms and delays its controls/caption reveal. Marquee duration is now 28 seconds (previously 48) for a faster readable pace. Reduced-motion behavior is preserved.
+
+Refinement validation: 63 tests, lint and production build pass. Added a regression check that front-card displacement and release momentum both follow left/right dragging. Center logo stays above the orbit cards so it remains visible.

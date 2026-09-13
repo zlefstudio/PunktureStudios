@@ -33,7 +33,7 @@ export function BreakdownModal({ ticket, items, total, onClose, onConfirm }: Pro
           background: 'var(--color-overlay)',
           border: '1px solid var(--color-border-strong)',
           boxShadow: 'var(--shadow-lg)',
-          maxHeight: '90vh',
+          maxHeight: '90dvh',
         }}
       >
         {error && <p role="alert" className="p-4 text-red-400">{error}</p>}

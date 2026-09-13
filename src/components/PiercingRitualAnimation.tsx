@@ -1,3 +1,4 @@
+import { ritualMotion } from './ritualMotion';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { RITUAL_CONFIG } from './ritualConfig';
 
@@ -239,41 +240,20 @@ export function PiercingRitualAnimation() {
     else if (t >= 11.0 && t < 13.0) phaseName = 'JEWEL';
     else if (t >= 13.0) phaseName = 'REVEAL';
 
-    // 1. Logo state (idle float + reactions)
-    let logoY = Math.sin((t / 1.5) * Math.PI * 2) * 3;
-    let logoScaleX = 1;
-    let logoScaleY = 1;
-    let logoRot = 0;
-    let shadowScale = 1 + Math.sin((t / 1.5) * Math.PI * 2) * 0.04;
-    let shadowOpacity = 0.35 - Math.sin((t / 1.5) * Math.PI * 2) * 0.05;
-
-    // Mark contact squish (t ~ 4.25s)
-    if (t >= 4.2 && t <= 4.5) {
-      const p = (t - 4.2) / 0.3;
-      const s = Math.sin(p * Math.PI);
-      logoScaleX = 1 + s * 0.035;
-      logoScaleY = 1 - s * 0.035;
-    }
-
-    // Mirror shy wiggle (t ~ 6.3s - 6.8s)
-    if (t >= 6.3 && t <= 6.8) {
-      const p = (t - 6.3) / 0.5;
-      logoRot = Math.sin(p * Math.PI * 2) * 1.8;
-    }
-
-    // Needle micro-tremble (t ~ 9.9s - 10.2s)
-    if (t >= 9.9 && t <= 10.2) {
-      const p = (t - 9.9) / 0.3;
-      logoY += Math.sin(p * Math.PI * 6) * 1.5;
-    }
-
-    // Jewel happy bounce (t ~ 11.5s - 12.1s)
-    if (t >= 11.5 && t <= 12.1) {
-      const p = (t - 11.5) / 0.6;
-      logoY -= Math.sin(p * Math.PI) * 4.5;
-      logoScaleX = 1 + Math.sin(p * Math.PI) * 0.02;
-      logoScaleY = 1 + Math.sin(p * Math.PI) * 0.02;
-    }
+    const motion = ritualMotion(t);
+    const logoY = motion.y;
+    const logoScaleX = motion.scaleX;
+    const logoScaleY = motion.scaleY;
+    const logoRot = motion.rot;
+    const shadowScale = motion.shadowScale;
+    const shadowOpacity = motion.shadowOpacity;
+    // CSS avatar origin is 50% 65%; keep contact effects attached during the nod.
+    const originY = RITUAL_CONFIG.logo.center.y + RITUAL_CONFIG.logo.displayHeight * .15;
+    const dx = P.x - RITUAL_CONFIG.logo.center.x;
+    const dy = P.y - originY;
+    const rad = logoRot * Math.PI / 180;
+    const contactX = motion.x + dx * logoScaleX * Math.cos(rad) - dy * logoScaleY * Math.sin(rad) - dx;
+    const contactY = logoY + dx * logoScaleX * Math.sin(rad) + dy * logoScaleY * Math.cos(rad) - dy;
 
     // 2. Cotton Swab (1.5s -> 3.5s)
     let swab = { x: 420, y: 70, angle: -38, opacity: 0, elevation: 0.8 };
@@ -321,7 +301,7 @@ export function PiercingRitualAnimation() {
     if (t >= 3.5 && t < 5.5) {
       if (t < 4.15) {
         // Enter
-        const p = easeOutBack((t - 3.5) / 0.65);
+        const p = easeOutCubic((t - 3.5) / 0.65);
         marker = {
           x: lerp(420, P.x, p),
           y: lerp(40, P.y, p),
@@ -460,41 +440,18 @@ export function PiercingRitualAnimation() {
       }
     }
 
-    // 7. Needle (9.5s -> 11.0s)
-    let needle = { x: 410, y: 30, angle: -36, opacity: 0, elevation: 0.8 };
-    if (t >= 9.5 && t < 11.0) {
-      if (t < 9.9) {
-        // Fast enter
-        const p = easeInCubic((t - 9.5) / 0.4);
-        needle = {
-          x: lerp(410, P.x, p),
-          y: lerp(30, P.y, p),
-          angle: lerp(-36, RITUAL_CONFIG.tools.needle.contactAngle, p),
-          opacity: easeOutCubic((t - 9.5) / 0.2),
-          elevation: lerp(0.8, 0, p),
-        };
-      } else if (t < 10.25) {
-        // Pierce hold / through
-        const p = (t - 9.9) / 0.35;
-        const dip = Math.sin(p * Math.PI) * 2;
-        needle = {
-          x: P.x + dip * 0.8,
-          y: P.y + dip * 0.6,
-          angle: RITUAL_CONFIG.tools.needle.contactAngle,
-          opacity: 1,
-          elevation: 0,
-        };
-      } else {
-        // Fast exit
-        const p = easeOutCubic((t - 10.25) / 0.65);
-        needle = {
-          x: lerp(P.x, 420, p),
-          y: lerp(P.y, 40, p),
-          angle: lerp(RITUAL_CONFIG.tools.needle.contactAngle, -38, p),
-          opacity: 1 - easeInCubic((t - 10.6) / 0.35),
-          elevation: lerp(0, 0.8, p),
-        };
-      }
+    // Approach and retract on the sprite's shaft axis; no sideways stab or tip orbit.
+    const needleAngle = RITUAL_CONFIG.tools.needle.contactAngle;
+    const shaft = { x: -Math.sin(needleAngle * Math.PI / 180), y: Math.cos(needleAngle * Math.PI / 180) };
+    let needle = { x: P.x + shaft.x * 120, y: P.y + shaft.y * 120, angle: needleAngle, opacity: 0, elevation: 0.4 };
+    if (t >= 9.5 && t < 11) {
+      let distance: number;
+      if (t < 9.95) distance = lerp(120, 0, easeOutCubic((t - 9.5) / .45));
+      else if (t < 10.15) distance = lerp(0, -6, easeOutCubic((t - 9.95) / .2));
+      else if (t < 10.35) distance = -6;
+      else distance = lerp(-6, 120, easeInCubic((t - 10.35) / .65));
+      needle = { x: P.x + shaft.x * distance, y: P.y + shaft.y * distance, angle: needleAngle,
+        opacity: Math.min(clamp((t - 9.5) / .2, 0, 1), clamp((11 - t) / .2, 0, 1)), elevation: clamp(distance / 120, 0, .4) };
     }
 
     // 8. Jeweled Forceps & Release (11.0s -> 13.0s)
@@ -635,18 +592,22 @@ export function PiercingRitualAnimation() {
       });
     }
 
+    // Translate the complete contact rig together. The dot and stud use logo.y below.
+    const followAvatar = <T extends { x: number; y: number }>(tool: T): T => ({ ...tool, x: tool.x + contactX, y: tool.y + contactY });
     return {
       phaseName,
-      logo: { y: logoY, scaleX: logoScaleX, scaleY: logoScaleY, rot: logoRot, shadowScale, shadowOpacity },
-      swab,
-      marker,
+      contactY,
+      contactX,
+      logo: { x: motion.x, y: logoY, scaleX: logoScaleX, scaleY: logoScaleY, rot: logoRot, shadowScale, shadowOpacity },
+      swab: followAvatar(swab),
+      marker: followAvatar(marker),
       hasPurpleDot,
-      mirror,
-      clamp: clampState,
-      needle,
-      jewelClamp,
+      mirror: followAvatar(mirror),
+      clamp: followAvatar(clampState),
+      needle: followAvatar(needle),
+      jewelClamp: followAvatar(jewelClamp),
       stud,
-      particles,
+      particles: particles.map(followAvatar),
     };
   }, [time]);
 
@@ -664,9 +625,9 @@ export function PiercingRitualAnimation() {
           aspectRatio: '1 / 1',
           background:
             'radial-gradient(circle at 50% 45%, rgba(139, 92, 246, 0.16) 0%, rgba(12, 14, 19, 0.95) 75%), #0c0e13',
-          border: '1px solid rgba(251, 191, 36, 0.32)',
+          border: '1px solid rgba(196, 181, 253, 0.16)',
           boxShadow:
-            '0 0 24px -4px rgba(139, 92, 246, 0.25), 0 0 0 1px rgba(251, 191, 36, 0.12), inset 0 0 40px rgba(0,0,0,0.6)',
+            'inset 0 1px rgba(255,255,255,0.025)',
         }}
       >
         {/* ── Fixed 400x400 Logical Stage Scaled as One Unit ── */}
@@ -706,7 +667,7 @@ export function PiercingRitualAnimation() {
               className="phase-shimmer text-[9px] tracking-widest uppercase font-bold"
               style={{ fontFamily: 'var(--font-mono, monospace)' }}
             >
-              {stageState.phaseName}
+              {prefersReducedMotion ? 'SESSION IN PROGRESS' : stageState.phaseName}
             </span>
           </div>
 
@@ -754,7 +715,7 @@ export function PiercingRitualAnimation() {
               transformOrigin: '50% 65%',
               transform: prefersReducedMotion
                 ? 'none'
-                : `translate3d(0, ${stageState.logo.y}px, 0) rotate(${stageState.logo.rot}deg) scale(${stageState.logo.scaleX}, ${stageState.logo.scaleY})`,
+                : `translate3d(${stageState.logo.x}px, ${stageState.logo.y}px, 0) rotate(${stageState.logo.rot}deg) scale(${stageState.logo.scaleX}, ${stageState.logo.scaleY})`,
               zIndex: 3,
               willChange: 'transform',
             }}
@@ -774,8 +735,8 @@ export function PiercingRitualAnimation() {
             <div
               style={{
                 position: 'absolute',
-                left: `${piercePoint.x - 2.5}px`,
-                top: `${piercePoint.y - 2.5 + (prefersReducedMotion ? 0 : stageState.logo.y)}px`,
+                left: `${piercePoint.x - 2.5 + (prefersReducedMotion ? 0 : stageState.contactX)}px`,
+                top: `${piercePoint.y - 2.5 + (prefersReducedMotion ? 0 : stageState.contactY)}px`,
                 width: 5,
                 height: 5,
                 borderRadius: '50%',
@@ -792,8 +753,8 @@ export function PiercingRitualAnimation() {
             <div
               style={{
                 position: 'absolute',
-                left: `${piercePoint.x - 5}px`,
-                top: `${piercePoint.y - 5 + (prefersReducedMotion ? 0 : stageState.logo.y)}px`,
+                left: `${piercePoint.x - 5 + (prefersReducedMotion ? 0 : stageState.contactX)}px`,
+                top: `${piercePoint.y - 5 + (prefersReducedMotion ? 0 : stageState.contactY)}px`,
                 width: 10,
                 height: 10,
                 borderRadius: '50%',
@@ -1104,7 +1065,7 @@ export function PiercingRitualAnimation() {
                 className="absolute bottom-2 left-2 px-2 py-1 rounded bg-black/80 font-mono text-[10px] text-green-400 border border-green-500/30"
                 style={{ pointerEvents: 'none' }}
               >
-                t: {time.toFixed(2)}s | {stageState.phaseName} | scale: {scaleFactor.toFixed(2)}x
+                t: {time.toFixed(2)}s | {prefersReducedMotion ? 'SESSION IN PROGRESS' : stageState.phaseName} | scale: {scaleFactor.toFixed(2)}x
                 <br />
                 PIERCE: ({piercePoint.x}, {piercePoint.y})
               </div>
