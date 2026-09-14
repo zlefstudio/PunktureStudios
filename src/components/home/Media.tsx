@@ -18,6 +18,6 @@ export function Media({ item, playing = false, viewer = false }: { item: MediaIt
       onError={e => { e.currentTarget.style.opacity = '0'; }} />
     {item.type === 'video' && requested && !failed && <video ref={video} src={item.src} muted loop playsInline
       autoPlay={playing} preload={viewer ? 'auto' : 'none'} poster={mediaPoster(item)} onError={() => setFailed(true)} aria-hidden="true" />}
-    {failed && viewer && <span className="pk-media-error">Preview unavailable — sample poster shown</span>}
+    {failed && viewer && <span className="pk-media-error">Preview unavailable — preview image shown</span>}
   </>;
 }

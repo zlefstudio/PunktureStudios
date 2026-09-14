@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import { ArrowDown, ArrowUpRight, MoveHorizontal, Pause, Play } from 'lucide-react';
 import { mediaItems, type MediaItem } from './mediaItems.js';
 import { Media } from './Media';
 import { mediaPoster } from './mediaUtils';
+import type { IntroGate } from './introTimeline';
 import { ORBIT, advanceOrbit, isOrbitClick, orbitPose } from './orbitMath';
 
-export function OrbitHero({ onOpen, open, reduced }: { onOpen: (item: MediaItem, source: HTMLButtonElement) => void; open: boolean; reduced: boolean }) {
+export function OrbitHero({ onOpen, open, reduced, introGate }: { onOpen: (item: MediaItem, source: HTMLButtonElement) => void; open: boolean; reduced: boolean; introGate?: IntroGate }) {
   const stage = useRef<HTMLDivElement>(null);
   const cards = useRef<(HTMLButtonElement | null)[]>([]);
-  const engine = useRef({ angle: -0.35, velocity: 0, width: 1000, height: 600, visible: true, layoutDirty: true, focused: false, open, reduced, paused: false });
+  const engine = useRef({ angle: ORBIT.initialAngle, velocity: 0, width: 1000, height: 600, visible: true, layoutDirty: true, focused: false, open, reduced, paused: false });
   const gesture = useRef<null | { id: number; startX: number; startY: number; x: number; time: number; start: number; distance: number; card: HTMLButtonElement | null }>(null);
   const [paused, setPaused] = useState(false);
   const [playingIds, setPlayingIds] = useState<string[]>([]);
@@ -23,6 +24,7 @@ export function OrbitHero({ onOpen, open, reduced }: { onOpen: (item: MediaItem,
     let raf = 0, previous = performance.now(), lastVideos = '';
     const render = (now: number) => {
       const dt = Math.min((now - previous) / 1000, 0.05); previous = now;
+      if (introGate && !introGate.ready) { raf = requestAnimationFrame(render); return; }
       const active = state.visible && !document.hidden && !state.open;
       if (active || state.layoutDirty) {
         state.layoutDirty = false;
@@ -45,9 +47,10 @@ export function OrbitHero({ onOpen, open, reduced }: { onOpen: (item: MediaItem,
     };
     raf = requestAnimationFrame(render);
     return () => { cancelAnimationFrame(raf); resize.disconnect(); observer.disconnect(); };
-  }, []);
+  }, [introGate]);
 
   function down(e: PointerEvent<HTMLDivElement>) {
+    if (introGate && !introGate.ready) return;
     if (!e.isPrimary || e.button !== 0 || engine.current.open || gesture.current) return;
     const target = e.target as HTMLElement;
     if (target.closest('a, button:not(.pk-orbit-card)')) return;
@@ -93,8 +96,8 @@ export function OrbitHero({ onOpen, open, reduced }: { onOpen: (item: MediaItem,
       <div className="pk-orbit-guide" aria-hidden="true" />
       <div className="pk-ring-brand"><img src="/logo.png" alt="Punkture Studios" width="190" height="190" draggable={false} /></div>
       {mediaItems.map((item, index) => <button type="button" key={item.id} ref={el => { cards.current[index] = el; }} data-media-id={item.id}
-        className="pk-orbit-card" style={{ aspectRatio: item.aspect }} aria-label={`Open ${item.caption}${item.type === 'video' ? ', video' : ''}`}
-        onClick={e => { if (e.detail === 0) { engine.current.open = true; onOpen(item, e.currentTarget); } }}>
+        className="pk-orbit-card" style={{ aspectRatio: item.aspect, '--pk-card-aspect': item.aspect } as CSSProperties} aria-label={`Open ${item.caption}${item.type === 'video' ? ', video' : ''}`}
+        onClick={e => { if (e.detail === 0 && (!introGate || introGate.ready)) { engine.current.open = true; onOpen(item, e.currentTarget); } }}>
         <Media item={item} playing={playingIds.includes(item.id) && !open} />
         <span className="pk-card-index">{item.id} / {item.type === 'video' ? '▶' : '↗'}</span>
         <span className="pk-card-caption">{item.caption}</span>

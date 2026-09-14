@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { animate } from 'motion/mini';
 import Lenis from 'lenis';
@@ -11,12 +11,15 @@ import { OrbitHero } from './home/OrbitHero';
 import { MediaViewer } from './home/MediaViewer';
 import { Media } from './home/Media';
 import { mediaItems, type MediaItem } from './home/mediaItems.js';
+import { startHomeIntro } from './home/homeIntro';
 import './home/home.css';
 
 export function HomePage() {
   const [rawSettings, setPublicSettings] = useState<PublicSettings | null>(null);
   const [selected, setSelected] = useState<{ item: MediaItem; source: HTMLButtonElement } | null>(null);
   const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const [introDone, setIntroDone] = useState(() => reduced || document.documentElement.dataset.homeIntro === 'ready');
+  const introGate = useRef({ ready: introDone });
   const root = useRef<HTMLDivElement>(null);
   const lenis = useRef<Lenis | null>(null);
   const magnetic = useRef<ReturnType<typeof animate> | null>(null);
@@ -24,6 +27,7 @@ export function HomePage() {
   const open = useCallback((item: MediaItem, source: HTMLButtonElement) => setSelected({ item, source }), []);
   const publicSettings = nextEventSettings(rawSettings);
   const hasEvent = publicSettings?.eventActive === true && !!publicSettings.eventDate;
+  useLayoutEffect(() => startHomeIntro(root.current!, introGate.current, () => setIntroDone(true)), [reduced]);
   useEffect(() => onSnapshot(doc(firestore, 'public', 'public'), snap => setPublicSettings(snap.exists() ? snap.data() as PublicSettings : null), () => setPublicSettings(null)), []);
   useEffect(() => {
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -32,9 +36,10 @@ export function HomePage() {
     return () => query.removeEventListener('change', change);
   }, []);
   useEffect(() => {
-    if (reduced) return;
+    if (reduced || !introDone) return;
     const scroll = new Lenis({ lerp: 0.085, smoothWheel: true, syncTouch: false, anchors: true });
     lenis.current = scroll;
+    if (document.body.style.overflow === 'hidden') scroll.stop();
     let frame = 0;
     const tick = (time: number) => { scroll.raf(time); frame = requestAnimationFrame(tick); };
     frame = requestAnimationFrame(tick);
@@ -42,11 +47,12 @@ export function HomePage() {
     const locks = new MutationObserver(() => { if (document.body.style.overflow === 'hidden') scroll.stop(); else scroll.start(); });
     locks.observe(document.body, { attributes: true, attributeFilter: ['style'] });
     return () => { cancelAnimationFrame(frame); locks.disconnect(); scroll.destroy(); lenis.current = null; };
-  }, [reduced]);
+  }, [reduced, introDone]);
   useEffect(() => {
-    if (selected) lenis.current?.stop(); else lenis.current?.start();
-  }, [selected]);
+    if (selected || document.body.style.overflow === 'hidden') lenis.current?.stop(); else lenis.current?.start();
+  }, [selected, introDone]);
   useEffect(() => {
+    if (!introDone) return;
     const nodes = root.current!.querySelectorAll<HTMLElement>('[data-reveal]');
     if (reduced) { nodes.forEach(node => { node.style.opacity = '1'; node.style.transform = 'none'; }); return; }
     const animations: ReturnType<typeof animate>[] = [];
@@ -58,9 +64,11 @@ export function HomePage() {
     }), { threshold: 0.12 });
     nodes.forEach(node => { node.style.opacity = '0'; observer.observe(node); });
     return () => { observer.disconnect(); animations.forEach(animation => animation.stop()); magnetic.current?.stop(); };
-  }, [reduced]);
+  }, [reduced, introDone]);
+  useEffect(() => { if (introDone) lenis.current?.resize(); }, [introDone]);
   return <PublicShell page="home"><div ref={root} className="pk-home">
-    <OrbitHero onOpen={open} open={!!selected} reduced={reduced} />
+    <div className="pk-grain" aria-hidden="true" />
+    <OrbitHero introGate={introGate.current} onOpen={open} open={!!selected} reduced={reduced} />
     <div className="pk-status-strip"><span className="pk-eyebrow"><i /> YOUR NEXT CHAPTER STARTS HERE</span><a href={hasEvent ? '/popup.html' : '/appointment.html'}>{hasEvent ? `${publicSettings.eventTitle || 'Next pop-up'} — ${eventDateRange(publicSettings)}` : 'Private studio sessions · By appointment'}<ArrowUpRight size={17} /></a></div>
     <section className="pk-intro pk-section" id="pk-selected">
       <p className="pk-eyebrow" data-reveal="0">01 / THE PUNKTURE PERSPECTIVE</p>
@@ -69,11 +77,11 @@ export function HomePage() {
     <section className="pk-gallery pk-section" aria-labelledby="pk-gallery-title">
       <div className="pk-section-heading" data-reveal="0"><h2 id="pk-gallery-title" className="pk-eyebrow">SELECTED STUDIES / 001—004</h2><span className="pk-eyebrow">PIERCING, IN YOUR OWN WAY</span></div>
       <div className="pk-editorial-grid">
-        {[mediaItems[0], mediaItems[2], mediaItems[8], mediaItems[6]].map((item, i) => <figure className={`pk-study pk-study-${i + 1}`} key={`${item.id}-gallery`} data-reveal={i % 2}>
-          <button type="button" onClick={e => open(item, e.currentTarget)} aria-label={`View concept study: ${item.caption}`}><Media item={item} /><span className="pk-study-tag">{i === 0 || i === 3 ? 'EAR CURATION' : 'JEWELRY STUDY'}</span><span className="pk-study-arrow"><ArrowUpRight size={24} /></span></button>
+        {[mediaItems[0], mediaItems[2], mediaItems[8], mediaItems[6]].map(item => item.gallery!).map((item, i) => <figure className={`pk-study pk-study-${i + 1}`} key={`${item.id}-gallery`} data-reveal={i % 2}>
+          <button type="button" onClick={e => open(item, e.currentTarget)} aria-label={`View concept study: ${item.caption}`}>{introDone && <Media item={item} />}<span className="pk-study-tag">{i === 0 || i === 3 ? 'EAR CURATION' : 'JEWELRY STUDY'}</span><span className="pk-study-arrow"><ArrowUpRight size={24} /></span></button>
           <figcaption><span><small>0{i + 1} / CONCEPT STUDY</small>{['An ear. A whole universe.', 'Less, but with intention.', 'A perfect little rebellion.', 'Beautifully individual.'][i]}</span><span>{['CURATED', 'ESSENTIAL', 'TIMELESS', 'PERSONAL'][i]}</span></figcaption>
         </figure>)}
-      </div><p className="pk-placeholder-note">Concept illustrations & sample films. Our real studio portfolio is coming soon.</p>
+      </div><p className="pk-placeholder-note">These editorial illustrations are concept studies. Explore our studio footage in the reels above.</p>
     </section>
     <div className="pk-marquee" aria-label="Your body. Your story. Your expression."><div aria-hidden="true">{[0, 1].map(i => <span key={i}>YOUR BODY. <b>✳</b> YOUR STORY. <b>✳</b> YOUR EXPRESSION. <b>✳</b> </span>)}</div></div>
     <section className="pk-care pk-section"><div data-reveal="0"><p className="pk-eyebrow">02 / GOOD ENERGY. CONSIDERED CARE.</p><h2>A little edge.<br /><em>A lot of care.</em></h2></div><div className="pk-care-links" data-reveal="1">{[

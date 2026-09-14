@@ -405,3 +405,42 @@ Final local validation: **62 tests passed**, lint completed without warnings/err
 **Home interaction refinement:** Reversed both drag displacement and tracked release velocity so front-facing cards follow the pointer. The orbit center now shows the existing `/logo.png` only; the drawn ring and “The art of becoming” tagline are removed. Hero copy is “Customize your character.” / “Be fierce. Get pierced.” The media viewer measures and initializes FLIP in a layout effect before paint, resets transforms for StrictMode measurements, expands over 780ms and delays its controls/caption reveal. Marquee duration is now 28 seconds (previously 48) for a faster readable pace. Reduced-motion behavior is preserved.
 
 Refinement validation: 63 tests, lint and production build pass. Added a regression check that front-card displacement and release momentum both follow left/right dragging. Center logo stays above the orbit cards so it remains visible.
+
+## Cinematic home load / reload intro (2026-09-14)
+
+The home-only intro adds no libraries and changes no other route, backend or shared navigation component. Every navigation/reload uses the same full deterministic choreography; no session-storage shortcut changes repeat visits. The existing center logo remains the final mark, surrounded by a thin ring during the black preloader.
+
+- **First paint:** `home.html` contains a tiny critical black curtain/logo and pending-state CSS before the main bundle. Header, hero chrome and cards are hidden before React mounts. Home font CSS loads without blocking this first paint. `scrollbar-gutter: stable` reserves the scrollbar width; section/card dimensions remain unchanged. Scroll restoration is temporarily manual for the opening stage and restored on completion/exit. Reduced-motion CSS bypasses the curtain immediately. A separate six-second boot fallback releases the critical curtain if the app module is delayed or fails.
+- **Honest preload:** `home/preloadFirstMedia.ts` waits only for `mediaItems[0]` (decoded image or first decoded video data), with an **850ms hard cap**. Failed/aborted loads cannot strand the curtain; no pretend progress counter or whole-gallery readiness dependency is used. Existing orbit posters may load normally, but only that one media asset gates the sequence. Gallery `<Media>` components do not mount until handoff and keep their native lazy loading afterward.
+- **One master clock:** `home/homeIntro.ts` owns one requestAnimationFrame timeline, with the pure choreography in `home/introTimeline.ts`. It writes transforms/opacity only; static blurred-poster layers are crossfaded instead of animating filters. Geometry is measured once outside the frame loop, and stacking order comes from final orbit depth. The preloader curtain fades, scattered dim cards gather into their exact orbit slots, the loading logo moves/scales/rotates into the existing center-logo position, header/hero chrome and bottom controls stagger in, and grain fades to its existing strength. The boot logo disappears on the same frame that the normal center logo becomes visible.
+- **Handoff:** `OrbitHero` accepts a mutable `IntroGate`. Its existing RAF loop cannot touch card styles, advance the angle or start video playback until `gate.ready` becomes true. Both systems share `ORBIT.initialAngle`, so the last intro pose is exactly the first orbit pose, with zero initial momentum. Drag direction/friction and media viewer animation are unchanged. Lenis is created/resized after intro completion. The existing IntersectionObserver gallery reveal setup is also deferred until completion; this repo does not use GSAP ScrollTrigger, so none was added.
+- **Interrupt safety:** Capturing `pointerdown`, `click`, `touchstart`, `wheel`, `keydown` or meaningful scroll synchronously writes the full final frame, aborts pending preload callbacks, cancels the timeline/watchdog, reveals the normal logo and all chrome, removes the curtain/temporary scroll constraint, and sets the gate ready **before the same input reaches the orbit**. Default input behavior is not cancelled. Resize and page exit also settle safely. Finishing is idempotent; late image callbacks cannot restart it. An independent wall-clock failsafe finishes even if RAF is suspended in a background tab. StrictMode cleanup invalidates the old run so it cannot race the next setup. Changing reduced-motion preferences after interaction does not reset the user's orbit angle.
+
+### Intro tuning
+
+All choreography values are in `src/components/home/introTimeline.ts` → `INTRO` (seconds unless named `Ms`):
+
+| Segment | Timing / tuning |
+| --- | --- |
+| Preloader | First asset readiness, at most `preloadCapMs: 850` |
+| Master reveal | `duration: 2.12` seconds after readiness/cap |
+| Stage fade | `stageDuration: 0.62` |
+| Cards | `cardStart: 0.2`, `cardStagger: 0.045`, `cardDuration: 1.25`; quintic ease-out for a soft landing |
+| Scatter | `scatterX: 0.23` × stage width, `scatterY: 0.3` × stage height, `scatterScale: 0.42`, `scatterRotation: 22` degrees; golden-angle seed gives the same arrangement on reload |
+| Center logo | `logoDuration: 1.52`; scales from 96px to the existing responsive mark size, with a subtle 14° turning arc |
+| Header + hero chrome | `headerStart: 0.72`, `chromeStagger: 0.1`, `chromeDuration: 0.65` |
+| Bottom controls | `bottomStart: 1.28`, 70ms stagger, 14px rise |
+| Grain | `grainStart: 1.15`, 700ms fade to the existing 0.035 opacity |
+
+The natural reveal completes in about **2.1–3 seconds**, depending only on first-asset readiness. Interruptions and reduced motion render the final state directly. `tests/home-intro.test.mjs` covers deterministic end poses for 10/12/14 cards and phone/desktop sizes, preload gating/cap/abort, loading and mid-reveal interruptions, StrictMode cancellation, suspended-RAF recovery and preference changes. Existing mounted pointer tests additionally verify exclusive intro ownership and the orbit handoff. Browser checks observed pending/revealing with zero gallery images, ready state with all four gallery images mounted, phone drag interruption without accidental viewer opening, and the existing viewer opening/closing after handoff. These checks do not certify physical-device 60fps or matching a reference video that was not attached.
+
+Intro validation: all **70 tests passed**, lint passed, and the seven-page production build passed. Fresh desktop/390px phone browser passes showed no console errors, no horizontal overflow, zero gallery images before handoff, normal scrolling/offscreen video pause afterward, and successful viewer open/close after interruption. Lenis also checks an existing body lock when it is first created, so opening navigation during the intro cannot start scrolling behind the drawer. Production build emitted a non-failing bundler plugin-timing advisory during concurrent validation; no source/build error occurred.
+
+
+## Local studio reels (2026-09-14)
+
+The 12 orbit slots now use **all 12 MP4 files directly under `public/videos/` exactly once**, in filename order, through `src/components/home/mediaItems.js`. Native track metadata confirmed every file is **9:16 H.264/AVC**: eleven 1080×1920 clips and one 720×1280 clip. Original MP4 bytes are preserved. Twelve 540×960 JPEG posters under `public/videos/posters/` were extracted around the first second of their corresponding footage; paused cards, loading previews and depth-blur layers now show that footage, without remote demo imagery. Videos remain muted/looped with at most two orbit videos playing; the intro, drag momentum and FLIP viewer remain in place.
+
+Orbit widths are calculated from a responsive height and each item's `aspect`, rather than a width plus an independent maximum height that could distort/crop portrait framing. The viewer keeps `object-fit: contain`, preserving the complete reel. Viewer captions identify real videos as studio reels, not placeholders. Below-fold editorial illustrations are unchanged: optional nested `gallery` image records in the same single manifest retain the four prior studies, and HomePage selects those explicitly. Their existing concept labels and image-viewer behavior remain unchanged.
+
+To swap a reel, update its `src`, `poster`, `aspect` and caption in the manifest. The manifest test compares the listed video filenames to all MP4s in `public/videos/`, verifies uniqueness/9:16 sizing and checks each local poster exists. Intro test media mocks now exercise first-video readiness (the previous first asset was an image).

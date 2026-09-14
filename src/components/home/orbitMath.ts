@@ -1,4 +1,5 @@
 export const ORBIT = {
+  initialAngle: -0.35,
   idleSpeed: 0.075, // radians per second
   dragSensitivity: -0.0055, // radians per CSS pixel; front cards follow the pointer
   friction: 3.2, // exponential decay per second (same feel at 30/60/120Hz)

@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync, existsSync } from 'node:fs';
 import { advanceOrbit, isOrbitClick, orbitPose, ORBIT } from '../src/components/home/orbitMath.ts';
 import { mediaItems } from '../src/components/home/mediaItems.js';
 
@@ -32,11 +33,19 @@ test('front of the ellipse is larger, clearer and above the rear at phone and de
     assert.ok(Math.abs(loop.y - front.y) < 1e-9);
   }
 });
-test('one manifest supplies twelve unique mixed-aspect cards and reusable gallery assets', () => {
+test('one manifest covers every supplied portrait reel exactly once, with a local poster', () => {
   assert.equal(mediaItems.length, 12);
   assert.equal(new Set(mediaItems.map(item => item.id)).size, mediaItems.length);
-  assert.ok(mediaItems.filter(item => item.type === 'video').length >= 6);
-  assert.ok(mediaItems.some(item => item.aspect < 1) && mediaItems.some(item => item.aspect > 1));
+  assert.equal(new Set(mediaItems.map(item => item.src)).size, 12);
+  const supplied = readdirSync(new URL('../public/videos/', import.meta.url)).filter(file => file.endsWith('.mp4')).sort();
+  assert.deepEqual(mediaItems.map(item => item.src.replace('/videos/', '')).sort(), supplied);
+  for (const item of mediaItems) {
+    assert.equal(item.type, 'video');
+    assert.equal(item.aspect, 9 / 16);
+    assert.ok(item.poster.startsWith('/videos/posters/'));
+    assert.ok(existsSync(new URL('../public' + item.poster, import.meta.url)));
+  }
+  for (const index of [0, 2, 8, 6]) assert.equal(mediaItems[index].gallery.type, 'image');
   for (const item of mediaItems) assert.ok(item.src && item.caption && item.aspect > 0);
 });
 

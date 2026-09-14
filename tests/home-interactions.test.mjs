@@ -50,6 +50,16 @@ test('mouse, touch and pen support tap, captured drag, release momentum and canc
       await pointer(stage, 'pointerup', type, 61);
       assert.equal(opened.length, startCount + 1, `${type}: tap opens the card`);
     }
+    const introGate = { ready: false };
+    await act(async () => root.render(React.createElement(OrbitHero, { key: 'gated', open: false, reduced: false, introGate, onOpen: item => opened.push(item.id) })));
+    await frame();
+    const gatedCard = document.querySelector('.pk-orbit-card');
+    assert.equal(gatedCard.style.transform, '', 'orbit must not overwrite the intro timeline');
+    await pointer(gatedCard, 'pointerdown', 'touch', 60);
+    assert.equal(captures.size, 0, 'intro owns interaction until handoff');
+    introGate.ready = true;
+    await frame();
+    assert.notEqual(gatedCard.style.transform, '', 'orbit takes over after synchronous handoff');
     await act(async () => root.render(React.createElement(OrbitHero, { key: 'reduced', open: false, reduced: true, onOpen: item => opened.push(item.id) })));
     await frame();
     const staticPose = document.querySelector('.pk-orbit-card').style.transform;
