@@ -6,6 +6,7 @@ import { JSDOM } from 'jsdom';
 import { EarDiagram } from '../src/components/booking/EarDiagram.tsx';
 import { FaceDiagram } from '../src/components/booking/FaceDiagram.tsx';
 import { BodyDiagram } from '../src/components/booking/BodyDiagram.tsx';
+import { PiercingSpotModal } from '../src/components/booking/PiercingSpotModal.tsx';
 import { EAR_HOTSPOTS, FACE_HOTSPOTS, BODY_HOTSPOTS } from '../src/components/booking/types.ts';
 
 function setup(t) {
@@ -16,6 +17,21 @@ function setup(t) {
  t.after(()=>{act(()=>root.unmount());Object.assign(globalThis,previous);dom.window.close();});
  return {root, dom};
 }
+test('Hidden Helix offers only the required 200 jewelry tier and saves a 600 single-ear selection', t=>{
+ const {root,dom}=setup(t);
+ dom.window.scrollTo=()=>{};
+ const spot=EAR_HOTSPOTS.find(s=>s.id==='hidden_helix');
+ let saved;
+ act(()=>root.render(React.createElement(PiercingSpotModal,{spot,onAdd:item=>saved=item,onClose:()=>{}})));
+ const buttons=[...document.querySelectorAll('button')];
+ assert.equal(buttons.filter(b=>b.textContent.includes('200 Titanium')).length,1);
+ for(const label of ['Free Stainless Studs','Rhinestone Stainless','150 Titanium']) assert.ok(!buttons.some(b=>b.textContent.includes(label)));
+ act(()=>buttons.find(b=>b.textContent.includes('Add to Session')).dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true})));
+ assert.equal(saved.name,'Hidden Helix');
+ assert.equal(saved.basePrice,400);
+ assert.equal(saved.upgradePrice,200);
+ assert.equal(saved.basePrice+saved.upgradePrice,600);
+});
 test('all map directories keep original catalog records and selected state', t=>{
  const {root,dom}=setup(t);
  for(const [Component,spots] of [[EarDiagram,EAR_HOTSPOTS],[FaceDiagram,FACE_HOTSPOTS],[BodyDiagram,BODY_HOTSPOTS]]) {

@@ -21,8 +21,8 @@ export function Jewelry({ kind = 'stud', metal, ends = [[-86,-38],[99,44]] }: { 
   if (kind === 'rook') return <><path d="M0-14 1-9M3 8Q4 13 1 16" fill="none" stroke={metal} strokeWidth="2.5" />{ball(0,-14,4)}{ball(1,17,4)}</>;
   if (kind === 'fold') return <><path d="M0-10V-7M0 7V10" stroke={metal} strokeWidth="2.5" />{ball(0,-11,3.5)}{ball(0,11,3.5)}</>;
   if (kind === 'snug') return <><path d="M-14 0H-10M10 0H14" stroke={metal} strokeWidth="2.5" />{ball(-14,0,3.8)}{ball(14,0,3.8)}</>;
-  // The upper-left arc disappears into the crus; the visible hoop fills the inner bowl.
-  if (kind === 'daith') return <><path d="M-3-22A18 23 0 1 1-17-7" fill="none" stroke="#66596d" strokeWidth="4.5"/><path d="M-3-23A18 23 0 1 1-17-8" fill="none" stroke={metal} strokeWidth="2.8"/>{ball(5,21,3)}</>;
+  // Trim the returning left arc beneath the fold, preserving the original hoop curve.
+  if (kind === 'daith') return <><path d="M-3-22A18 23 0 1 1-17-7" pathLength="100" strokeDasharray="76 100" fill="none" stroke="#66596d" strokeWidth="4.5"/><path d="M-3-23A18 23 0 1 1-17-8" pathLength="100" strokeDasharray="76 100" fill="none" stroke={metal} strokeWidth="2.8"/>{ball(5,21,3)}</>;
   // A circular barbell opens DOWNWARD. Its upper arc is inside the nose, behind the columella.
   if (kind === 'septum') return <><path d="M-9-1C-14 6-12 12-5 16M9-1C14 6 12 12 5 16" fill="none" stroke="#746878" strokeWidth="4"/><path d="M-9-2C-14 5-12 11-5 15M9-2C14 5 12 11 5 15" fill="none" stroke={metal} strokeWidth="2.6"/>{ball(-5,15,3)}{ball(5,15,3)}</>;
   if (kind === 'smiley') return <><path d="M-6-3A10 13 0 1 0 6-3" fill="none" stroke={metal} strokeWidth="2.5"/>{ball(0,19,3)}</>;

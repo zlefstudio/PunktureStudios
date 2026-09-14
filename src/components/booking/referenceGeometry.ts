@@ -12,14 +12,16 @@ export function onReference(image: {x: number; y: number; scale: number}, point:
 export const EAR_POINTS: MapPoint[] = [
   {id:'lobe',x:337,y:851,landmark:'Soft lower lobe'},
   {id:'auricle',x:477,y:746,landmark:'Middle-to-lower outer cartilage rim'},
-  {id:'helix',x:518,y:559,landmark:'Upper outer cartilage rim'},
+  {id:'helix',x:515,y:612,landmark:'Outer cartilage rim'},
+  {id:'hidden_helix',x:399,y:444,landmark:'Tucked beneath the upper helix rim'},
   {id:'forward_helix',x:289,y:490,landmark:'Front-facing upper helix rim'},
   {id:'flat',x:410,y:512,landmark:'Flat cartilage inside the upper rim'},
-  {id:'conch',x:370,y:687,landmark:'Central cartilage bowl'},
+  {id:'conch',x:422,y:648,landmark:'Central cartilage bowl'},
   {id:'tragus',x:276,y:688,landmark:'Flap immediately in front of the ear canal'},
   {id:'anti_tragus',x:339,y:770,jewel:'fold',size:.8,rotation:-35,landmark:'Raised cartilage opposite the tragus'},
   {id:'rook',x:344,y:545,jewel:'rook',size:.72,rotation:-24,landmark:'Upper inner cartilage shelf'},
-  {id:'daith',x:324,y:640,offset:[12,29],jewel:'daith',size:.8,rotation:-12,landmark:'Innermost fold, above the ear canal'},
+  // Center the tap marker inside the hoop; compensate the offset to keep jewelry fixed.
+  {id:'daith',x:367,y:616,offset:[-7,-1],jewel:'daith',size:1.35,rotation:-12,landmark:'Innermost fold, above the ear canal'},
   {id:'snug',x:421,y:705,jewel:'snug',size:.8,rotation:18,landmark:'Across the lower antihelix ridge'},
   {id:'industrial',x:400,y:487,jewel:'industrial',landmark:'Two upper-rim contacts',ends:[[-85,-32.5],[89.2,35.8]]},
 ].map(point => onReference(EAR_IMAGE, point as MapPoint));
