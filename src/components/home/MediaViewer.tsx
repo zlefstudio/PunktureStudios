@@ -63,7 +63,7 @@ export function MediaViewer({ item, source, reduced, onClose }: { item: MediaIte
     <div className="pk-viewer-panel" ref={panel}>
       <Media item={item} playing viewer />
       <div className="pk-viewer-top pk-eyebrow"><span>PUNKTURE / {item.type === 'video' ? 'REEL' : 'STUDY'} {item.id}</span><button type="button" autoFocus onClick={() => dismiss.current()} aria-label="Close media viewer"><X size={24} /></button></div>
-      <div className="pk-viewer-caption"><h2 id="pk-viewer-title">{item.caption}</h2><p id="pk-viewer-description">{item.type === 'video' ? 'PUNKTURE STUDIOS · MUTED / LOOP' : 'CONCEPT MOODBOARD · PLACEHOLDER IMAGE'}</p></div>
+      <div className="pk-viewer-caption"><h2 id="pk-viewer-title">{item.caption}</h2><p id="pk-viewer-description">{item.type === 'video' ? 'PUNKTURE STUDIOS · MUTED / LOOP' : 'PUNKTURE STUDIOS · GUIDES & RATES'}</p></div>
     </div>
   </dialog>;
 }

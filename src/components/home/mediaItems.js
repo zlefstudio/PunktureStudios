@@ -1,128 +1,127 @@
-// One manifest: all twelve supplied reels, with thumbnails extracted from their footage.
-// Optional gallery entries preserve the existing editorial illustrations independently.
+// One manifest for the compressed local reels, matching posters, and four gallery graphics.
 export const mediaItems = [
   {
     "id": "01",
     "type": "video",
-    "src": "/videos/03539D77-6E20-4B89-BD80-E1140E1B0B4B.mp4",
+    "src": "/videos/1.mp4",
     "aspect": 0.5625,
     "caption": "Studio reel 01",
-    "poster": "/videos/posters/03539D77-6E20-4B89-BD80-E1140E1B0B4B.jpg",
+    "poster": "/videos/posters/1.jpg",
     "gallery": {
-      "id": "01",
+      "id": "gallery-a",
       "type": "image",
-      "src": "/media/ear-study.svg",
-      "aspect": 0.75,
-      "caption": "The curated ear"
+      "src": "/media/a.png",
+      "aspect": 0.7093821510297483,
+      "caption": "Ear piercing guide"
     }
   },
   {
     "id": "02",
     "type": "video",
-    "src": "/videos/15b56e554f524eb590cb00b237c68990.mp4",
+    "src": "/videos/2.mp4",
     "aspect": 0.5625,
     "caption": "Studio reel 02",
-    "poster": "/videos/posters/15b56e554f524eb590cb00b237c68990.jpg"
+    "poster": "/videos/posters/2.jpg"
   },
   {
     "id": "03",
     "type": "video",
-    "src": "/videos/4baa47f2d40e4c8faf1405f8748e5c3e.mp4",
+    "src": "/videos/3.mp4",
     "aspect": 0.5625,
     "caption": "Studio reel 03",
-    "poster": "/videos/posters/4baa47f2d40e4c8faf1405f8748e5c3e.jpg",
+    "poster": "/videos/posters/3.jpg",
     "gallery": {
-      "id": "03",
+      "id": "gallery-b",
       "type": "image",
-      "src": "/media/ring-study.svg",
-      "aspect": 1,
-      "caption": "Precious by nature"
+      "src": "/media/b.png",
+      "aspect": 0.7093821510297483,
+      "caption": "Face piercing guide"
     }
   },
   {
     "id": "04",
     "type": "video",
-    "src": "/videos/IMG_0599.mp4",
+    "src": "/videos/4.mp4",
     "aspect": 0.5625,
     "caption": "Studio reel 04",
-    "poster": "/videos/posters/IMG_0599.jpg"
+    "poster": "/videos/posters/4.jpg"
   },
   {
     "id": "05",
     "type": "video",
-    "src": "/videos/IMG_1711.mp4",
+    "src": "/videos/5.mp4",
     "aspect": 0.5625,
     "caption": "Studio reel 05",
-    "poster": "/videos/posters/IMG_1711.jpg"
+    "poster": "/videos/posters/5.jpg"
   },
   {
     "id": "06",
     "type": "video",
-    "src": "/videos/IMG_5554.mp4",
+    "src": "/videos/6.mp4",
     "aspect": 0.5625,
     "caption": "Studio reel 06",
-    "poster": "/videos/posters/IMG_5554.jpg"
+    "poster": "/videos/posters/6.jpg"
   },
   {
     "id": "07",
     "type": "video",
-    "src": "/videos/IMG_8013.mp4",
+    "src": "/videos/7.mp4",
     "aspect": 0.5625,
     "caption": "Studio reel 07",
-    "poster": "/videos/posters/IMG_8013.jpg",
+    "poster": "/videos/posters/7.jpg",
     "gallery": {
-      "id": "07",
+      "id": "gallery-d",
       "type": "image",
-      "src": "/media/ear-study.svg",
-      "aspect": 0.8,
-      "caption": "Small details. All you."
+      "src": "/media/d.png",
+      "aspect": 0.7093821510297483,
+      "caption": "Studio piercing rates"
     }
   },
   {
     "id": "08",
     "type": "video",
-    "src": "/videos/IMG_9401.mp4",
+    "src": "/videos/8.mp4",
     "aspect": 0.5625,
     "caption": "Studio reel 08",
-    "poster": "/videos/posters/IMG_9401.jpg"
+    "poster": "/videos/posters/8.jpg"
   },
   {
     "id": "09",
     "type": "video",
-    "src": "/videos/copy_51EF3A73-C857-45A6-9433-7F0F05DD744B.mp4",
+    "src": "/videos/9.mp4",
     "aspect": 0.5625,
     "caption": "Studio reel 09",
-    "poster": "/videos/posters/copy_51EF3A73-C857-45A6-9433-7F0F05DD744B.jpg",
+    "poster": "/videos/posters/9.jpg",
     "gallery": {
-      "id": "09",
+      "id": "gallery-c",
       "type": "image",
-      "src": "/media/ring-study.svg",
-      "aspect": 1.2,
-      "caption": "Made to become you"
+      "src": "/media/c.png",
+      "aspect": 0.7093821510297483,
+      "caption": "Pop-up piercing rates"
     }
   },
   {
     "id": "10",
     "type": "video",
-    "src": "/videos/copy_D48A804B-747A-4833-93F1-AB549DC0E797.mp4",
+    "src": "/videos/10.mp4",
     "aspect": 0.5625,
     "caption": "Studio reel 10",
-    "poster": "/videos/posters/copy_D48A804B-747A-4833-93F1-AB549DC0E797.jpg"
+    "poster": "/videos/posters/10.jpg"
   },
   {
     "id": "11",
     "type": "video",
-    "src": "/videos/copy_D9341EEF-07FF-4258-8D18-1139B4AC20E1.mp4",
+    "src": "/videos/11.mp4",
     "aspect": 0.5625,
     "caption": "Studio reel 11",
-    "poster": "/videos/posters/copy_D9341EEF-07FF-4258-8D18-1139B4AC20E1.jpg"
+    "poster": "/videos/posters/11.jpg"
   },
   {
     "id": "12",
     "type": "video",
-    "src": "/videos/fbfb59d0eca64cb58e73a7265336ce21.mp4",
+    "src": "/videos/12.mp4",
     "aspect": 0.5625,
     "caption": "Studio reel 12",
-    "poster": "/videos/posters/fbfb59d0eca64cb58e73a7265336ce21.jpg"
+    "poster": "/videos/posters/12.jpg"
   }
 ];

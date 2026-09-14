@@ -72,16 +72,16 @@ export function HomePage() {
     <div className="pk-status-strip"><span className="pk-eyebrow"><i /> YOUR NEXT CHAPTER STARTS HERE</span><a href={hasEvent ? '/popup.html' : '/appointment.html'}>{hasEvent ? `${publicSettings.eventTitle || 'Next pop-up'} — ${eventDateRange(publicSettings)}` : 'Private studio sessions · By appointment'}<ArrowUpRight size={17} /></a></div>
     <section className="pk-intro pk-section" id="pk-selected">
       <p className="pk-eyebrow" data-reveal="0">01 / THE PUNKTURE PERSPECTIVE</p>
-      <div><h2 data-reveal="1">Not just a piercing.<br />A point of <em>expression.</em></h2><div className="pk-intro-bottom" data-reveal="2"><span className="pk-asterisk" aria-hidden="true">✳</span><p>A quiet statement. A bold beginning. A little piece of who you are. We make space for self-expression, one considered detail at a time.</p><a href="/appointment.html" className="pk-text-link">Find your next piercing <ArrowUpRight size={18} /></a></div></div>
+      <div><h2 data-reveal="1">Life’s an RPG.<br />Never skip character creation.</h2><div className="pk-intro-bottom" data-reveal="2"><span className="pk-asterisk" aria-hidden="true">✳</span><div><p className="pk-intro-statement"><strong>Piercings are your IRL character customization.</strong></p><p>A quiet statement. A bold beginning. A little piece of who you are.</p></div><div className="pk-intro-actions"><a href="/appointment.html" className="pk-text-link"><strong>Start your build →</strong></a><a href="https://maps.app.goo.gl/4dPsJAiQHDwJxVsM6" target="_blank" rel="noopener noreferrer" className="pk-text-link">Punkture Point <ArrowUpRight size={18} /></a></div></div></div>
     </section>
     <section className="pk-gallery pk-section" aria-labelledby="pk-gallery-title">
-      <div className="pk-section-heading" data-reveal="0"><h2 id="pk-gallery-title" className="pk-eyebrow">SELECTED STUDIES / 001—004</h2><span className="pk-eyebrow">PIERCING, IN YOUR OWN WAY</span></div>
+      <div className="pk-section-heading" data-reveal="0"><h2 id="pk-gallery-title" className="pk-eyebrow">PIERCING GUIDES & RATES / 001—004</h2><span className="pk-eyebrow">PIERCING, IN YOUR OWN WAY</span></div>
       <div className="pk-editorial-grid">
         {[mediaItems[0], mediaItems[2], mediaItems[8], mediaItems[6]].map(item => item.gallery!).map((item, i) => <figure className={`pk-study pk-study-${i + 1}`} key={`${item.id}-gallery`} data-reveal={i % 2}>
-          <button type="button" onClick={e => open(item, e.currentTarget)} aria-label={`View concept study: ${item.caption}`}>{introDone && <Media item={item} />}<span className="pk-study-tag">{i === 0 || i === 3 ? 'EAR CURATION' : 'JEWELRY STUDY'}</span><span className="pk-study-arrow"><ArrowUpRight size={24} /></span></button>
-          <figcaption><span><small>0{i + 1} / CONCEPT STUDY</small>{['An ear. A whole universe.', 'Less, but with intention.', 'A perfect little rebellion.', 'Beautifully individual.'][i]}</span><span>{['CURATED', 'ESSENTIAL', 'TIMELESS', 'PERSONAL'][i]}</span></figcaption>
+          <button type="button" style={{ aspectRatio: item.aspect }} onClick={e => open(item, e.currentTarget)} aria-label={`View ${item.caption}`}>{introDone && <Media item={item} />}</button>
+          <figcaption><span><small>0{i + 1} / {i < 2 ? 'PLACEMENT GUIDE' : 'RATE CARD'}</small>{item.caption}</span><span>VIEW ↗</span></figcaption>
         </figure>)}
-      </div><p className="pk-placeholder-note">These editorial illustrations are concept studies. Explore our studio footage in the reels above.</p>
+      </div><p className="pk-placeholder-note">Tap a guide or rate card to view it in full.</p>
     </section>
     <div className="pk-marquee" aria-label="Your body. Your story. Your expression."><div aria-hidden="true">{[0, 1].map(i => <span key={i}>YOUR BODY. <b>✳</b> YOUR STORY. <b>✳</b> YOUR EXPRESSION. <b>✳</b> </span>)}</div></div>
     <section className="pk-care pk-section"><div data-reveal="0"><p className="pk-eyebrow">02 / GOOD ENERGY. CONSIDERED CARE.</p><h2>A little edge.<br /><em>A lot of care.</em></h2></div><div className="pk-care-links" data-reveal="1">{[

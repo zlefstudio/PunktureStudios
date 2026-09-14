@@ -36,6 +36,8 @@ await mock.module('firebase/firestore', { namedExports: {
   serverTimestamp: () => 'server-timestamp',
   setDoc: async (ref, value) => { bookingWrites.push({ ref, value }); await saveBooking(); },
   updateDoc: async () => {}, deleteDoc: async () => {},
+  getDocs: async ref => ({ docs: (ref?.col === 'appointments' ? queueRows : []).map(row => ({ data: () => row, ref: docRef(null, 'appointments', String(row.id ?? 'row')) })) }),
+  writeBatch: () => ({ delete: () => {}, commit: async () => {} }),
   onSnapshot: (ref, callback) => {
     if (ref.kind === 'collection') callback({ forEach: visit => queueRows.forEach(row => visit({ data: () => row })) });
     else if (ref.id === 'heartbeat') callback({ data: () => ({ publishedAt: { toMillis: () => heartbeat } }) });
@@ -88,10 +90,26 @@ test('fresh settings form can save its first change', async () => {
   const checkboxes = container.querySelectorAll('input[type="checkbox"]');
   // Booking availability remains independently editable.
   await act(async () => checkboxes[0].click());
-  const saveBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Save all changes'));
+  const saveBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Save changes'));
+  assert.ok(saveBtn, 'settings save button must exist in the sticky action bar');
   await act(async () => saveBtn.click());
   assert.equal(savedSettings.bookingEnabled, false);
   assert.match(container.textContent, /Settings saved/i);
+});
+test('settings workspace shows one panel at a time and follows deep-link anchors', async () => {
+  await render(PublicSettingsView);
+  const tab = (label) => [...container.querySelectorAll('nav[aria-label="Settings sections"] button')].find(b => b.textContent === label);
+  const panel = (selector) => container.querySelector(selector);
+  const bookingsWrapper = () => panel('#paid-bookings').parentElement;
+  assert.ok(!bookingsWrapper().className.includes('hidden'), 'bookings panel is the default panel');
+  assert.ok(panel('#booking-schedule').className.includes('hidden'), 'schedule panel starts hidden');
+  await act(async () => tab('Schedule').click());
+  assert.ok(!panel('#booking-schedule').className.includes('hidden'), 'schedule panel opens');
+  assert.ok(bookingsWrapper().className.includes('hidden'), 'other panels hide when one opens');
+  window.location.hash = '#incoming-requests';
+  await act(async () => window.dispatchEvent(new window.Event('hashchange')));
+  assert.ok(!panel('#incoming-requests').className.includes('hidden'), 'sidebar anchor opens the legacy panel');
+  assert.ok(panel('#booking-schedule').className.includes('hidden'), 'previous panel hides again');
 });
 test('second ticket cannot start while another session is active', async () => {
   const first = await useStore.getState().addTicket('First');

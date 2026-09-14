@@ -8,7 +8,6 @@ import {
   Home,
   Clock,
   Calendar,
-  Sparkles,
   Plus,
   Trash2,
   CheckCircle,
@@ -26,6 +25,8 @@ import {
   doc,
   updateDoc,
   deleteDoc,
+  getDocs,
+  writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
 import { auth, firestore } from '../firebase';
@@ -50,6 +51,26 @@ const PREVIEW_LINKS = [
   { label: 'Privacy', href: PRIVACY_URL },
 ];
 
+type SettingsTab = 'bookings' | 'schedule' | 'popups' | 'legacy';
+
+/**
+ * Panel switcher metadata. Every panel keeps its original anchor id so the
+ * sidebar deep links (#paid-bookings, #booking-schedule, …) still resolve; the
+ * hash listener below opens the matching panel instead of scrolling a hidden one.
+ */
+const TABS: { id: SettingsTab; label: string }[] = [
+  { id: 'bookings', label: 'Bookings & deposits' },
+  { id: 'schedule', label: 'Schedule' },
+  { id: 'popups', label: 'Pop-ups & studio' },
+  { id: 'legacy', label: 'Legacy requests' },
+];
+const ANCHORS: Record<SettingsTab, string> = {
+  bookings: 'paid-bookings',
+  schedule: 'booking-schedule',
+  popups: 'popup-event',
+  legacy: 'incoming-requests',
+};
+
 const DAYS_OF_WEEK = [
   { id: 0, label: 'Sun', full: 'Sunday' },
   { id: 1, label: 'Mon', full: 'Monday' },
@@ -72,49 +93,6 @@ function format12Hour(time24: string): string {
 export function SettingsSidebar() {
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
-      {/* Overview Pill */}
-      <div
-        className="p-4 rounded-2xl space-y-2"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-      >
-        <div className="flex items-center gap-2 text-label-xs" style={{ color: 'var(--color-brand-text)' }}>
-          <Sparkles size={14} />
-          <span>SETTINGS &amp; ONLINE CONTROL</span>
-        </div>
-        <p className="text-body-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-          Use the studio settings workspace to manage public schedules, slots, pop-up events, and incoming booking requests.
-        </p>
-      </div>
-
-      {/* Quick Jump Anchors */}
-      <div
-        className="p-4 rounded-2xl space-y-2"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-      >
-        <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">Sections</p>
-        <nav className="space-y-1 text-body-xs font-semibold">
-          <a href="#paid-bookings" className="block px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 no-underline">Payments &amp; bookings</a>
-          <a
-            href="#booking-schedule"
-            className="block px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 transition-colors no-underline"
-          >
-            📅 Booking &amp; Schedule
-          </a>
-          <a
-            href="#popup-event"
-            className="block px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 transition-colors no-underline"
-          >
-            🎪 Pop-Up Event &amp; Studio
-          </a>
-          <a
-            href="#incoming-requests"
-            className="block px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-white/5 transition-colors no-underline"
-          >
-            📥 Legacy reservations
-          </a>
-        </nav>
-      </div>
-
       {/* Quick Links */}
       <div
         className="p-4 rounded-2xl space-y-2.5"
@@ -165,6 +143,11 @@ export function PublicSettingsView() {
   // Filter state for requests
   const [filterStatus, setFilterStatus] = useState<'all' | 'requested' | 'confirmed' | 'cancelled'>('all');
 
+  // Which settings panel is open. Keeps the workspace short instead of one long scroll.
+  const [tab, setTab] = useState<SettingsTab>('bookings');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [legacyNotice, setLegacyNotice] = useState('');
+
   useEffect(() => {
     let active = true;
     void getLocalPublicSettings()
@@ -196,6 +179,18 @@ export function PublicSettingsView() {
   }, []);
 
   useEffect(() => onAuthStateChanged(auth, (u) => setUser(u)), []);
+
+  // Sidebar links are plain anchors; open the panel that owns the clicked anchor.
+  useEffect(() => {
+    const applyHash = () => {
+      const hash = window.location.hash.replace('#', '');
+      const match = (Object.entries(ANCHORS) as [SettingsTab, string][]).find(([, anchor]) => anchor === hash);
+      if (match) setTab(match[0]);
+    };
+    applyHash();
+    window.addEventListener('hashchange', applyHash);
+    return () => window.removeEventListener('hashchange', applyHash);
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -320,6 +315,38 @@ export function PublicSettingsView() {
     }
   }
 
+  /**
+   * Removes legacy requests that never proved payment (status missing or 'requested').
+   * Documents marked 'confirmed' are never touched — they may be real promises.
+   * After deleting, the staff must refresh the legacy slot safeguards so the
+   * private D1 holds stop reserving slots for removed records.
+   */
+  async function deleteUnpaidRequests() {
+    if (!user || bulkBusy) return;
+    if (!window.confirm('Delete every legacy request still marked Pending (no payment proof)?\n\nRecords marked Confirmed are never touched. Refresh the legacy slot safeguards afterwards.')) return;
+    setBulkBusy(true);
+    setAppointmentError(null);
+    setLegacyNotice('');
+    try {
+      const snap = await getDocs(query(collection(firestore, 'appointments'), limit(500)));
+      const unpaid = snap.docs.filter((d) => String(d.data()['status'] ?? 'requested') === 'requested');
+      let removed = 0;
+      for (let i = 0; i < unpaid.length; i += 400) {
+        const batch = writeBatch(firestore);
+        for (const d of unpaid.slice(i, i + 400)) batch.delete(d.ref);
+        await batch.commit();
+        removed += Math.min(400, unpaid.length - i);
+      }
+      setLegacyNotice(removed === 0
+        ? 'No unpaid legacy requests were left to delete.'
+        : `Deleted ${removed} unpaid legacy request${removed === 1 ? '' : 's'}. Refresh the legacy slot safeguards so those slots can be booked online again.`);
+    } catch (e) {
+      setAppointmentError(e instanceof Error ? e.message : 'Could not delete unpaid requests.');
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   const cardStyle: React.CSSProperties = {
     borderRadius: '20px',
     border: '1px solid var(--color-border)',
@@ -351,35 +378,53 @@ export function PublicSettingsView() {
   });
 
   return (
-    <div className="p-6 sm:p-8 space-y-8 max-w-5xl mx-auto">
-      {/* Top Title Banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-5 border-b border-zinc-800">
-        <div>
-          <h1 className="font-bold text-2xl sm:text-3xl text-white tracking-tight">
-            Studio settings
-          </h1>
-          <p className="text-body-xs text-zinc-400 mt-0.5">
-            Manage appointments, availability, and what customers see online.
-          </p>
+    <div className="p-6 sm:p-8 space-y-6 max-w-5xl mx-auto">
+      {/* Sticky action bar: live status and Save stay reachable while editing any panel. */}
+      <div className="sticky top-0 z-20 -mx-2 px-2 pt-3 pb-2 backdrop-blur">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-zinc-800">
+          <div>
+            <h1 className="font-bold text-2xl sm:text-3xl text-white tracking-tight">Studio settings</h1>
+            <p className="text-body-xs text-zinc-400 mt-0.5">Availability, pop-ups, and the bookings customers pay for online.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full"
+              style={settings?.bookingEnabled === false
+                ? { background: 'rgba(239,68,68,0.16)', color: '#f87171', border: '1px solid rgba(239,68,68,0.35)' }
+                : { background: 'rgba(16,185,129,0.16)', color: '#34d399', border: '1px solid rgba(16,185,129,0.35)' }}
+            >
+              {settings?.bookingEnabled === false ? 'Bookings paused' : 'Booking live'}
+            </span>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || !settings}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-ui-sm font-bold text-white transition-transform active:scale-95 disabled:opacity-50"
+              style={{ background: 'var(--color-brand)', boxShadow: 'var(--shadow-brand)', border: 'none' }}
+            >
+              <Save size={15} />
+              <span>{saving ? 'Saving…' : 'Save changes'}</span>
+            </button>
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving || !settings}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-ui-sm font-bold text-white transition-transform active:scale-95 disabled:opacity-50"
-          style={{ background: 'var(--color-brand)', boxShadow: 'var(--shadow-brand)', border: 'none' }}
-        >
-          <Save size={15} />
-          <span>{saving ? 'Saving…' : 'Save all changes'}</span>
-        </button>
+        {/* One panel at a time — no more scrolling past four stacked cards. */}
+        <nav aria-label="Settings sections" className="mt-3 flex flex-wrap gap-1.5 p-1 rounded-2xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)' }}>
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              aria-current={tab === t.id ? 'page' : undefined}
+              onClick={() => { setTab(t.id); window.history.replaceState(null, '', `#${ANCHORS[t.id]}`); }}
+              className="px-3.5 py-2 rounded-xl text-body-xs font-bold transition-colors"
+              style={tab === t.id ? { background: 'var(--color-brand)', color: '#fff' } : { background: 'transparent', color: 'var(--color-text-muted)' }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2" aria-label="Booking overview">
-        <a href="#booking-schedule" style={cardStyle} className="p-4 no-underline text-white"><span className="text-sm text-zinc-400">Booking form setting</span><p className="text-lg font-semibold mt-1">{settings?.bookingEnabled === false ? 'Paused' : 'Enabled'}</p><p className="text-sm text-zinc-400 mt-1">Schedule controls below · save to apply</p></a>
-        <div style={cardStyle} className="p-4"><span className="text-sm text-zinc-400">Reservation deposit</span><p className="text-lg font-semibold text-white mt-1">₱100 toward the final bill</p><p className="text-sm text-zinc-400 mt-1">Verify payment, then collect the balance.</p></div>
-      </div>
-      <PaidBookingsView />
       {saveError && (
         <div className="p-4 rounded-xl bg-red-950/60 border border-red-800 text-red-200 text-body-xs flex items-center gap-2">
           <AlertCircle size={16} />
@@ -394,8 +439,12 @@ export function PublicSettingsView() {
         </div>
       )}
 
-      {/* ════ SECTION 1: PUBLIC BOOKING & SCHEDULE CONTROLS ════ */}
-      <section id="booking-schedule" style={cardStyle} className="p-6 space-y-6">
+      <div className={tab === 'bookings' ? 'space-y-6' : 'hidden'}>
+        <PaidBookingsView />
+      </div>
+
+      {/* ════ PANEL 1: PUBLIC BOOKING & SCHEDULE CONTROLS ════ */}
+      <section id="booking-schedule" style={cardStyle} className={`p-6 space-y-6${tab === 'schedule' ? '' : ' hidden'}`}>
         <div className="flex items-center justify-between gap-3 pb-3 border-b border-zinc-800">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-violet-600/20 text-violet-400">
@@ -536,7 +585,7 @@ export function PublicSettingsView() {
       </section>
 
       {/* ════ SECTION 2: POP-UP EVENT & HOME STUDIO PROFILE ════ */}
-      <section id="popup-event" style={cardStyle} className="p-6 space-y-5">
+      <section id="popup-event" style={cardStyle} className={`p-6 space-y-5${tab === 'popups' ? '' : ' hidden'}`}>
         <div className="flex items-center gap-2.5 pb-3 border-b border-zinc-800">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-600/20 text-amber-400">
             <Megaphone size={18} />
@@ -598,17 +647,17 @@ export function PublicSettingsView() {
         </div>
       </section>
 
-      {/* ════ SECTION 3: INCOMING BOOKING REQUESTS ════ */}
-      <section id="incoming-requests" style={cardStyle} className="p-6 space-y-5">
+      {/* ════ PANEL 3: INCOMING BOOKING REQUESTS ════ */}
+      <section id="incoming-requests" style={cardStyle} className={`p-6 space-y-5${tab === 'legacy' ? '' : ' hidden'}`}>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-zinc-800">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-emerald-600/20 text-emerald-400">
               <CalendarCheck size={18} />
             </div>
             <div>
-              <h2 className="font-bold text-body text-white">Legacy unpaid appointment requests</h2>
-              <p className="text-xs text-amber-300">Import legacy slot safeguards above before launch; refresh after cancelling or deleting a legacy booking. These records do not prove payment. New paid bookings appear above.</p>
-              <p className="text-body-xs text-zinc-400">Review older reservations and manage cancellations</p>
+              <h2 className="font-bold text-body text-white">Legacy appointment requests</h2>
+              <p className="text-xs text-amber-300">Pre-payment records. They do not prove payment, and future ones hold their slot through the private safeguards — not through a deposit.</p>
+              <p className="text-body-xs text-zinc-400">Review, cancel or delete them, then refresh the legacy slot safeguards so the freed slots can be booked online again.</p>
             </div>
           </div>
 
@@ -631,6 +680,13 @@ export function PublicSettingsView() {
           </div>
         </div>
 
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          {user && <button type="button" onClick={() => void deleteUnpaidRequests()} disabled={bulkBusy} className="self-start rounded-xl px-3.5 py-2 text-body-xs font-bold" style={{ background: 'rgba(239,68,68,0.16)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.35)', opacity: bulkBusy ? 0.6 : 1 }}>{bulkBusy ? 'Deleting unpaid requests…' : 'Delete unpaid requests'}</button>}
+          <p className="text-body-xs text-zinc-500">Removes every record still marked Pending (no payment proof). Confirmed records are never touched. Run “Import / refresh legacy slot safeguards” afterwards.</p>
+        </div>
+
+        {legacyNotice && <p role="status" className="rounded-xl p-3 text-body-xs" style={{ background: 'rgba(16,185,129,0.12)', color: '#6ee7b7', border: '1px solid rgba(16,185,129,0.3)' }}>{legacyNotice}</p>}
+
         {appointmentError && (
           <div className="p-3 rounded-xl bg-red-950/60 border border-red-800 text-red-200 text-body-xs">
             {appointmentError}
@@ -647,7 +703,7 @@ export function PublicSettingsView() {
             No appointment requests found under this filter.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3">
+          <div role="region" aria-label="Legacy appointment requests" tabIndex={0} className="grid grid-cols-1 gap-3 max-h-[50vh] overflow-y-auto pr-1">
             {filteredAppointments.map((a) => {
               const id = String(a['id']);
               const status = String(a['status'] ?? 'requested');
