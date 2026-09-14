@@ -182,6 +182,26 @@ test('mismatched live/test key configuration blocks checkout before charging',as
   env.PAYMONGO_LIVE='true';assert.equal((await request('/bookings',input())).status,503);assert.equal(createCalls,0);
 });
 
+test('customer release frees an unpaid hold immediately and never frees a paid slot',async()=>{
+  const {b}=await book();
+  assert.equal((await request(`/bookings/${b.id}/release`,{})).status,404);
+  assert.equal((await request(`/bookings/${b.id}/release`,{},{Authorization:'Bearer wrong'})).status,404);
+  assert.equal(db.prepare('SELECT status FROM bookings WHERE id=?').get(b.id).status,'pending');
+  assert.equal((await request(`/bookings/${b.id}/release`,{},{Authorization:`Bearer ${b.token}`})).status,200);
+  assert.equal(db.prepare('SELECT status FROM bookings WHERE id=?').get(b.id).status,'expired');
+  assert.deepEqual((await (await request(`/availability?date=${b.date}`)).json()).unavailable,[]);
+  const replacement={...input(),date:b.date,time:b.time};await book(replacement);
+  assert.equal(db.prepare('SELECT count(*) n FROM outbox').get().n,0);
+});
+
+test('release verifies with the provider so a paid-but-unnotified slot stays owned and confirmed',async()=>{
+  const {b}=await book();pay(b);
+  const r=await request(`/bookings/${b.id}/release`,{},{Authorization:`Bearer ${b.token}`});
+  assert.equal(r.status,200);assert.equal((await r.json()).status,'confirmed');
+  assert.equal(db.prepare('SELECT status FROM bookings WHERE id=?').get(b.id).status,'confirmed');
+  assert.equal(db.prepare('SELECT count(*) n FROM outbox').get().n,2);
+});
+
 test('live mode end-to-end: sk_live_ key, li signature and livemode payment confirm exactly once',async()=>{
   env.PAYMONGO_LIVE='true';env.PAYMONGO_SECRET_KEY='sk_live_fake';
   const {b,result}=await book();assert.equal(result.status,'pending');

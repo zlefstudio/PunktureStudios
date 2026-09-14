@@ -202,6 +202,26 @@ async function route(request, env) {
     return json({unavailable:occupied.map(x=>x.time)});
   }
   if (request.method==='POST' && url.pathname==='/bookings') return create(request,env);
+  if (request.method==='POST' && /^\/bookings\/[^/]+\/release$/.test(url.pathname)) {
+    const id = url.pathname.split('/')[2];
+    const b = await sql(env,'SELECT * FROM bookings WHERE id=?',id).first();
+    const token = request.headers.get('Authorization')?.replace(/^Bearer /,'') || '';
+    if (!b || b.token_hash !== await sha(token)) fail(404,'Booking not found.');
+    // Already paid or already finished: never touch it.
+    if (b.payment_id || !['creating','pending'].includes(b.status)) return json(publicBooking(b));
+    if (b.session_id) {
+      // A customer may have paid and then clicked cancel. Verify with the provider before freeing the slot.
+      const session = await paymongo(env, `/checkout_sessions/${encodeURIComponent(b.session_id)}`);
+      if (paidPayment(session, b, env.PAYMONGO_LIVE === 'true')) {
+        await reconcile(env, b);
+        return json(publicBooking(await sql(env,'SELECT * FROM bookings WHERE id=?',id).first()));
+      }
+    }
+    const released = await sql(env,"UPDATE bookings SET status='expired' WHERE id=? AND payment_id IS NULL AND status IN ('creating','pending')",id).run();
+    const changed = released?.meta?.changes ?? released?.changes;
+    if (changed) await sql(env,'INSERT INTO audit(booking_id,action,createdAt) VALUES(?,?,?)',id,'customer_released_hold',Date.now()).run();
+    return json(publicBooking(await sql(env,'SELECT * FROM bookings WHERE id=?',id).first()));
+  }
   if (request.method==='GET' && url.pathname.startsWith('/bookings/')) {
     await expire(env);
     const b=await sql(env,'SELECT * FROM bookings WHERE id=?',url.pathname.split('/')[2]).first();

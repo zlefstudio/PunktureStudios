@@ -1,17 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { bookingApi } from '../../bookingApi';
 import type { PaymentBooking } from '../../types';
+
+function fetchBooking(id: string, token: string) {
+  return bookingApi<PaymentBooking>(`/bookings/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+}
 
 export function PaymentStatus({ id, token, cancelled = false }: { id: string; token: string; cancelled?: boolean }) {
   const [booking, setBooking] = useState<PaymentBooking | null>(null);
   const [error, setError] = useState('');
   const [now, setNow] = useState(Date.now());
+  const [releasing, setReleasing] = useState(false);
+  const autoReleased = useRef(false);
   useEffect(() => {
     let active = true;
     const refresh = async () => {
       if (active) setNow(Date.now());
       try {
-        const b = await bookingApi(`/bookings/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+        const b = await fetchBooking(id, token);
         if (active) { setBooking(b); setError(''); setNow(Date.now()); }
       } catch (e) { if (active) setError(e instanceof Error ? e.message : 'Status unavailable.'); }
     };
@@ -19,7 +25,35 @@ export function PaymentStatus({ id, token, cancelled = false }: { id: string; to
     const timer = setInterval(() => void refresh(), 5000);
     return () => { active = false; clearInterval(timer); };
   }, [id, token]);
-  const titles = { creating: 'Preparing payment', pending: cancelled || booking?.last_error === 'payment_failed' ? 'Payment not completed' : 'Waiting for verified payment', confirmed: 'Booking confirmed', expired: 'Reservation expired', payment_review: 'Payment received — admin review required', cancelled: 'Booking cancelled' };
+
+  // Leaving PayMongo with `cancelled=1` must not keep the slot busy for the full hold window.
+  useEffect(() => {
+    if (!cancelled || autoReleased.current || !booking) return;
+    if (booking.status !== 'pending' && booking.status !== 'creating') return;
+    autoReleased.current = true;
+    void (async () => {
+      try {
+        await bookingApi(`/bookings/${id}/release`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+        const b = await fetchBooking(id, token);
+        setBooking(b); setError(''); setNow(Date.now());
+      } catch { /* Keep the hold if the release cannot be confirmed; it still expires on its own. */ }
+    })();
+  }, [cancelled, booking, id, token]);
+
+  async function releaseHold() {
+    if (releasing) return;
+    setReleasing(true);
+    try {
+      await bookingApi(`/bookings/${id}/release`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+      const b = await fetchBooking(id, token);
+      setBooking(b); setError(''); setNow(Date.now());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not release the held slot.');
+    } finally {
+      setReleasing(false);
+    }
+  }
+  const titles = { creating: 'Preparing payment', pending: cancelled || booking?.last_error === 'payment_failed' ? 'Payment not completed' : 'Waiting for verified payment', confirmed: 'Booking confirmed', expired: cancelled ? 'Payment not completed — slot released' : 'Reservation expired', payment_review: 'Payment received — admin review required', cancelled: 'Booking cancelled' };
   return <section className="rounded-3xl p-6 space-y-4 bg-zinc-900 border border-zinc-700" aria-live="polite">
     <h2 className="text-2xl font-bold">{booking ? titles[booking.status] : 'Checking booking status…'}</h2>
     {error && <p role="alert" className="text-red-300">{error} Do not pay again while your status is uncertain. Keep your booking reference.</p>}
@@ -31,8 +65,11 @@ export function PaymentStatus({ id, token, cancelled = false }: { id: string; to
         <p>Temporary hold expires at {new Date(booking.expiresAt).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' })} Manila time. A redirect or payment screenshot does not confirm your booking.</p>
         {booking.checkout_url && booking.expiresAt > now && <a href={booking.checkout_url} rel="noreferrer" className="inline-block rounded-xl bg-violet-600 px-5 py-3 font-bold">Pay PHP 100.00 with PayMongo</a>}
         <p>Failed attempt? You may retry in the same PayMongo checkout before expiry.</p>
+        <button type="button" onClick={() => void releaseHold()} disabled={releasing} className="rounded-xl border border-zinc-600 px-4 py-2 font-semibold disabled:opacity-60">{releasing ? 'Releasing the held slot…' : 'Cancel and release this slot now'}</button>
+        <p>This frees the time slot immediately for other customers instead of holding it for the full 15 minutes. If your payment already went through, the slot stays yours.</p>
       </>}
-      {booking.status === 'creating' && <p>Checkout is being prepared or its response is delayed. Do not submit another payment. This temporary hold expires after 15 minutes.</p>}
+      {booking.status === 'creating' && <><p>Checkout is being prepared or its response is delayed. Do not submit another payment. This temporary hold expires after 15 minutes.</p>
+        <button type="button" onClick={() => void releaseHold()} disabled={releasing} className="rounded-xl border border-zinc-600 px-4 py-2 font-semibold disabled:opacity-60">{releasing ? 'Releasing the held slot…' : 'Cancel and release this slot now'}</button></>}
       {booking.status === 'expired' && <p>This slot is no longer held. If you were charged, contact the studio with this reference; a late payment requires review.</p>}
       {booking.status === 'payment_review' && <p>Your payment did not secure a slot. The studio has been queued for notification to arrange a refund or rescheduling.</p>}
       {booking.status === 'cancelled' && <p>Contact the studio about your reservation payment. Cancellation does not automatically issue a refund.</p>}

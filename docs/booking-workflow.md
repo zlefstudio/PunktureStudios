@@ -1,6 +1,6 @@
 # Booking and payment runbook
 
-**Current payment environment (2026-09-14 — LIVE mode): Gmail + Google Apps Script for email.** The Worker `punkture-booking` now runs `PAYMONGO_LIVE=true` with a verified live PayMongo account and `PAYMENT_METHODS=gcash`; `GET /availability` returns HTTP 200 (all readiness gates pass). Pre-live acceptance was exercised in test mode: two bookings reached `confirmed` through verified webhooks and four outbox jobs were marked `sent`. A real PHP 100.00 live payment, its signed webhook delivery and actual inbox delivery are still **pending**. See [PayMongo account switch to live](#paymongo-account-switch-to-live-executed-2026-09-14).
+**Current payment environment (2026-09-14 — LIVE mode, QR Ph): Gmail + Google Apps Script for email.** The Worker `punkture-booking` now runs `PAYMONGO_LIVE=true` with a verified but **unregistered (Individual)** PayMongo account, so `PAYMENT_METHODS=qrph` is the only valid channel choice; `GET /availability` returns HTTP 200 and a rendered preflight checkout shows QR Ph. Pre-live acceptance was exercised in test mode: two bookings reached `confirmed` through verified webhooks and four outbox jobs were marked `sent`. A real PHP 100.00 live payment, its signed webhook delivery and actual inbox delivery are still **pending**. See [PayMongo account switch to live](#paymongo-account-switch-to-live-executed-2026-09-14).
 
 ## Delivery status
 
@@ -42,9 +42,21 @@ The studio moved from the original PayMongo test account to a verified live acco
 
 7. Run one explicitly authorised real PHP 100.00 payment, then verify the signed live webhook (`li` signature), the `confirmed` status, both inboxes, and a 200 in the PayMongo endpoint delivery log before refunding.
 
+**Channel activation and hold release (learned live, 2026-09-14):**
+
+- **Match `PAYMENT_METHODS` to the account's business type — this is not optional.** PayMongo exposes Cards, GCash, Maya, GrabPay, ShopeePay, Google Pay, direct online banking and BNPL only to **registered** business types (Sole Proprietorship / Partnership / OPC / Corporation). A verified **Individual (unregistered)** account — valid government ID plus liveness, no DTI/SEC — may accept **QR Ph** only, which is active by default once the account is activated. Requesting `gcash` on an Individual account produces the exact live symptom recorded here:
+
+  | Hosted checkout page | Meaning |
+  | --- | --- |
+  | `No payment methods are available` | The requested `payment_method_types` are not activated for this account or business type. PayMongo still creates the session and returns a checkout URL, so `ready()`, `/availability` and the D1 ledger all look healthy. |
+  | A QR code / payment method renders | The requested channel is live. |
+
+- **Render one preflight checkout before declaring a launch healthy.** Create a booking through `POST /bookings` (or the public page), fetch the returned `checkout_url` with a browser user-agent, and confirm a method renders instead of the dead-end string. Then hand the slot back with `POST /bookings/:id/release` — no money moves. This is the only reliable activation check available: PayMongo exposes no API for channel activation state, and `wrangler secret list` names never prove a value.
+- **`POST /bookings/:id/release`** (bearer booking token) expires an unpaid `creating`/`pending` hold immediately, but first verifies with the provider — an already-paid slot is confirmed through `reconcile()` instead of being freed. The status page calls it automatically on the `cancelled=1` return and also shows a manual button, so a cancelled or abandoned checkout no longer blocks the slot for the full 15-minute hold. Release never touches a row that already carries a `payment_id`.
+
 **Deviation from step 10 below:** the studio kept the existing migrated D1 rather than standing up a separate live database, after an export backup and clearing the old-account session references. The two pre-live test-mode rows stay in the ledger (PHP 200 gross, annotated in `audit` as `prelive_test_payment_old_paymongo_account`) and must not be reported as real revenue.
 
-**Observed result (2026-09-14):** Worker version `d9d8b6c0-6246-4af6-9603-1d61f25c2637`, `PAYMONGO_LIVE="true"`, `PAYMENT_METHODS="gcash"`, `BOOKING_LAUNCH_READY="true"`, `/availability` HTTP 200, lint clean, seven-entry production build passing, and 79 local tests passing (a live-path test was added: `sk_live_` key + `li` signature + `livemode` payment confirms exactly once, and an attacker-signed `li` webhook is rejected). The real payment, webhook delivery and inbox acceptance are still pending; GCash-only was chosen because the studio absorbs fees (GCash 2.23% ≈ PHP 2.23 versus cards 3.125% + PHP 13.39 ≈ PHP 16.50 on the PHP 100.00 deposit).
+**Observed result (2026-09-14):** Worker version `db36e0ed-d11b-46cb-8674-47a4f8c27d61`, `PAYMONGO_LIVE="true"`, `PAYMENT_METHODS="qrph"`, `BOOKING_LAUNCH_READY="true"`, lint clean, seven-entry production build passing, and **81 local tests passing** (added live-path coverage: `sk_live_` key + `li` signature + `livemode` payment confirms exactly once and an attacker-signed `li` webhook is rejected; plus two release tests proving an unpaid hold frees the slot immediately and a paid-but-unnotified slot is confirmed instead of released). A rendered preflight checkout served 45 KB, contained the `qrph` method five times and **zero** occurrences of `No payment methods are available`; the release endpoint then returned `status: expired` and `/availability` immediately showed `[]`. QR Ph was chosen because the account is an Individual (unregistered) type, and it is also the cheapest channel at 1.34% (PHP 1.34) versus GCash 2.23% and cards 3.125% + PHP 13.39 (PHP 16.50) on the PHP 100.00 deposit. The real payment, webhook delivery and inbox acceptance are still pending.
 
 ## Verification record — 2026-09-10
 

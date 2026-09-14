@@ -12,7 +12,7 @@
     "FIREBASE_PROJECT_ID": "punkture-studios",
     "FIREBASE_API_KEY": "AIzaSyDQHORJgFp4WS9dK6x9MM2D8ycvE92pvb8",
     "PAYMONGO_LIVE": "true",
-    "PAYMENT_METHODS": "gcash",
+    "PAYMENT_METHODS": "qrph",
     "BOOKING_LAUNCH_READY": "true"
   }
 }
