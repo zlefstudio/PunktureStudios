@@ -42,7 +42,7 @@ beforeEach(() => {
       createCalls++;
       const a=JSON.parse(options.body).data.attributes;
       assert.equal(a.line_items[0].amount,10000); assert.equal(a.line_items[0].quantity,1); assert.equal(a.send_email_receipt,true);
-      const s={id:`cs_${createCalls}`,attributes:{...a,livemode:false,checkout_url:`https://checkout.paymongo.com/cs_${createCalls}`,payments:[]}};
+      const s={id:`cs_${createCalls}`,attributes:{...a,livemode:env.PAYMONGO_LIVE==='true',checkout_url:`https://checkout.paymongo.com/cs_${createCalls}`,payments:[]}};
       sessions.set(s.id,s); return Response.json({data:s});
     }
     const id=String(url).split('/').at(-1)==='expire'?String(url).split('/').at(-2):String(url).split('/').at(-1);
@@ -54,11 +54,13 @@ afterEach(()=>{globalThis.fetch=originalFetch;db.close();});
 function input() { return {id:crypto.randomUUID(),token:crypto.randomUUID(),name:'Customer',email:'customer@example.com',contact:'09171234567',notes:'Lobe',date:new Date(Date.now()+2*86400000+28800000).toISOString().slice(0,10),time:'13:00',policy:POLICY,consent:true}; }
 const request=(path, body, headers={})=>worker.fetch(new Request(`https://api.example${path}`,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...headers},...(body?{body:JSON.stringify(body)}:{})}),env);
 async function book(b=input()) { const r=await request('/bookings',b); assert.equal(r.status,200); return {b,result:await r.json()}; }
-function pay(b,amount=10000) { const row=db.prepare('SELECT * FROM bookings WHERE id=?').get(b.id); const s=sessions.get(row.session_id); s.attributes.payments=[{id:`pay_${b.id}`,attributes:{amount,currency:'PHP',status:'paid',livemode:false,paid_at:Math.floor(Date.now()/1000)}}]; return s; }
+function pay(b,amount=10000) { const row=db.prepare('SELECT * FROM bookings WHERE id=?').get(b.id); const s=sessions.get(row.session_id); s.attributes.payments=[{id:`pay_${b.id}`,attributes:{amount,currency:'PHP',status:'paid',livemode:env.PAYMONGO_LIVE==='true',paid_at:Math.floor(Date.now()/1000)}}]; return s; }
 async function webhook(session,id=crypto.randomUUID(),secret=env.PAYMONGO_WEBHOOK_SECRET) {
   const raw=JSON.stringify({data:{id,attributes:{type:'checkout_session.payment.paid',data:session}}});
   const t=Math.floor(Date.now()/1000); const signature=createHmac('sha256',secret).update(`${t}.${raw}`).digest('hex');
-  return worker.fetch(new Request('https://api.example/webhooks/paymongo',{method:'POST',headers:{'Paymongo-Signature':`t=${t},te=${signature},li=`},body:raw}),env);
+  // Live events are signed into `li`, test events into `te`; the other slot stays empty.
+  const header=env.PAYMONGO_LIVE==='true'?`t=${t},te=,li=${signature}`:`t=${t},te=${signature},li=`;
+  return worker.fetch(new Request('https://api.example/webhooks/paymongo',{method:'POST',headers:{'Paymongo-Signature':header},body:raw}),env);
 }
 test('end-to-end local flow: pending slot, verified webhook, receipt and admin email',async()=>{
   const {b,result}=await book(); assert.equal(result.status,'pending'); assert.equal(result.payment_id,null);
@@ -178,6 +180,17 @@ test('legacy import is authenticated, enables launch and preserves holds on conf
 
 test('mismatched live/test key configuration blocks checkout before charging',async()=>{
   env.PAYMONGO_LIVE='true';assert.equal((await request('/bookings',input())).status,503);assert.equal(createCalls,0);
+});
+
+test('live mode end-to-end: sk_live_ key, li signature and livemode payment confirm exactly once',async()=>{
+  env.PAYMONGO_LIVE='true';env.PAYMONGO_SECRET_KEY='sk_live_fake';
+  const {b,result}=await book();assert.equal(result.status,'pending');
+  const s=pay(b);assert.equal(s.attributes.livemode,true);
+  assert.equal((await webhook(s,'evt_live_attacker','attacker')).status,401);
+  assert.equal(db.prepare('SELECT status FROM bookings').get().status,'pending');
+  assert.equal((await webhook(s,'evt_live')).status,200);assert.equal((await webhook(s,'evt_live')).status,200);
+  assert.equal(db.prepare('SELECT status FROM bookings').get().status,'confirmed');
+  await deliver(env);assert.equal(sends.length,2);
 });
 
 test('Gmail ambiguous send is visible for manual review and never blindly resent',async()=>{

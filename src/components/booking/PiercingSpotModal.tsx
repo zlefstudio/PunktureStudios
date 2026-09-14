@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { PiercingHotspot } from './types';
 import type { BookingSelectedPiercing } from '../../types';
 import { X, Shield, Clock, Plus, Trash2, Check, AlertTriangle } from 'lucide-react';
 import { UPGRADES } from '../../constants';
+import { EarDiagram } from './EarDiagram';
+import { FaceDiagram } from './FaceDiagram';
+import { BodyDiagram } from './BodyDiagram';
 
 /** All initial-jewelry price tiers offered when a spot doesn't restrict them. */
 const DEFAULT_JEWELRY_PRICES = [0, 50, 150, 200];
@@ -24,102 +27,8 @@ interface PiercingSpotModalProps {
 }
 
 function SpotLocationGraphic({ spot }: { spot: PiercingHotspot }) {
-  const cx = (spot.x / 100) * 200;
-  const cy = (spot.y / 100) * 250;
-
-  if (spot.category === 'EAR') {
-    return (
-      <div
-        className="spot-location-graphic relative w-full rounded-2xl overflow-hidden flex items-center justify-center p-2 select-none"
-        style={{
-          height: '112px',
-          background: 'radial-gradient(circle at 50% 50%, rgba(139,92,246,0.14) 0%, rgba(17,21,32,0.95) 75%)',
-          border: '1px solid var(--color-border)',
-        }}
-      >
-        <span className="absolute top-2.5 left-3 text-[10px] font-mono tracking-wider text-zinc-400 font-semibold uppercase">
-          Anatomical Ear Map
-        </span>
-        <svg viewBox="0 0 200 250" className="h-full max-w-[130px]">
-          <path
-            d="M 70,40 C 110,25 165,40 170,95 C 175,140 155,170 140,190 C 130,205 120,230 95,235 C 75,238 70,215 75,195 C 80,175 85,165 75,155 C 60,140 50,120 53,105 C 55,90 65,85 72,85 C 65,70 60,50 70,40 Z"
-            fill="rgba(255,255,255,0.03)"
-            stroke="rgba(255,255,255,0.2)"
-            strokeWidth="2"
-          />
-          <path
-            d="M 72,48 C 105,38 152,48 157,92 C 162,130 145,155 130,172"
-            fill="none"
-            stroke="rgba(168,85,247,0.3)"
-            strokeWidth="1.5"
-          />
-          <circle cx={cx} cy={cy} r="14" fill="rgba(168,85,247,0.3)" className="animate-ping" />
-          <circle cx={cx} cy={cy} r="8" fill="rgba(139,92,246,0.5)" stroke="#a78bfa" strokeWidth="1.5" />
-          <circle cx={cx} cy={cy} r="3.5" fill="#34d399" />
-        </svg>
-      </div>
-    );
-  }
-
-  if (spot.category === 'FACE' || spot.category === 'ORAL') {
-    return (
-      <div
-        className="spot-location-graphic relative w-full rounded-2xl overflow-hidden flex items-center justify-center p-2 select-none"
-        style={{
-          height: '112px',
-          background: 'radial-gradient(circle at 50% 50%, rgba(139,92,246,0.14) 0%, rgba(17,21,32,0.95) 75%)',
-          border: '1px solid var(--color-border)',
-        }}
-      >
-        <span className="absolute top-2.5 left-3 text-[10px] font-mono tracking-wider text-zinc-400 font-semibold uppercase">
-          Facial Placement Map
-        </span>
-        <svg viewBox="0 0 200 250" className="h-full max-w-[130px]">
-          <path
-            d="M 60,40 C 90,30 110,30 140,40 C 155,65 158,110 150,155 C 142,195 117,220 100,228 C 83,220 58,195 50,155 C 42,110 45,65 60,40 Z"
-            fill="rgba(255,255,255,0.03)"
-            stroke="rgba(255,255,255,0.2)"
-            strokeWidth="2"
-          />
-          <path d="M 65,70 Q 75,66 85,72" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none" />
-          <path d="M 115,72 Q 125,66 135,70" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none" />
-          <path d="M 100,85 L 96,115 L 104,115" stroke="rgba(255,255,255,0.15)" strokeWidth="1.2" fill="none" />
-          <path d="M 85,140 Q 100,146 115,140" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" fill="none" />
-          <circle cx={cx} cy={cy} r="14" fill="rgba(168,85,247,0.3)" className="animate-ping" />
-          <circle cx={cx} cy={cy} r="8" fill="rgba(139,92,246,0.5)" stroke="#a78bfa" strokeWidth="1.5" />
-          <circle cx={cx} cy={cy} r="3.5" fill="#34d399" />
-        </svg>
-      </div>
-    );
-  }
-
-  // BODY
-  return (
-    <div
-      className="spot-location-graphic relative w-full rounded-2xl overflow-hidden flex items-center justify-center p-2 select-none"
-      style={{
-        height: '112px',
-        background: 'radial-gradient(circle at 50% 50%, rgba(139,92,246,0.14) 0%, rgba(17,21,32,0.95) 75%)',
-        border: '1px solid var(--color-border)',
-      }}
-    >
-      <span className="absolute top-2.5 left-3 text-[10px] font-mono tracking-wider text-zinc-400 font-semibold uppercase">
-        Torso &amp; Body Map
-      </span>
-      <svg viewBox="0 0 200 250" className="h-full max-w-[130px]">
-        <path
-          d="M 40,30 C 65,45 135,45 160,30 C 150,60 145,85 152,120 C 160,160 155,200 162,240 L 38,240 C 45,200 40,160 48,120 C 55,85 50,60 40,30 Z"
-          fill="rgba(255,255,255,0.03)"
-          stroke="rgba(255,255,255,0.2)"
-          strokeWidth="2"
-        />
-        <ellipse cx="100" cy="122" rx="4" ry="6" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-        <circle cx={cx} cy={cy} r="14" fill="rgba(168,85,247,0.3)" className="animate-ping" />
-        <circle cx={cx} cy={cy} r="8" fill="rgba(139,92,246,0.5)" stroke="#a78bfa" strokeWidth="1.5" />
-        <circle cx={cx} cy={cy} r="3.5" fill="#34d399" />
-      </svg>
-    </div>
-  );
+  const Diagram = spot.category === 'EAR' ? EarDiagram : spot.category === 'BODY' ? BodyDiagram : FaceDiagram;
+  return <div className="spot-location-graphic"><Diagram key={spot.id} previewId={spot.id} selectedNames={[spot.name]} onSelectSpot={() => {}} /></div>;
 }
 
 export function PiercingSpotModal({
@@ -153,12 +62,15 @@ export function PiercingSpotModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Prevent body scroll while modal is open
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+  // Keep the reference map in place when the mobile sheet opens and closes.
+  useLayoutEffect(() => {
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prev = { overflow: body.style.overflow, position: body.style.position, top: body.style.top, width: body.style.width };
+    Object.assign(body.style, { overflow: 'hidden', position: 'fixed', top: `${-scrollY}px`, width: '100%' });
     return () => {
-      document.body.style.overflow = prev;
+      Object.assign(body.style, prev);
+      window.scrollTo(0, scrollY);
     };
   }, []);
 

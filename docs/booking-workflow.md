@@ -1,12 +1,50 @@
 # Booking and payment runbook
 
-**Current email setup (2026-09-11): Gmail + Google Apps Script, replacing Resend. Start with [gmail-setup.md](gmail-setup.md).** The user has deployed the initial Worker and uploaded both PayMongo secrets; Gmail connection and full payment/inbox acceptance remain pending.
+**Current payment environment (2026-09-14 — LIVE mode): Gmail + Google Apps Script for email.** The Worker `punkture-booking` now runs `PAYMONGO_LIVE=true` with a verified live PayMongo account and `PAYMENT_METHODS=gcash`; `GET /availability` returns HTTP 200 (all readiness gates pass). Pre-live acceptance was exercised in test mode: two bookings reached `confirmed` through verified webhooks and four outbox jobs were marked `sent`. A real PHP 100.00 live payment, its signed webhook delivery and actual inbox delivery are still **pending**. See [PayMongo account switch to live](#paymongo-account-switch-to-live-executed-2026-09-14).
 
 ## Delivery status
 
 Implemented locally. Do not describe this as a production-tested integration until the staging checks below pass with the studio's own accounts. No live charge or email was sent during implementation. The user deployed the initial Worker; the Gmail update has not yet been deployed. The automated integration tests use the actual SQL migration, Worker request handlers, and Apps Script source with simulated external services, not live PayMongo or Gmail delivery.
 
 **Gmail verification — 2026-09-11:** All 51 tests, lint, production build, and Wrangler deployment dry-run passed. Actual Google authorization, script deployment, and inbox acceptance remain pending. The table below records the earlier pre-migration checks.
+
+## PayMongo account switch to live (executed 2026-09-14)
+
+The studio moved from the original PayMongo test account to a verified live account. The Worker fails closed on any key/mode mismatch, so the order below matters.
+
+1. Freeze public booking first (staff Public Settings → booking Paused) so no customer starts a checkout mid-switch.
+2. In the **new** PayMongo account: complete verification/KYC, activate **only** the channels the studio accepts, copy the **live** secret key (`sk_live_…`), then create a live webhook endpoint for `https://punkture-booking.zlef-dev.workers.dev/webhooks/paymongo` subscribed to `checkout_session.payment.paid` and copy **that endpoint's** signing secret. The secret is unique per endpoint; the old one is not reusable.
+3. Upload both values as Worker secrets — never in the repo, never in a `VITE_` variable:
+
+   ```sh
+   cd /Users/azifaith/Downloads/PunkTest
+   npx --yes wrangler@4 secret put PAYMONGO_SECRET_KEY --config backend/wrangler.jsonc
+   npx --yes wrangler@4 secret put PAYMONGO_WEBHOOK_SECRET --config backend/wrangler.jsonc
+   ```
+
+   Run these from the repo root: `--config backend/wrangler.jsonc` is a relative path and fails with `Could not read file` from inside `backend/`. `wrangler secret put` has **no empty-value check** (the bundled handler PUTs `text: secretValue` and prints `✨ Success! Uploaded secret …` even for an empty string) and it trims trailing whitespace only, so a leading space or quote silently breaks the `sk_live_` prefix check. The Cloudflare dashboard (Workers & Pages → Settings → Variables and Secrets) rejects empty values and is the safer path. Secrets survive a deploy; only `vars` need one.
+4. Backup, then neutralise the old account's leftovers:
+
+   ```sh
+   npx --yes wrangler@4 d1 export punkture-booking --remote --config backend/wrangler.jsonc --output /tmp/punkture-d1-backup-prelive.sql
+   npx --yes wrangler@4 d1 execute punkture-booking --remote --yes --config backend/wrangler.jsonc --command "UPDATE bookings SET session_id=NULL, checkout_url=NULL WHERE payment_id IS NULL AND status='expired'"
+   ```
+
+   Without this, the per-minute cron reconciler keeps requesting checkout sessions that do not exist on the new account and logs `reconciliation_retry` for up to 24 hours per row.
+5. Set `PAYMONGO_LIVE="true"` plus the activated `PAYMENT_METHODS` in `backend/wrangler.jsonc`, then `npx --yes wrangler@4 deploy --config backend/wrangler.jsonc`.
+6. Verify before spending money — `curl "https://punkture-booking.zlef-dev.workers.dev/availability?date=<future-date>"`:
+
+   | Response | Meaning |
+   | --- | --- |
+   | `{"unavailable":[]}` (HTTP 200) | Every readiness gate passes: legacy import done, `PAYMONGO_LIVE='true'`, key starts with `sk_live_`, launch flag on, webhook secret non-empty, mailer configured. |
+   | `{"error":"Payment environment is not configured correctly."}` | Secret key is empty/malformed, or the mode flag does not match the key prefix. Re-upload. |
+   | `{"error":"Online payments are not yet available. Please contact the studio."}` | `BOOKING_LAUNCH_READY` is not `true`, or the webhook secret is empty, or the mailer configuration is broken. |
+
+7. Run one explicitly authorised real PHP 100.00 payment, then verify the signed live webhook (`li` signature), the `confirmed` status, both inboxes, and a 200 in the PayMongo endpoint delivery log before refunding.
+
+**Deviation from step 10 below:** the studio kept the existing migrated D1 rather than standing up a separate live database, after an export backup and clearing the old-account session references. The two pre-live test-mode rows stay in the ledger (PHP 200 gross, annotated in `audit` as `prelive_test_payment_old_paymongo_account`) and must not be reported as real revenue.
+
+**Observed result (2026-09-14):** Worker version `d9d8b6c0-6246-4af6-9603-1d61f25c2637`, `PAYMONGO_LIVE="true"`, `PAYMENT_METHODS="gcash"`, `BOOKING_LAUNCH_READY="true"`, `/availability` HTTP 200, lint clean, seven-entry production build passing, and 79 local tests passing (a live-path test was added: `sk_live_` key + `li` signature + `livemode` payment confirms exactly once, and an attacker-signed `li` webhook is rejected). The real payment, webhook delivery and inbox acceptance are still pending; GCash-only was chosen because the studio absorbs fees (GCash 2.23% ≈ PHP 2.23 versus cards 3.125% + PHP 13.39 ≈ PHP 16.50 on the PHP 100.00 deposit).
 
 ## Verification record — 2026-09-10
 
