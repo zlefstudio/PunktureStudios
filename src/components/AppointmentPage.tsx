@@ -1,3 +1,4 @@
+import { bookingCartNotes, itemEstimate, readCartDraft, saveCartDraft, clearCartDraft } from './booking/cartSnapshot';
 import { editableEvents } from '../popupEvents';
 import { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -58,7 +59,7 @@ const BOOKING_SERVICES: OtherService[] = [...OTHER_SERVICES].sort((a, b) =>
 
 export function AppointmentPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [selectedPiercings, setSelectedPiercings] = useState<BookingSelectedPiercing[]>([]);
+  const [selectedPiercings, setSelectedPiercings] = useState<BookingSelectedPiercing[]>(readCartDraft);
   const [activeCategory, setActiveCategory] = useState<VisualCategory>('EAR');
   const [viewMode, setViewMode] = useState<ViewMode>('diagram');
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,6 +91,8 @@ export function AppointmentPage() {
     const params = new URLSearchParams(window.location.hash.slice(1));
     return params.get('booking') && params.get('token') ? { id: params.get('booking')!, token: params.get('token')!, cancelled: params.has('cancelled') } : null;
   });
+
+  useEffect(() => { if (!payment) saveCartDraft(selectedPiercings); }, [selectedPiercings, payment]);
 
   const pending = useRef(false);
   const requestId = useRef(crypto.randomUUID());
@@ -132,7 +135,7 @@ export function AppointmentPage() {
 
   // Compute total estimate
   const totalEstimate = selectedPiercings.reduce(
-    (sum, p) => sum + p.basePrice + (p.upgradePrice ?? 0),
+    (sum, p) => sum + itemEstimate(p),
     0
   );
 
@@ -208,24 +211,7 @@ export function AppointmentPage() {
     setError(null);
 
     try {
-      // Build clean structured notes with piercings breakdown
-      const itemsBreakdown = selectedPiercings.length > 0
-        ? `[Piercings: ${selectedPiercings
-            .map(
-              (p) =>
-                `${p.name}${p.side ? ` (${p.side})` : ''}${
-                  p.upgradePrice ? ` + ${p.upgradeLabel}` : ''
-                } - ₱${p.basePrice + (p.upgradePrice ?? 0)}`
-            )
-            .join(', ')} | Est: ₱${totalEstimate}]`
-        : '[No specific piercings pre-selected]';
-
-      const fullNotes = notes.trim()
-        ? `${itemsBreakdown} Note: ${notes.trim()}`
-        : itemsBreakdown;
-
-      // Truncate to 300 chars to strictly satisfy Firestore rules
-      const safeNotes = fullNotes.slice(0, 300);
+      const safeNotes = bookingCartNotes(selectedPiercings, notes);
 
       await bookingApi('/bookings', { method: 'POST', body: JSON.stringify({
         id: requestId.current, token: paymentToken.current, name: name.trim(), email: email.trim(),
@@ -234,6 +220,7 @@ export function AppointmentPage() {
       const next = { id: requestId.current, token: paymentToken.current, cancelled: false };
       window.history.replaceState(null, '', `#booking=${next.id}&token=${next.token}`);
       setShowWaiverModal(false);
+      clearCartDraft();
       setPayment(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not prepare your payment. Please retry with the same details.');
@@ -979,7 +966,7 @@ export function AppointmentPage() {
                           <span>
                             {p.name} {p.side ? `(${p.side})` : ''} {p.upgradeLabel ? `· ${p.upgradeLabel}` : ''}
                           </span>
-                          <span className="font-mono text-zinc-400">₱{p.basePrice + (p.upgradePrice ?? 0)}</span>
+                          <span className="font-mono text-zinc-400">₱{itemEstimate(p)}</span>
                         </div>
                       ))}
                       <div className="pt-2 border-t border-zinc-800 flex items-center justify-between font-bold text-white">

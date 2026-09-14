@@ -133,7 +133,7 @@ export function PaidBookingsView() {
               <p className="break-all font-mono text-[11px]">Booking {b.id}</p>
               <p className="break-all font-mono text-[11px]">Payment {b.payment_id || 'not verified'}</p>
             </div>
-            {b.notes && <p className="text-body-xs" style={{ color: 'var(--color-text)' }}>{b.notes}</p>}
+            {b.notes && <p className="text-body-xs whitespace-pre-wrap break-words" style={{ color: 'var(--color-text)' }}>{b.notes}</p>}
             {b.last_error && <p className="text-body-xs" style={{ color: '#fbbf24' }}>⚠ {b.last_error}</p>}
             {b.status === 'payment_review' && <p className="text-body-xs" style={{ color: '#fdba74' }}>No slot confirmed. Contact the customer; refund or reschedule manually in PayMongo.</p>}
             <details className="text-body-xs">

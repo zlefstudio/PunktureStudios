@@ -98,7 +98,7 @@ async function create(request, env) {
   let b;
   try { b = await request.json(); } catch { fail(400,'Invalid JSON.'); }
   if (!b || typeof b !== 'object') fail(400,'Invalid booking.');
-  for (const [key, max] of [['name',60],['email',254],['contact',80],['notes',300]]) {
+  for (const [key, max] of [['name',60],['email',254],['contact',80],['notes',20000]]) {
     if (typeof b[key] !== 'string' || b[key].length > max || (key !== 'notes' && !b[key].trim())) fail(400, 'Please complete your name, email and contact details.');
     b[key] = b[key].trim();
   }

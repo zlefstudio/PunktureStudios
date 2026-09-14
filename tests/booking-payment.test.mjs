@@ -218,3 +218,17 @@ test('Gmail ambiguous send is visible for manual review and never blindly resent
   await deliver(env);assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE status='needs_review'").get().n,2);
   const attempts=mailer.state.sent.length;await deliver(env);assert.equal(mailer.state.sent.length,attempts);
 });
+
+test('full cart snapshot survives checkout, staff retrieval and admin notification',async()=>{
+  const {bookingCartNotes}=await import('../src/components/booking/cartSnapshot.ts');
+  const items=Array.from({length:12},(_,i)=>({id:String(i),name:`Selected item ${i}`,category:'EAR',basePrice:400,upgradePrice:200,upgradeLabel:'200 Titanium',side:'right'}));
+  const notes=bookingCartNotes(items,'Please discuss placement.');
+  assert.ok(notes.length>300);
+  const {b}=await book({...input(),notes});
+  assert.equal(db.prepare('SELECT notes FROM bookings WHERE id=?').get(b.id).notes,notes);
+  const report=await (await request('/admin/bookings',null,{Authorization:'Bearer staff-token'})).json();
+  assert.equal(report.bookings.find(row=>row.id===b.id).notes,notes);
+  await webhook(pay(b));await deliver(env);
+  assert.ok(sends.find(message=>message.body.to[0]==='admin@example.com').body.text.includes(notes));
+  assert.equal((await request('/bookings',{...input(),notes:'x'.repeat(20001)})).status,400);
+});

@@ -1,3 +1,4 @@
+import { itemEstimate } from './cartSnapshot';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { BookingSelectedPiercing } from '../../types';
@@ -33,7 +34,7 @@ export function BookingCartBar({ items, onRemoveItem, onProceed }: BookingCartBa
   if (items.length === 0) return null;
 
   const totalEstimate = items.reduce(
-    (sum, item) => sum + item.basePrice + (item.upgradePrice ?? 0),
+    (sum, item) => sum + itemEstimate(item),
     0
   );
 
@@ -179,7 +180,7 @@ export function BookingCartBar({ items, onRemoveItem, onProceed }: BookingCartBa
                     {/* Price + Remove */}
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="font-mono font-bold text-white text-[13px]">
-                        ₱{it.basePrice + (it.upgradePrice ?? 0)}
+                        ₱{itemEstimate(it)}
                       </span>
                       <button
                         type="button"
