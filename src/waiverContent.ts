@@ -14,6 +14,8 @@ export interface WaiverCopy {
   risksTitle: string;
   risks: string;
   consent: string;
+  privacyConsent: string;
+  privacyView: string;
   cta: string;
 }
 
@@ -49,6 +51,8 @@ export const WAIVER_CONTENT: Record<WaiverLang, WaiverCopy> = {
     risks:
       'Body piercing involves piercing living tissue. Normal healing responses include swelling, localized tenderness, slight bleeding, crusting, releasing fluid (clear lymph fluid), and irritation bumps (especially if bumped, snagged, or slept on). Diligent aftercare significantly helps soothe bumps and prevents infection or migration.',
     consent: 'I have read, understood, and agree to the guidelines and aftercare instructions provided.',
+    privacyConsent: 'I have read, understood, and agree to the Privacy & Legal policy.',
+    privacyView: 'Read Privacy & Legal ↗',
     cta: 'Proceed',
   },
   fil: {
@@ -82,6 +86,8 @@ export const WAIVER_CONTENT: Record<WaiverLang, WaiverCopy> = {
     risks:
       'Ang pagpapaturok ng piercing ay pagbutas sa buhay na tissue. Normal ang pamamaga, kaunting pagdurugo, paglabas ng fluid (clear lymph fluid o crusties), at pagkakaroon ng bump o bukol (lalo na kung nasanggi, naipit sa damit, o natulugan). Ang tamang aftercare ang magpapakalma sa bump at poprotekta sa iyo laban sa impeksyon.',
     consent: 'Nabasa, naintindihan, at sumasang-ayon ako sa mga gabay at tagubilin sa aftercare na ibinigay.',
+    privacyConsent: 'Nabasa ko, naunawaan, at sumasang-ayon ako sa Privacy & Legal policy.',
+    privacyView: 'Basahin ang Privacy & Legal ↗',
     cta: 'Magpatuloy',
   },
 };

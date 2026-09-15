@@ -149,12 +149,19 @@ test('booking form requires waiver consent inside the review modal before submit
   assert.ok(modalBox, 'waiver consent modal should open on submit');
   assert.equal(bookingWrites.length, 0);
 
-  // The confirm button stays disabled until the checkbox is ticked.
+  // The confirm button stays disabled until BOTH checkboxes are ticked.
   const confirmBefore = [...document.body.querySelectorAll('button')].find(b => b.textContent.includes('Agree & Continue to PHP 100.00 Payment'));
   assert.ok(confirmBefore);
   assert.equal(confirmBefore.disabled, true);
 
+  const privacyBox = document.body.querySelector('#waiver-modal-privacy');
+  assert.ok(privacyBox, 'privacy & legal consent is present');
+
   await act(async () => modalBox.click());
+  assert.equal(confirmBefore.disabled, true, 'waiver alone is not enough');
+
+  await act(async () => privacyBox.click());
+  assert.equal(confirmBefore.disabled, false, 'both consents enable the pay button');
 
   // Double-clicking confirm must not create duplicate requests while pending.
   const confirmBtn = [...document.body.querySelectorAll('button')].find(b => b.textContent.includes('Agree & Continue to PHP 100.00 Payment'));
@@ -441,6 +448,13 @@ test('the waiver modal is full screen with the pay button outside the scrolling 
   assert.ok(dialog.className.includes('flex-col'), 'header, copy and actions stack');
   const scroller = dialog.querySelector('.overflow-y-auto');
   assert.ok(scroller, 'the waiver copy scrolls inside the panel');
+  const header = dialog.querySelector('.flex-shrink-0');
+  assert.ok(header && !header.textContent.includes('EN'), 'the language toggle moved out of the header');
+  assert.ok(scroller.textContent.includes('Language'), 'the language switch lives in the scrollable body');
+  assert.ok(dialog.querySelector('#waiver-modal-privacy'), 'privacy & legal consent is present');
+  const privacyLink = dialog.querySelector('a[href="https://punkture-studios.web.app/privacy"]');
+  assert.ok(privacyLink, 'the privacy link points at the live policy page');
+  assert.equal(privacyLink.getAttribute('target'), '_blank', 'the policy opens without leaving the booking');
   const cta = [...dialog.querySelectorAll('button')].find(b => b.textContent.includes('Agree & Continue'));
   assert.ok(cta && !scroller.contains(cta), 'the pay button stays visible outside the scrolling copy');
   assert.ok(!scroller.contains(dialog.querySelector('#waiver-modal-agree')), 'consent sits with the pay button');

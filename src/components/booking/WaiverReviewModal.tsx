@@ -7,6 +7,8 @@ import { WAIVER_CONTENT, type WaiverLang } from '../../waiverContent';
 interface WaiverReviewModalProps {
   agreed: boolean;
   onAgreedChange: (v: boolean) => void;
+  privacyAgreed: boolean;
+  onPrivacyAgreedChange: (v: boolean) => void;
   busy?: boolean;
   error?: string | null;
   onClose: () => void;
@@ -21,6 +23,8 @@ interface WaiverReviewModalProps {
 export function WaiverReviewModal({
   agreed,
   onAgreedChange,
+  privacyAgreed,
+  onPrivacyAgreedChange,
   busy = false,
   error = null,
   onClose,
@@ -79,28 +83,33 @@ export function WaiverReviewModal({
         aria-modal="true"
         aria-label="Before We Pierce — Studio Waiver"
       >
-        {/* Header — stays visible while the waiver scrolls */}
+        {/* Header — title + close only; the language switch lives inside the body */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-zinc-800 gap-2 flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <ShieldCheck size={22} className="text-violet-400 flex-shrink-0" />
             <h3 className="font-bold text-body text-white truncate">Before We Pierce — Studio Waiver</h3>
           </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            {langBtn('en', 'EN')}
-            {langBtn('fil', 'FIL')}
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="p-1 text-zinc-400 hover:text-white ml-1"
-            >
-              <X size={18} />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="p-1 text-zinc-400 hover:text-white ml-1 flex-shrink-0"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         {/* Waiver body — scrolls inside the panel */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 space-y-4">
+
+        {/* Language switch — moved down from the header */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--color-text-faint)' }}>Language · Wika</span>
+          <div className="flex items-center gap-1.5">
+            {langBtn('en', 'EN')}
+            {langBtn('fil', 'FIL')}
+          </div>
+        </div>
 
         {/* Intro */}
         <p className="text-body-xs text-zinc-300 leading-relaxed">{t.intro}</p>
@@ -192,11 +201,42 @@ export function WaiverReviewModal({
           </span>
         </label>
 
+        {/* Privacy & Legal consent */}
+        <label
+          className="flex items-start gap-3 p-3.5 rounded-2xl cursor-pointer"
+          style={{
+            background: privacyAgreed ? 'rgba(16,185,129,0.10)' : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${privacyAgreed ? 'rgba(16,185,129,0.35)' : 'var(--color-border-strong)'}`,
+          }}
+        >
+          <input
+            type="checkbox"
+            id="waiver-modal-privacy"
+            checked={privacyAgreed}
+            onChange={(e) => onPrivacyAgreedChange(e.target.checked)}
+            className="mt-0.5"
+            style={{ accentColor: 'var(--color-brand)', width: 16, height: 16, flexShrink: 0 }}
+          />
+          <span className="text-body-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+            {t.privacyConsent}{' '}
+            <a
+              href="https://punkture-studios.web.app/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-bold underline underline-offset-2"
+              style={{ color: 'var(--color-brand-text)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {t.privacyView}
+            </a>
+          </span>
+        </label>
+
         {error && <p className="text-body-xs font-semibold text-red-400">{error}</p>}
 
         <button
           type="button"
-          disabled={!agreed || busy}
+          disabled={!agreed || !privacyAgreed || busy}
           onClick={onSubmit}
           className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-ui-sm text-white transition-transform active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: 'var(--color-brand)', boxShadow: 'var(--shadow-brand)', border: 'none' }}

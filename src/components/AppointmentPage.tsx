@@ -82,6 +82,7 @@ export function AppointmentPage() {
   const [availabilityError, setAvailabilityError] = useState('');
   const [notes, setNotes] = useState('');
   const [waiverAgreed, setWaiverAgreed] = useState(false);
+  const [privacyAgreed, setPrivacyAgreed] = useState(false);
   const [showWaiverModal, setShowWaiverModal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -219,12 +220,13 @@ export function AppointmentPage() {
     }
     setError(null);
     setWaiverAgreed(false);
+    setPrivacyAgreed(false);
     setShowWaiverModal(true);
   }
 
   async function submitRequest() {
     if (pending.current) return;
-    if (!waiverAgreed) return;
+    if (!waiverAgreed || !privacyAgreed) return;
     pending.current = true;
     setBusy(true);
     setError(null);
@@ -1166,6 +1168,8 @@ export function AppointmentPage() {
           <WaiverReviewModal
             agreed={waiverAgreed}
             onAgreedChange={setWaiverAgreed}
+            privacyAgreed={privacyAgreed}
+            onPrivacyAgreedChange={setPrivacyAgreed}
             busy={busy}
             error={error}
             onClose={() => setShowWaiverModal(false)}

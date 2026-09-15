@@ -29,8 +29,8 @@ export const FACE_POINTS: MapPoint[] = [
   {id:'nostril',x:129,y:258,size:.54,landmark:'Nostril wing, above the opening'},
   {id:'septum',x:145,y:273,jewel:'septum',size:.48,landmark:'Inside the nose; jewelry emerges below the tip'},
   // Raised to sit on the brow itself (was y:184, which landed just under the brow hair).
-  {id:'eyebrow',x:76,y:173,jewel:'fold',size:.72,rotation:18,landmark:'Across the outer third of the brow ridge'},
-  {id:'anti_eyebrow',x:75,y:208,size:.5,landmark:'Cheekbone beneath the outer brow'},
+  {id:'eyebrow',x:72,y:168,jewel:'fold',size:.72,rotation:18,landmark:'Across the outer third of the brow ridge'},
+  {id:'anti_eyebrow',x:66,y:228,size:.5,landmark:'Upper cheek, below the brow tail'},
   {id:'medusa',x:145,y:288,size:.54,landmark:'Philtrum, above the Cupid’s bow'},
   {id:'madonna',x:115,y:291,size:.5,landmark:'Above the upper lip, on the wearer’s right'},
   {id:'jestrum',x:145,y:300,jewel:'vertical',size:.42,landmark:'Straight through the centre of the upper lip'},
@@ -56,7 +56,13 @@ export const NAVEL_POINTS: MapPoint[] = [
 // The supplied torso has no individually photographed nipple landmark, so this is
 // a labelled chest-line guide (with the modal's left/right picker) rather than an
 // invented anatomical mark; the piercer confirms the exact position in person.
-export const NIPPLE_POINT: MapPoint = onReference(BODY_IMAGE,{id:'nipple_single',x:340,y:205,jewel:'nipple',size:.8,landmark:'Chest, nipple line · mirrored on the other side'});
+// Position is derived from the torso's own landmarks, not guessed: the shot is
+// cropped at the neck (top edge ≈ sternal notch, source y≈25) and the navel dip
+// sits at (392, 614) — where NAVEL_POINTS already lands. The nipple line is ~50%
+// of the notch-to-navel span and ~20 cm below the notch, so source y ≈ 325; the
+// marker sits 100 source px (~7 cm) left of the x≈392 midline, which keeps the
+// whole horizontal barbell on the pectoral instead of on the sternum.
+export const NIPPLE_POINT: MapPoint = onReference(BODY_IMAGE,{id:'nipple_single',x:292,y:328,jewel:'nipple',size:.8,landmark:'Pectoral, nipple line · mirrored on the other side'});
 
 /** Voronoi partition clipped to a square hit target. Close facial spots cannot
  * steal one another's taps. Coordinates returned are local to the current point. */
