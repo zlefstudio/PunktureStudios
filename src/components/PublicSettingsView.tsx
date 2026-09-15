@@ -32,6 +32,18 @@ import {
 import { auth, firestore } from '../firebase';
 import { getLocalPublicSettings, saveLocalPublicSettings, syncNow } from '../sync';
 import type { PublicSettings } from '../types';
+import {
+  DEFAULT_DAYS,
+  DEFAULT_SLOTS,
+  SLOT_INTERVAL_MINUTES,
+  flattenDaySlots,
+  format12Hour,
+  slotRangesLabel,
+  slotsForDay,
+  studioDaySlots,
+  studioHoursLabel,
+  studioSlotsForDay,
+} from '../schedule';
 
 const LIVE_URL = 'https://punkture-studios.web.app/live.html';
 const HOME_URL = 'https://punkture-studios.web.app/home.html';
@@ -81,12 +93,20 @@ const DAYS_OF_WEEK = [
   { id: 6, label: 'Sat', full: 'Saturday' },
 ];
 
-function format12Hour(time24: string): string {
-  const [h, m] = time24.split(':').map(Number);
-  if (isNaN(h)) return time24;
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return `${hour12}:${m < 10 ? '0' + m : m} ${ampm}`;
+/**
+ * Slots currently in effect for one weekday: the saved per-weekday grid, else
+ * the legacy flat list, else the built-in studio hours (Saturday is shorter
+ * than Mon–Fri). This mirrors what the booking page and Worker resolve.
+ */
+function daySlotsOf(settings: PublicSettings | null, dayId: number): string[] {
+  return slotsForDay(settings, dayId);
+}
+
+/** True when the saved grid is exactly the built-in studio hours. */
+function matchesStudioHours(settings: PublicSettings | null): boolean {
+  const map = settings?.bookingDaySlots;
+  if (!map || Object.keys(map).length !== DEFAULT_DAYS.length) return false;
+  return DEFAULT_DAYS.every((day) => (map[String(day)] ?? []).join('|') === studioSlotsForDay(day).join('|'));
 }
 
 /** Left sidebar when in Settings tab */
@@ -139,6 +159,7 @@ export function PublicSettingsView() {
   // New slot & blackout date inputs
   const [newSlotInput, setNewSlotInput] = useState('');
   const [newBlockDateInput, setNewBlockDateInput] = useState('');
+  const [scheduleNotice, setScheduleNotice] = useState('');
 
   // Filter state for requests
   const [filterStatus, setFilterStatus] = useState<'all' | 'requested' | 'confirmed' | 'cancelled'>('all');
@@ -158,8 +179,9 @@ export function PublicSettingsView() {
             key: 'public',
             eventActive: false,
             bookingEnabled: true,
-            bookingDays: [0, 1, 2, 3, 4, 5, 6],
-            bookingSlots: ['13:00', '14:30', '16:00', '17:30', '19:00'],
+            bookingDays: [...DEFAULT_DAYS],
+            bookingSlots: [...DEFAULT_SLOTS],
+            bookingDaySlots: studioDaySlots(),
             blockedDates: [],
             bookingNoticeDays: 1,
             updatedAt: 0,
@@ -216,28 +238,48 @@ export function PublicSettingsView() {
     setSettings((s) => (s ? { ...s, [key]: value } : s));
   }
 
+  /** Toggling a day keeps its per-weekday grid in step (days off are removed). */
   function toggleDay(dayId: number) {
-    if (!settings) return;
-    const current = settings.bookingDays ?? [0, 1, 2, 3, 4, 5, 6];
-    const exists = current.includes(dayId);
-    const next = exists ? current.filter((d) => d !== dayId) : [...current, dayId].sort();
-    patch('bookingDays', next);
+    setSettings((s) => {
+      if (!s) return s;
+      const current = s.bookingDays ?? [...DEFAULT_DAYS];
+      const exists = current.includes(dayId);
+      const bookingDays = exists
+        ? current.filter((d) => d !== dayId)
+        : [...current, dayId].sort((a, b) => a - b);
+      const map = { ...(s.bookingDaySlots ?? {}) };
+      if (exists) delete map[String(dayId)];
+      else if (!(map[String(dayId)] ?? []).length) map[String(dayId)] = slotsForDay(s, dayId);
+      return { ...s, bookingDays, bookingDaySlots: map };
+    });
   }
 
-  function addTimeSlot() {
+  function setDaySlots(dayId: number, slots: string[]) {
+    setSettings((s) => (s ? { ...s, bookingDaySlots: { ...(s.bookingDaySlots ?? {}), [String(dayId)]: slots } } : s));
+  }
+
+  function addTimeSlot(dayId: number) {
     if (!newSlotInput || !settings) return;
-    const current = settings.bookingSlots ?? [];
-    if (!current.includes(newSlotInput)) {
-      const next = [...current, newSlotInput].sort();
-      patch('bookingSlots', next);
-    }
+    const current = daySlotsOf(settings, dayId);
+    if (!current.includes(newSlotInput)) setDaySlots(dayId, [...current, newSlotInput].sort());
     setNewSlotInput('');
   }
 
-  function removeTimeSlot(slot: string) {
+  function removeTimeSlot(dayId: number, slot: string) {
     if (!settings) return;
-    const current = settings.bookingSlots ?? [];
-    patch('bookingSlots', current.filter((s) => s !== slot));
+    setDaySlots(dayId, daySlotsOf(settings, dayId).filter((s) => s !== slot));
+  }
+
+  /** One click: Monday–Friday 9 AM–8 PM, Saturday 1 PM–5 PM, Sunday closed. */
+  function applyStudioHours() {
+    if (!settings) return;
+    setSettings({
+      ...settings,
+      bookingDays: [...DEFAULT_DAYS],
+      bookingDaySlots: studioDaySlots(),
+      bookingSlots: [...DEFAULT_SLOTS],
+    });
+    setScheduleNotice(`Studio hours applied (${studioHoursLabel()}, ${SLOT_INTERVAL_MINUTES}-minute appointments). Click Save all changes to publish them to customers.`);
   }
 
   function addBlockedDate() {
@@ -263,6 +305,11 @@ export function PublicSettingsView() {
     setSaveError(null);
     setSaved(false);
     try {
+      // Derive the legacy day list / flat slot list from the per-weekday grid so
+      // the saved document is self-consistent for every client and the Worker.
+      const bookingDays = (settings.bookingDays ?? [...DEFAULT_DAYS]).slice().sort((a, b) => a - b);
+      const bookingDaySlots = Object.fromEntries(bookingDays.map((day) => [String(day), daySlotsOf(settings, day)]));
+      const { slots: bookingSlots } = flattenDaySlots(bookingDaySlots);
       const next = await saveLocalPublicSettings({
         events: editableEvents(settings).map(event => Object.fromEntries(Object.entries(event).filter(([,value]) => value !== undefined)) as typeof event).sort((a,b) => a.eventDate.localeCompare(b.eventDate)),
         eventDate: settings.eventDate?.trim() ? settings.eventDate.trim() : undefined,
@@ -275,12 +322,14 @@ export function PublicSettingsView() {
         studioMapUrl: settings.studioMapUrl?.trim() ? settings.studioMapUrl.trim() : undefined,
         eventActive: settings.eventActive,
         bookingEnabled: settings.bookingEnabled !== false,
-        bookingDays: settings.bookingDays ?? [0, 1, 2, 3, 4, 5, 6],
-        bookingSlots: settings.bookingSlots ?? ['13:00', '14:30', '16:00', '17:30', '19:00'],
+        bookingDays,
+        bookingSlots,
+        bookingDaySlots,
         blockedDates: settings.blockedDates ?? [],
         bookingNoticeDays: settings.bookingNoticeDays ?? 1,
       });
       setSettings(next);
+      setScheduleNotice('');
       if (user) {
         await syncNow();
         setSavedMessage('Settings saved and synced live to customer websites!');
@@ -474,7 +523,7 @@ export function PublicSettingsView() {
           </label>
           <div className="flex flex-wrap gap-2">
             {DAYS_OF_WEEK.map((d) => {
-              const isChecked = (settings?.bookingDays ?? [0, 1, 2, 3, 4, 5, 6]).includes(d.id);
+              const isChecked = (settings?.bookingDays ?? DEFAULT_DAYS).includes(d.id);
               return (
                 <button
                   key={d.id}
@@ -494,46 +543,106 @@ export function PublicSettingsView() {
           </div>
         </div>
 
-        {/* Available Time Slots Manager */}
-        <div className="space-y-2.5">
-          <label className="text-body-xs font-bold text-zinc-300 uppercase tracking-wider block">
-            Available Time Slots
-          </label>
-          <div className="flex flex-wrap items-center gap-2">
-            {(settings?.bookingSlots ?? ['13:00', '14:30', '16:00', '17:30', '19:00']).map((slot) => (
-              <span
-                key={slot}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-body-xs font-bold bg-zinc-800/80 border border-zinc-700 text-white"
+        {/* Studio Hours & Per-Weekday Slot Manager */}
+        <div className="space-y-3 pt-2 border-t border-zinc-800">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <label className="text-body-xs font-bold text-zinc-300 uppercase tracking-wider block">
+                Studio Hours &amp; Appointment Slots
+              </label>
+              <p className="text-body-xs text-zinc-400">
+                {studioHoursLabel()} · {SLOT_INTERVAL_MINUTES}-minute appointments
+              </p>
+              <p
+                className="text-body-xs font-semibold"
+                style={{ color: matchesStudioHours(settings) ? 'var(--color-success-text)' : 'var(--color-warn-text)' }}
               >
-                <Clock size={12} className="text-violet-400" />
-                <span>{format12Hour(slot)}</span>
-                <button
-                  type="button"
-                  onClick={() => removeTimeSlot(slot)}
-                  className="p-0.5 hover:text-red-400 transition-colors"
-                  title="Remove slot"
-                >
-                  <XCircle size={14} />
-                </button>
-              </span>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2 max-w-xs pt-1">
-            <input
-              type="time"
-              value={newSlotInput}
-              onChange={(e) => setNewSlotInput(e.target.value)}
-              className="p-2 rounded-xl text-body-xs text-white bg-zinc-800/60 border border-zinc-700 flex-1"
-            />
+                {matchesStudioHours(settings)
+                  ? 'Saved schedule matches the studio hours above.'
+                  : 'Saved schedule differs from the studio hours above — apply and save to publish them.'}
+              </p>
+            </div>
             <button
               type="button"
-              onClick={addTimeSlot}
-              disabled={!newSlotInput}
-              className="px-3 py-2 rounded-xl text-body-xs font-bold bg-violet-600 text-white disabled:opacity-40"
+              onClick={applyStudioHours}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-body-xs font-bold text-white"
+              style={{ background: 'var(--color-brand)' }}
             >
-              <Plus size={14} className="inline mr-1" /> Add
+              <CalendarCheck size={14} /> Apply studio hours
             </button>
+          </div>
+
+          {scheduleNotice && (
+            <p className="text-body-xs font-semibold" style={{ color: 'var(--color-warn-text)' }}>{scheduleNotice}</p>
+          )}
+
+          <div className="space-y-2">
+            {DAYS_OF_WEEK.map((d) => {
+              const enabled = (settings?.bookingDays ?? DEFAULT_DAYS).includes(d.id);
+              const slots = daySlotsOf(settings, d.id);
+              return (
+                <div
+                  key={d.id}
+                  className="rounded-2xl p-3 space-y-2"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)' }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-body-xs font-bold text-white">{d.full}</span>
+                    <span className="text-[11px] text-zinc-400 text-right">
+                      {!enabled
+                        ? 'Not bookable — switch the day on above'
+                        : slots.length === 0
+                        ? 'No slots — this day cannot be booked'
+                        : `${slotRangesLabel(slots)} · ${slots.length} slots`}
+                    </span>
+                  </div>
+
+                  {enabled && (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {slots.map((slot) => (
+                          <span
+                            key={slot}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-body-xs font-bold bg-zinc-800/80 border border-zinc-700 text-white"
+                          >
+                            <Clock size={12} className="text-violet-400" />
+                            <span>{format12Hour(slot)}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeTimeSlot(d.id, slot)}
+                              className="p-0.5 hover:text-red-400 transition-colors"
+                              title={`Remove ${format12Hour(slot)} from ${d.full}`}
+                            >
+                              <XCircle size={14} />
+                            </button>
+                          </span>
+                        ))}
+                        {slots.length === 0 && (
+                          <p className="text-body-xs text-zinc-500">Add a slot to reopen this day.</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 max-w-xs">
+                        <input
+                          type="time"
+                          value={newSlotInput}
+                          onChange={(e) => setNewSlotInput(e.target.value)}
+                          className="p-2 rounded-xl text-body-xs text-white bg-zinc-800/60 border border-zinc-700 flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addTimeSlot(d.id)}
+                          disabled={!newSlotInput}
+                          className="px-3 py-2 rounded-xl text-body-xs font-bold bg-violet-600 text-white disabled:opacity-40"
+                        >
+                          <Plus size={14} className="inline mr-1" /> Add
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 

@@ -81,6 +81,21 @@ export function validateSettings(value: unknown): PublicSettings {
       }
     }
   }
+  if (s.bookingDays !== undefined) {
+    if (!Array.isArray(s.bookingDays) || s.bookingDays.length > 7 || new Set(s.bookingDays).size !== s.bookingDays.length) throw new Error('Keep up to 7 booking days.');
+    for (const day of s.bookingDays) {
+      number(day, 'booking day', 0, true);
+      if ((day as number) > 6) throw new Error('Invalid booking day.');
+    }
+  }
+  if (s.bookingSlots !== undefined) slotList(s.bookingSlots, 'booking time slots');
+  if (s.bookingDaySlots !== undefined) {
+    const map = object(s.bookingDaySlots);
+    for (const [day, slots] of Object.entries(map)) {
+      if (!/^[0-6]$/.test(day)) throw new Error('Invalid booking day.');
+      slotList(slots, 'booking time slots');
+    }
+  }
   return pick(s, [
     'events',
     'key',
@@ -97,9 +112,20 @@ export function validateSettings(value: unknown): PublicSettings {
     'bookingEnabled',
     'bookingDays',
     'bookingSlots',
+    'bookingDaySlots',
     'blockedDates',
     'bookingNoticeDays',
   ]) as unknown as PublicSettings;
+}
+/** One `HH:MM` slot list, at most 48 entries and no duplicates. */
+function slotList(value: unknown, label: string): asserts value is string[] {
+  if (!Array.isArray(value) || value.length > 48) throw new Error(`Keep up to 48 ${label}.`);
+  const seen = new Set<string>();
+  for (const slot of value) {
+    if (typeof slot !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(slot)) throw new Error(`Invalid ${label}.`);
+    if (seen.has(slot)) throw new Error(`Duplicate ${label}.`);
+    seen.add(slot);
+  }
 }
 function pick(value: Record<string, unknown>, fields: string[]): Record<string, unknown> {
   return Object.fromEntries(fields.filter(key => value[key] !== undefined).map(key => [key, value[key]]));

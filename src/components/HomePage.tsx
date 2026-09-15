@@ -14,6 +14,22 @@ import { mediaItems, type MediaItem } from './home/mediaItems.js';
 import { startHomeIntro } from './home/homeIntro';
 import './home/home.css';
 
+/**
+ * Eight-spoke asterisk drawn as an inline SVG instead of the "✳" dingbat
+ * (U+2733): several mobile browsers substitute that character with a colour
+ * emoji, which broke the flat brand mark. An SVG keeps the exact shape, colour
+ * and weight on every platform. Sizing lives in `home.css` (`.pk-asterisk`).
+ */
+function AsteriskMark() {
+  return (
+    <svg className="pk-asterisk" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <g fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+        <path d="M12 2.6v18.8M2.6 12h18.8M5.35 5.35l13.3 13.3M18.65 5.35l-13.3 13.3" />
+      </g>
+    </svg>
+  );
+}
+
 export function HomePage() {
   const [rawSettings, setPublicSettings] = useState<PublicSettings | null>(null);
   const [selected, setSelected] = useState<{ item: MediaItem; source: HTMLButtonElement } | null>(null);
@@ -72,7 +88,7 @@ export function HomePage() {
     <div className="pk-status-strip"><span className="pk-eyebrow"><i /> YOUR NEXT CHAPTER STARTS HERE</span><a href={hasEvent ? '/popup.html' : '/appointment.html'}>{hasEvent ? `${publicSettings.eventTitle || 'Next pop-up'} — ${eventDateRange(publicSettings)}` : 'Private studio sessions · By appointment'}<ArrowUpRight size={17} /></a></div>
     <section className="pk-intro pk-section" id="pk-selected">
       <p className="pk-eyebrow" data-reveal="0">01 / THE PUNKTURE PERSPECTIVE</p>
-      <div><h2 data-reveal="1">Life’s an RPG.<br />Never skip character creation.</h2><div className="pk-intro-bottom" data-reveal="2"><span className="pk-asterisk" aria-hidden="true">✳</span><div><p className="pk-intro-statement"><strong>Piercings are your IRL character customization.</strong></p><p>A quiet statement. A bold beginning. A little piece of who you are.</p></div><div className="pk-intro-actions"><a href="/appointment.html" className="pk-text-link"><strong>Start your build →</strong></a><a href="https://maps.app.goo.gl/4dPsJAiQHDwJxVsM6" target="_blank" rel="noopener noreferrer" className="pk-text-link">Punkture Point <ArrowUpRight size={18} /></a></div></div></div>
+      <div><h2 data-reveal="1">Life’s an RPG.<br />Never skip character creation.</h2><div className="pk-intro-bottom" data-reveal="2"><AsteriskMark /><div><p className="pk-intro-statement"><strong>Piercings are your IRL character customization.</strong></p><p>A quiet statement. A bold beginning. A little piece of who you are.</p></div><div className="pk-intro-actions"><a href="/appointment.html" className="pk-text-link"><strong>Start your build →</strong></a><a href="https://maps.app.goo.gl/4dPsJAiQHDwJxVsM6" target="_blank" rel="noopener noreferrer" className="pk-text-link"><strong>Location</strong> <ArrowUpRight size={18} /></a></div></div></div>
     </section>
     <section className="pk-gallery pk-section" aria-labelledby="pk-gallery-title">
       <div className="pk-section-heading" data-reveal="0"><h2 id="pk-gallery-title" className="pk-eyebrow">PIERCING GUIDES & RATES / 001—004</h2><span className="pk-eyebrow">PIERCING, IN YOUR OWN WAY</span></div>
@@ -83,7 +99,7 @@ export function HomePage() {
         </figure>)}
       </div><p className="pk-placeholder-note">Tap a guide or rate card to view it in full.</p>
     </section>
-    <div className="pk-marquee" aria-label="Your body. Your story. Your expression."><div aria-hidden="true">{[0, 1].map(i => <span key={i}>YOUR BODY. <b>✳</b> YOUR STORY. <b>✳</b> YOUR EXPRESSION. <b>✳</b> </span>)}</div></div>
+    <div className="pk-marquee" aria-label="Your body. Your story. Your expression."><div aria-hidden="true">{[0, 1].map(i => <span key={i}>YOUR BODY. <b><AsteriskMark /></b> YOUR STORY. <b><AsteriskMark /></b> YOUR EXPRESSION. <b><AsteriskMark /></b> </span>)}</div></div>
     <section className="pk-care pk-section"><div data-reveal="0"><p className="pk-eyebrow">02 / GOOD ENERGY. CONSIDERED CARE.</p><h2>A little edge.<br /><em>A lot of care.</em></h2></div><div className="pk-care-links" data-reveal="1">{[
       ['01', 'Before the moment', 'Everything to know before your session.', '/waiver.html'],
       ['02', 'After the sparkle', 'Give your new piercing the care it deserves.', '/aftercare.html'],

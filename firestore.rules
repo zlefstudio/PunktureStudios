@@ -88,6 +88,29 @@ service cloud.firestore {
     function separateEvents(a,b) {
       return a.get('eventEndDate', a.eventDate) < b.eventDate;
     }
+    // Per-weekday booking grid: weekday keys only ('0' = Sunday … '6' = Saturday)
+    // and each value a short list of 'HH:MM' slots. Slot contents are validated by
+    // the staff client (src/validation.ts) and re-checked by the booking Worker.
+    function validDaySlots(d) {
+      let map = d.get('bookingDaySlots', null);
+      return map == null || (map is map
+        && map.keys().hasOnly(['0', '1', '2', '3', '4', '5', '6'])
+        && (!('0' in map) || validSlotList(map['0']))
+        && (!('1' in map) || validSlotList(map['1']))
+        && (!('2' in map) || validSlotList(map['2']))
+        && (!('3' in map) || validSlotList(map['3']))
+        && (!('4' in map) || validSlotList(map['4']))
+        && (!('5' in map) || validSlotList(map['5']))
+        && (!('6' in map) || validSlotList(map['6'])));
+    }
+    function validSlotList(slots) {
+      return slots is list && slots.size() <= 48;
+    }
+    function validSlotLists(d) {
+      return (!('bookingSlots' in d) || validSlotList(d.bookingSlots))
+        && (!('bookingDays' in d) || (d.bookingDays is list && d.bookingDays.size() <= 7))
+        && validDaySlots(d);
+    }
     function validPopups(d) {
       return !('events' in d) || (d.events is list && d.events.size() <= 12
         && (d.events.size() <= 0 || validPopup(d.events[0]))
@@ -118,8 +141,9 @@ service cloud.firestore {
     match /public/public {
       allow read: if true;
       allow create, update: if isStaff()
-        && request.resource.data.keys().hasOnly(['key', 'events', 'eventActive', 'updatedAt', 'eventDate', 'eventLocation', 'eventMapUrl', 'eventTitle', 'eventHours', 'studioName', 'studioAddress', 'studioMapUrl', 'bookingEnabled', 'bookingDays', 'bookingSlots', 'blockedDates', 'bookingNoticeDays'])
+        && request.resource.data.keys().hasOnly(['key', 'events', 'eventActive', 'updatedAt', 'eventDate', 'eventLocation', 'eventMapUrl', 'eventTitle', 'eventHours', 'studioName', 'studioAddress', 'studioMapUrl', 'bookingEnabled', 'bookingDays', 'bookingSlots', 'bookingDaySlots', 'blockedDates', 'bookingNoticeDays'])
         && validPopups(request.resource.data)
+        && validSlotLists(request.resource.data)
         && request.resource.data.key == 'public' && request.resource.data.eventActive is bool
         && request.resource.data.updatedAt is number
         && optionalString(request.resource.data, 'eventDate', 2000)

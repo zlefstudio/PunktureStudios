@@ -28,14 +28,35 @@ export const EAR_POINTS: MapPoint[] = [
 export const FACE_POINTS: MapPoint[] = [
   {id:'nostril',x:129,y:258,size:.54,landmark:'Nostril wing, above the opening'},
   {id:'septum',x:145,y:273,jewel:'septum',size:.48,landmark:'Inside the nose; jewelry emerges below the tip'},
-  {id:'eyebrow',x:76,y:184,jewel:'fold',size:.72,rotation:18,landmark:'Across the outer third of the brow ridge'},
+  // Raised to sit on the brow itself (was y:184, which landed just under the brow hair).
+  {id:'eyebrow',x:76,y:173,jewel:'fold',size:.72,rotation:18,landmark:'Across the outer third of the brow ridge'},
+  {id:'anti_eyebrow',x:75,y:208,size:.5,landmark:'Cheekbone beneath the outer brow'},
   {id:'medusa',x:145,y:288,size:.54,landmark:'Philtrum, above the Cupid’s bow'},
-  {id:'labret',x:145,y:330,size:.54,landmark:'Centered below the lower lip'},
+  {id:'madonna',x:115,y:291,size:.5,landmark:'Above the upper lip, on the wearer’s right'},
+  {id:'jestrum',x:145,y:300,jewel:'vertical',size:.42,landmark:'Straight through the centre of the upper lip'},
+  {id:'angel_fangs',x:127,y:300,jewel:'vertical',size:.42,landmark:'Upper lip, mirrored on both sides'},
+  {id:'dahlia',x:110,y:318,size:.5,landmark:'Below the mouth corner, on the jaw line'},
+  // Ashley and Vertical Labret share the lower-lip centre; the markers are nudged
+  // apart so each keeps its own tappable cell while both stay centred.
+  {id:'ashley',x:145,y:311,size:.5,landmark:'Through the lower lip, exiting inside the mouth'},
+  {id:'vertical_labret',x:146,y:321,jewel:'vertical',size:.4,landmark:'Straight through the centre of the lower lip'},
+  {id:'snake_bites',x:129,y:320,size:.5,landmark:'Two piercings, one on each side of the lower lip'},
+  {id:'spider_bites',x:162,y:316,size:.5,landmark:'Two piercings along one side of the lower lip'},
+  {id:'labret',x:145,y:331,size:.54,landmark:'Centered below the lower lip'},
   {id:'monroe',x:175,y:289,size:.54,landmark:'Above the upper lip, on the wearer’s left'},
   {id:'dimple',x:94,y:306,size:.54,landmark:'Cheek, outside the mouth corner'},
 ].map(point => onReference(FACE_IMAGE, point as MapPoint));
-export const NAVEL_POINT = onReference(BODY_IMAGE,{id:'navel',x:393,y:611,jewel:'navel',size:.65,landmark:'Upper navel rim'});
-export const NIPPLE_POINT: MapPoint = {id:'nipple_single',x:200,y:224,jewel:'nipple',size:1,landmark:'Through the base of the nipple · detail view'};
+// Chest and navel share ONE torso graphic: the navel marker, the floating-navel
+// marker just below it, and the nipple-line marker on the chest. All are drawn
+// on the supplied torso reference so customers never switch views.
+export const NAVEL_POINTS: MapPoint[] = [
+  {id:'navel',x:393,y:611,jewel:'navel',size:.65,landmark:'Upper navel rim'},
+  {id:'floating_navel',x:393,y:627,jewel:'floating',size:.6,landmark:'Upper rim · flat lower end inside the navel'},
+].map(point => onReference(BODY_IMAGE, point as MapPoint));
+// The supplied torso has no individually photographed nipple landmark, so this is
+// a labelled chest-line guide (with the modal's left/right picker) rather than an
+// invented anatomical mark; the piercer confirms the exact position in person.
+export const NIPPLE_POINT: MapPoint = onReference(BODY_IMAGE,{id:'nipple_single',x:340,y:205,jewel:'nipple',size:.8,landmark:'Chest, nipple line · mirrored on the other side'});
 
 /** Voronoi partition clipped to a square hit target. Close facial spots cannot
  * steal one another's taps. Coordinates returned are local to the current point. */

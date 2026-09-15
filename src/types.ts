@@ -84,6 +84,13 @@ export interface PublicSettings {
   bookingDays?: number[];
   /** Allowed booking time slots, e.g. ['13:00', '14:30', '16:00', '17:30', '19:00']. */
   bookingSlots?: string[];
+  /**
+   * Per-weekday booking slots keyed by weekday number as a string
+   * ('0' = Sunday … '6' = Saturday), e.g. { '1': ['09:00', …], '6': ['13:00', …] }.
+   * When this map is present it wins over `bookingSlots`, and a weekday missing
+   * from it is closed (Sunday is closed by default).
+   */
+  bookingDaySlots?: Record<string, string[]>;
   /** Blackout dates when studio is unavailable, e.g. ['2026-09-15']. */
   blockedDates?: string[];
   /** Minimum days in advance to book (default: 1). */

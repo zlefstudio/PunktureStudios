@@ -8,9 +8,13 @@ interface BookingCartBarProps {
   items: BookingSelectedPiercing[];
   onRemoveItem: (id: string) => void;
   onProceed: () => void;
+  /** Hide the floating button while a full-screen modal (waiver, spot detail) owns the screen. */
+  hidden?: boolean;
+  /** Footer CTA label — follows the current booking step. */
+  nextLabel?: string;
 }
 
-export function BookingCartBar({ items, onRemoveItem, onProceed }: BookingCartBarProps) {
+export function BookingCartBar({ items, onRemoveItem, onProceed, hidden = false, nextLabel = 'Next: Schedule' }: BookingCartBarProps) {
   const [open, setOpen] = useState(false);
 
   // Close modal on Escape key
@@ -23,15 +27,23 @@ export function BookingCartBar({ items, onRemoveItem, onProceed }: BookingCartBa
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
-  // Lock body scroll when modal is open
+  // Lock body scroll when modal is open. The panel unmounts itself the moment the
+  // last item is removed or a modal takes over, so the lock also depends on those
+  // — otherwise a stuck `overflow: hidden` left the booking page unscrollable.
   useEffect(() => {
-    if (!open) return;
+    if (!open || hidden || items.length === 0) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
-  }, [open]);
+  }, [open, hidden, items.length]);
 
-  if (items.length === 0) return null;
+  // Emptying the cart or opening a full-screen modal closes the panel (and releases
+  // the lock above) instead of leaving it "open" with nothing to show.
+  useEffect(() => {
+    if (open && (hidden || items.length === 0)) setOpen(false);
+  }, [open, hidden, items.length]);
+
+  if (hidden || items.length === 0) return null;
 
   const totalEstimate = items.reduce(
     (sum, item) => sum + itemEstimate(item),
@@ -213,7 +225,7 @@ export function BookingCartBar({ items, onRemoveItem, onProceed }: BookingCartBa
                   </span>
                 </div>
 
-                {/* Next: Schedule CTA */}
+                {/* Next-step CTA — the label follows the booking step */}
                 <button
                   type="button"
                   onClick={() => {
@@ -227,7 +239,7 @@ export function BookingCartBar({ items, onRemoveItem, onProceed }: BookingCartBa
                     border: 'none',
                   }}
                 >
-                  <span>Next: Schedule</span>
+                  <span>{nextLabel}</span>
                   <ArrowRight size={18} />
                 </button>
               </div>

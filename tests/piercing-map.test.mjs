@@ -62,15 +62,15 @@ test('oral placements are inside a dedicated mouth view, never marked on facial 
  assert.equal(document.querySelector('[aria-label="Select Smiley piercing"]').getAttribute('transform'),'translate(200 220)');
  assert.equal(document.querySelector('[aria-label="Select Tongue piercing"]').getAttribute('transform'),'translate(200 318)');
 });
-test('floating navel shares the upper-rim location and uses a flat lower end',t=>{
- const {root,dom}=setup(t);
+test('floating navel sits on the same upper rim and uses a flat lower end',t=>{
+ const {root}=setup(t);
  act(()=>root.render(React.createElement(BodyDiagram,{selectedNames:[],onSelectSpot:()=>{}})));
- const position=document.querySelector('[aria-label="Select Navel piercing"]').getAttribute('transform');
- act(()=>document.querySelectorAll('.pm-view-switch button')[1].dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true})));
+ // Both navel placements now share one graphic, so both markers exist at once.
+ const navel=document.querySelector('[aria-label="Select Navel piercing"]');
  const floating=document.querySelector('[aria-label="Select Floating Navel piercing"]');
- assert.equal(floating.getAttribute('transform'),position);
- assert.ok(floating.querySelector('.pm-jewel ellipse'));
- assert.equal(document.querySelector('[aria-label="Select Navel piercing"]'),null);
+ assert.ok(navel&&floating,'navel and floating navel markers are both drawn');
+ assert.ok(floating.querySelector('.pm-jewel ellipse'),'floating navel uses the flat lower end');
+ assert.equal(document.querySelectorAll('.pm-view-switch').length,0,'no view switch on the body graphic');
 });
 
 test('modal previews reuse the selected anatomical detail without booking controls', t=>{
@@ -108,14 +108,43 @@ test('dense facial tap regions stay within their nearest landmark cells', async(
   }
  }
 });
-test('industrial has two rim targets, and chest uses a labeled detail rather than an invented torso landmark',t=>{
- const {root,dom}=setup(t);
+test('every face & oral placement has exactly one marker on a mapped view', async()=>{
+ const { FACE_POINTS }=await import('../src/components/booking/referenceGeometry.ts');
+ const { ORAL_POINTS }=await import('../src/components/booking/mapGeometry.ts');
+ const markerIds=new Set([...FACE_POINTS,...ORAL_POINTS].map(point=>point.id));
+ for(const spot of FACE_HOTSPOTS) assert.ok(markerIds.has(spot.id),`${spot.name} has no map marker on the face or inner-mouth view`);
+ // PiercingMap looks the catalog entry up by point id, so a stray marker would crash the map.
+ const catalogIds=new Set(FACE_HOTSPOTS.map(spot=>spot.id));
+ for(const id of markerIds) assert.ok(catalogIds.has(id),`${id} has a marker but no catalog entry`);
+});
+test('body markers keep their own tap cells on the shared torso graphic', async()=>{
+ const { NAVEL_POINTS,NIPPLE_POINT,hitCell }=await import('../src/components/booking/referenceGeometry.ts');
+ const points=[...NAVEL_POINTS,NIPPLE_POINT];
+ assert.equal(points.length,3,'navel, floating navel and the chest placement are all mapped');
+ for(const point of points) {
+  const vertices=hitCell(point,points).split(' ').map(pair=>pair.split(',').map(Number));
+  assert.ok(vertices.length>=3,`${point.id} needs its own tap cell`);
+  for(const [x,y] of vertices) for(const other of points) {
+   const own=x*x+y*y;
+   const otherDistance=(point.x+x-other.x)**2+(point.y+y-other.y)**2;
+   assert.ok(own<=otherDistance+.00001,`${point.id} target crossed into ${other.id}`);
+  }
+ }
+});
+test('the studio rate list is fully bookable on the face & oral tab', ()=>{
+ const names=new Set(FACE_HOTSPOTS.map(spot=>spot.name));
+ for(const name of ['Nostril','Eyebrow','Septum','Dahlia','Dimple','Anti Eyebrow','Labret','Vertical Labret','Ashley','Smiley','Madonna','Monroe','Medusa','Tongue','Jestrum','Spider Bites','Snake Bites','Angel Fangs']) {
+  assert.ok(names.has(name),`${name} is missing from the face & oral tab`);
+ }
+});
+test('industrial has two rim targets and every body placement shares one graphic',t=>{
+ const {root}=setup(t);
  act(()=>root.render(React.createElement(EarDiagram,{selectedNames:[],onSelectSpot:()=>{}})));
  assert.equal(document.querySelector('[aria-label="Select Industrial piercing"]').querySelectorAll('.pm-pin').length,2);
  act(()=>root.render(React.createElement(BodyDiagram,{selectedNames:[],onSelectSpot:()=>{}})));
- assert.equal(document.querySelector('[aria-label="Select Nipple (single) piercing"]'),null);
- const detail=[...document.querySelectorAll('.pm-view-switch button')].find(el=>el.textContent==='Chest detail');
- act(()=>detail.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true})));
- assert.ok(document.querySelector('[aria-label="Select Nipple (single) piercing"]'));
- assert.match(document.querySelector('.pm-sculpture').textContent,/SCHEMATIC/);
+ // Chest placement, navel and floating navel are drawn on the same torso image.
+ for(const name of ['Navel','Floating Navel','Nipple (single)']) {
+  assert.ok(document.querySelector(`[aria-label="Select ${name} piercing"]`),`${name} must share the body graphic`);
+ }
+ assert.equal(document.querySelectorAll('.pm-view-switch').length,0,'the body graphic has no view switch');
 });

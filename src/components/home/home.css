@@ -41,7 +41,10 @@
 .pk-intro h2, .pk-care h2 { font-size: clamp(38px, 5vw, 76px); }
 .pk-intro-bottom { display: grid; grid-template-columns: 40px 1fr; align-items: start; gap: 26px; max-width: 520px; margin-top: 35px; }
 .pk-intro-bottom p { font-size: 14px; line-height: 1.8; color: var(--color-text-muted); }
-.pk-asterisk { font-size: 48px; color: var(--color-brand-text); line-height: 1; }
+/* Brand asterisk: an inline SVG (not the "✳" glyph, which mobile browsers turn
+   into an emoji). Sized per context — fixed in the intro, text-relative in the
+   marquee so it scales with the clamp() font size. */
+.pk-asterisk { display: inline-block; width: 40px; height: 40px; color: var(--color-brand-text); }
 .pk-text-link { grid-column: 2; width: fit-content; display: flex; align-items: center; gap: 14px; font-size: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--color-brand-text); }
 .pk-gallery { padding-top: 0; }
 .pk-section-heading { display: flex; justify-content: space-between; gap: 20px; padding-bottom: 24px; border-bottom: 1px solid var(--pk-line); margin-bottom: 40px; }
@@ -68,6 +71,7 @@
 .pk-marquee > div { display: flex; width: max-content; animation: pk-home-marquee 28s linear infinite; }
 .pk-marquee span { white-space: nowrap; font-size: clamp(42px, 7vw, 110px); letter-spacing: -.05em; line-height: 1.2; }
 .pk-marquee b { font-weight: 400; color: var(--color-brand-text); padding: 0 25px; }
+.pk-marquee .pk-asterisk { width: .62em; height: .62em; vertical-align: -.04em; }
 .pk-marquee:hover > div, .pk-home:has(.pk-pause[aria-pressed='true']) .pk-marquee > div { animation-play-state: paused; }
 @keyframes pk-home-marquee { to { transform: translateX(-50%); } }
 .pk-care { display: grid; grid-template-columns: 1fr 1fr; gap: 10%; }

@@ -35,21 +35,17 @@ import {
   ListFilter,
   Sparkles,
   AlertTriangle,
+  Users,
 } from 'lucide-react';
 import { validAppointmentDate } from '../validation';
+import { DEFAULT_DAYS, DEFAULT_SLOTS, format12Hour, slotRangesLabel, slotsForDay } from '../schedule';
 
 type VisualCategory = 'EAR' | 'FACE' | 'BODY' | 'OTHERS';
 type ViewMode = 'diagram' | 'list';
 
-const DEFAULT_SLOTS = ['13:00', '14:30', '16:00', '17:30', '19:00'];
-const DEFAULT_DAYS = [1, 2, 3, 4, 5, 6, 0]; // All days
-
-function format12Hour(time24: string): string {
-  const [h, m] = time24.split(':').map(Number);
-  if (isNaN(h)) return time24;
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const hour12 = h % 12 === 0 ? 12 : h % 12;
-  return `${hour12}:${m < 10 ? '0' + m : m} ${ampm}`;
+/** Manila weekday of a YYYY-MM-DD date (0 = Sunday … 6 = Saturday). */
+function weekdayOf(dateStr: string): number {
+  return new Date(`${dateStr}T12:00:00+08:00`).getUTCDay();
 }
 
 // Other Services tab order — Aftercare Solution pinned to the top.
@@ -80,6 +76,8 @@ export function AppointmentPage() {
   const [contact, setContact] = useState('');
   const [email, setEmail] = useState('');
   const [unavailable, setUnavailable] = useState<string[]>([]);
+  /** Slots the Worker accepts for the selected date (`/availability.slots`); null until known. */
+  const [serverSlots, setServerSlots] = useState<string[] | null>(null);
   const [availabilityReady, setAvailabilityReady] = useState(false);
   const [availabilityError, setAvailabilityError] = useState('');
   const [notes, setNotes] = useState('');
@@ -102,10 +100,20 @@ export function AppointmentPage() {
     if (!date || payment) return;
     let active = true;
     setAvailabilityReady(false);
+    setServerSlots(null);
     const refresh = async () => {
       try {
-        const data = await bookingApi<{ unavailable: string[] }>(`/availability?date=${date}`);
-        if (active) { setUnavailable(data.unavailable); setAvailabilityReady(true); setAvailabilityError(''); setTime(t => data.unavailable.includes(t) ? '' : t); }
+        // `slots` is the Worker's accepted list for this weekday. Using it (when sent)
+        // means the page can never offer a slot the backend would reject — even if the
+        // saved schedule and this bundle were published in a different order.
+        const data = await bookingApi<{ slots?: string[]; unavailable: string[] }>(`/availability?date=${date}`);
+        if (!active) return;
+        const slots = Array.isArray(data.slots) ? data.slots : null;
+        setServerSlots(slots);
+        setUnavailable(data.unavailable);
+        setAvailabilityReady(true);
+        setAvailabilityError('');
+        setTime(t => (!t || data.unavailable.includes(t) || (slots !== null && !slots.includes(t)) ? '' : t));
       } catch (e) { if (active) { setAvailabilityReady(false); setAvailabilityError(e instanceof Error ? e.message : 'Availability unavailable.'); } }
     };
     void refresh();
@@ -128,16 +136,27 @@ export function AppointmentPage() {
   const allowedDays = publicSettings?.bookingDays && publicSettings.bookingDays.length > 0
     ? publicSettings.bookingDays
     : DEFAULT_DAYS;
-  const availableSlots = publicSettings?.bookingSlots && publicSettings.bookingSlots.length > 0
-    ? publicSettings.bookingSlots
+  // Slots belong to the weekday of the chosen date: Mon–Fri and Saturday differ.
+  // The Worker's accepted list wins when it is known, so the grid always matches
+  // what POST /bookings will accept.
+  const availableSlots = date
+    ? (serverSlots ?? slotsForDay(publicSettings, weekdayOf(date)))
     : DEFAULT_SLOTS;
   const blockedDates = new Set(publicSettings?.blockedDates ?? []);
+
+  // The floating cart's CTA follows the booking step: it advances from step 1/2,
+  // and on the details step it just returns the customer to the review they were on.
+  function handleCartProceed() {
+    if (step === 1) setStep(2);
+    else if (step === 2 && date && time) setStep(3);
+  }
 
   // Compute total estimate
   const totalEstimate = selectedPiercings.reduce(
     (sum, p) => sum + itemEstimate(p),
     0
   );
+
 
   // Hotspot selection handlers
   function handleSelectSpot(spot: PiercingHotspot, side?: 'left' | 'right') {
@@ -223,7 +242,13 @@ export function AppointmentPage() {
       clearCartDraft();
       setPayment(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not prepare your payment. Please retry with the same details.');
+      const message = err instanceof Error ? err.message : '';
+      // A policy/consent rejection means this bundle and the payment Worker disagree
+      // about the deposit terms — usually a half-finished deploy. Tell the customer to
+      // refresh instead of showing the raw backend error.
+      setError(/invalid booking details or consent/i.test(message)
+        ? 'This booking form is out of date. Please refresh the page and try again — if it still fails, message the studio on Instagram and we will book you in.'
+        : message || 'Could not prepare your payment. Please retry with the same details.');
     } finally {
       pending.current = false;
       setBusy(false);
@@ -245,16 +270,18 @@ export function AppointmentPage() {
         day: '2-digit',
       }).format(d);
 
-      const dayOfWeek = new Date(`${dateStr}T12:00:00+08:00`).getUTCDay(); // 0 = Sun, 1 = Mon ...
+      const dayOfWeek = weekdayOf(dateStr); // 0 = Sun, 1 = Mon ...
       const isAllowedDay = allowedDays.includes(dayOfWeek);
       const isBlocked = blockedDates.has(dateStr) || editableEvents(publicSettings).some(e => e.eventActive && e.eventDate <= dateStr && (e.eventEndDate || e.eventDate) >= dateStr);
+      // A day with no slot (e.g. Sunday or a fully booked-out grid) is not selectable.
+      const hasSlots = slotsForDay(publicSettings, dayOfWeek).length > 0;
 
       days.push({
         dateStr,
         label: d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' }),
         dayName: d.toLocaleDateString('en-PH', { weekday: 'short', timeZone: 'Asia/Manila' }),
         dayNum: Number(dateStr.slice(8)),
-        available: isAllowedDay && !isBlocked,
+        available: isAllowedDay && !isBlocked && hasSlots,
       });
     }
     return days;
@@ -308,6 +335,30 @@ export function AppointmentPage() {
         ) : (
           /* Multi-step Booking Form */
           <div className="space-y-6">
+            {/* Visit size — highlighted once, at the top of the wizard */}
+            <div
+              className="rounded-2xl p-4 flex items-start gap-3"
+              style={{
+                background: 'linear-gradient(135deg, rgba(139,92,246,0.18), rgba(16,185,129,0.10))',
+                border: '1px solid rgba(167,139,250,0.45)',
+                boxShadow: '0 8px 26px rgba(139,92,246,0.14)',
+              }}
+            >
+              <span
+                className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center"
+                style={{ background: 'rgba(139,92,246,0.25)', color: 'var(--color-brand-text)' }}
+              >
+                <Users size={18} />
+              </span>
+              <div className="space-y-1">
+                <p className="text-body-xs font-bold text-white">Up to 3 people per appointment</p>
+                <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+                  Our home studio is small and personal, so we can warmly host you plus up to two companions —
+                  three people in total. Extra company is welcome to wait outside, and it helps us keep the room
+                  calm and sterile for your piercing. Thank you for understanding!
+                </p>
+              </div>
+            </div>
             {/* Booking Process Stepper */}
             <div
               className="rounded-3xl p-4 sm:p-5 space-y-3"
@@ -323,7 +374,7 @@ export function AppointmentPage() {
                     Booking Flow
                   </span>
                   <span className="text-body-xs font-bold text-white">
-                    {step === 1 ? 'Step 1: Choose Piercings' : step === 2 ? 'Step 2: Pick Schedule' : 'Step 3: Client Details'}
+                    {step === 1 ? 'Choose your piercings' : step === 2 ? 'Pick your schedule' : 'Your details'}
                   </span>
                 </div>
                 <span className="text-[11px] font-mono font-bold text-zinc-400">
@@ -370,17 +421,17 @@ export function AppointmentPage() {
                 {[
                   {
                     num: 1,
-                    title: '1. Select Piercings',
+                    title: 'Select Piercings',
                     sub: selectedPiercings.length > 0 ? `${selectedPiercings.length} selected` : 'Pick spots',
                   },
                   {
                     num: 2,
-                    title: '2. Pick Schedule',
+                    title: 'Pick Schedule',
                     sub: 'Date & time',
                   },
                   {
                     num: 3,
-                    title: '3. Your Details',
+                    title: 'Your Details',
                     sub: 'Contact & confirm',
                   },
                 ].map((s) => {
@@ -815,16 +866,16 @@ export function AppointmentPage() {
                   </div>
                 )}
 
-                {/* Skip / Direct Next if user already knows what they want */}
-                <div className="pt-2 text-center">
+                {/* Step 1 action: matches the other step CTAs — full width, no back control. */}
+                <div className="pt-3">
                   <button
                     type="button"
                     onClick={() => setStep(2)}
-                    className="text-body-xs font-semibold text-zinc-400 hover:text-white underline underline-offset-4"
+                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-ui text-white transition-transform active:scale-95"
+                    style={{ background: 'var(--color-brand)', boxShadow: 'var(--shadow-brand)' }}
                   >
-                    {selectedPiercings.length > 0
-                      ? 'Continue with chosen piercings →'
-                      : 'Skip placement selection & proceed to schedule →'}
+                    <span>{selectedPiercings.length > 0 ? 'Next: Pick Schedule' : 'Skip to Schedule'}</span>
+                    <ChevronRight size={18} />
                   </button>
                 </div>
               </div>
@@ -836,15 +887,8 @@ export function AppointmentPage() {
                 <div className="flex items-center justify-between">
                   <h2 className="font-bold text-body text-white flex items-center gap-2">
                     <CalendarIcon size={18} className="text-violet-400" />
-                    1. Select an Available Date
+                    Select an Available Date
                   </h2>
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className="text-body-xs font-semibold text-zinc-400 hover:text-white flex items-center gap-1"
-                  >
-                    <ChevronLeft size={14} /> Back to Piercings
-                  </button>
                 </div>
 
                 {/* Available Date Chips / Horizontal Picker */}
@@ -887,10 +931,20 @@ export function AppointmentPage() {
                   <div className="space-y-3 pt-3 border-t border-zinc-800">
                     <h2 className="font-bold text-body text-white flex items-center gap-2">
                       <Clock size={18} className="text-violet-400" />
-                      2. Choose a Time Slot
+                      Choose a Time Slot
+                      {availableSlots.length > 0 && (
+                        <span className="text-body-xs font-normal" style={{ color: 'var(--color-text-muted)' }}>
+                          {slotRangesLabel(availableSlots)} · 45-minute appointments
+                        </span>
+                      )}
                     </h2>
                     {availabilityError && <p role="alert" className="text-red-300">{availabilityError}</p>}
                     {!availabilityReady && !availabilityError && <p>Checking slot availability…</p>}
+                    {availabilityReady && !availabilityError && availableSlots.length === 0 && (
+                      <p className="text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
+                        No time slots are open on this date. Please choose another day — or message the studio and we will find a slot for you.
+                      </p>
+                    )}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                       {availableSlots.map((slot) => {
                         const isSelected = time === slot;
@@ -915,13 +969,26 @@ export function AppointmentPage() {
                   </div>
                 )}
 
-                {/* Step 2 Action Button */}
-                <div className="pt-3">
+                {/* Step 2 actions: Back sits beside the step CTA */}
+                <div className="pt-3 flex items-stretch gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    className="flex items-center justify-center gap-1.5 px-4 py-3.5 rounded-2xl font-bold text-ui-sm transition-transform active:scale-95"
+                    style={{
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid var(--color-border)',
+                      color: 'var(--color-text-muted)',
+                    }}
+                  >
+                    <ChevronLeft size={18} />
+                    <span>Back</span>
+                  </button>
                   <button
                     type="button"
                     disabled={!date || !time || !availabilityReady || unavailable.includes(time)}
                     onClick={() => setStep(3)}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-ui text-white transition-transform active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-ui text-white transition-transform active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{ background: 'var(--color-brand)', boxShadow: 'var(--shadow-brand)' }}
                   >
                     <span>Next: Client Details</span>
@@ -1042,7 +1109,15 @@ export function AppointmentPage() {
                 <div className="rounded-xl border border-violet-500 p-4 space-y-2">
                   <h3 className="font-bold">Due now: PHP 100.00 deposit — deducted from your final total</h3>
                   <p className="text-body-xs">{RESERVATION_POLICY}</p>
-                  <p className="text-body-xs">The studio absorbs gateway fees. Your payment total is PHP 100.00. The slot is held temporarily for 15 minutes and confirmed only after backend verification.</p>
+                  <ul className="text-body-xs space-y-1 list-disc pl-4" style={{ color: 'var(--color-text-muted)' }}>
+                    <li>Cancelling or rescheduling 24 hours or more before your appointment keeps the PHP 100.00 refundable in full on request.</li>
+                    <li>Less than 24 hours notice uses the PHP 100.00 as the cancellation fee.</li>
+                    <li>Arriving 15 minutes or more after your slot uses the PHP 100.00 as the late fee.</li>
+                  </ul>
+                  <p className="text-body-xs">The studio absorbs gateway fees, so your payment total is exactly PHP 100.00. The slot is held temporarily for 15 minutes and confirmed only after backend verification.</p>
+                  <p className="text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
+                    Quick reminder: up to 3 people may join the appointment — you plus two companions.
+                  </p>
                 </div>
                 {/* Final Submit Button */}
                 <button
@@ -1077,11 +1152,13 @@ export function AppointmentPage() {
           />
         )}
 
-        {/* ── Floating Cart FAB — always visible when piercings are selected ── */}
+        {/* ── Floating Cart FAB — visible on the booking steps, never over a modal ── */}
         <BookingCartBar
           items={selectedPiercings}
           onRemoveItem={handleRemovePiercing}
-          onProceed={() => setStep(2)}
+          onProceed={handleCartProceed}
+          nextLabel={step === 1 ? 'Next: Schedule' : step === 2 ? 'Next: Client Details' : 'Back to Your Details'}
+          hidden={showWaiverModal || activeModalSpot !== null}
         />
 
         {/* ── Waiver Review Modal (mirrors /waiver.html content) ── */}

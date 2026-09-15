@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 import { gmailScript } from './helpers/gmail-script.mjs';
 import { RESERVATION_POLICY } from '../src/bookingApi.ts';
-import worker, { POLICY, verifySignature, validateSchedule, paidPayment, deliver, emailMessage } from '../backend/worker.mjs';
+import worker, { POLICY, LEGACY_POLICIES, CHECKOUT_DESCRIPTION, verifySignature, validateSchedule, paidPayment, deliver, emailMessage } from '../backend/worker.mjs';
 let db, env, originalFetch, sessions, sends, createCalls, providerDown, emailDown, legacyRecords, staffEnabled, mailer;
 function adapter(database) {
   const prepare = query => ({ bind: (...args) => ({
@@ -42,6 +42,7 @@ beforeEach(() => {
       createCalls++;
       const a=JSON.parse(options.body).data.attributes;
       assert.equal(a.line_items[0].amount,10000); assert.equal(a.line_items[0].quantity,1); assert.equal(a.send_email_receipt,true);
+      assert.equal(a.description,CHECKOUT_DESCRIPTION); assert.equal(a.line_items[0].description,CHECKOUT_DESCRIPTION);
       const s={id:`cs_${createCalls}`,attributes:{...a,livemode:env.PAYMONGO_LIVE==='true',checkout_url:`https://checkout.paymongo.com/cs_${createCalls}`,payments:[]}};
       sessions.set(s.id,s); return Response.json({data:s});
     }
@@ -51,7 +52,16 @@ beforeEach(() => {
   };
 });
 afterEach(()=>{globalThis.fetch=originalFetch;db.close();});
-function input() { return {id:crypto.randomUUID(),token:crypto.randomUUID(),name:'Customer',email:'customer@example.com',contact:'09171234567',notes:'Lobe',date:new Date(Date.now()+2*86400000+28800000).toISOString().slice(0,10),time:'13:00',policy:POLICY,consent:true}; }
+/** A bookable week slot: weekdays only (Sat is 1–5 PM, Sun is closed). */
+function bookableDate(offset = 2) {
+  for (let i = offset; i < offset + 7; i++) {
+    const date = new Date(Date.now() + i * 86400000 + 28800000);
+    const day = date.getUTCDay();
+    if (day >= 1 && day <= 5) return date.toISOString().slice(0, 10);
+  }
+  throw new Error('No bookable weekday found.');
+}
+function input() { return {id:crypto.randomUUID(),token:crypto.randomUUID(),name:'Customer',email:'customer@example.com',contact:'09171234567',notes:'Lobe',date:bookableDate(),time:'13:45',policy:POLICY,consent:true}; }
 const request=(path, body, headers={})=>worker.fetch(new Request(`https://api.example${path}`,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...headers},...(body?{body:JSON.stringify(body)}:{})}),env);
 async function book(b=input()) { const r=await request('/bookings',b); assert.equal(r.status,200); return {b,result:await r.json()}; }
 function pay(b,amount=10000) { const row=db.prepare('SELECT * FROM bookings WHERE id=?').get(b.id); const s=sessions.get(row.session_id); s.attributes.payments=[{id:`pay_${b.id}`,attributes:{amount,currency:'PHP',status:'paid',livemode:env.PAYMONGO_LIVE==='true',paid_at:Math.floor(Date.now()/1000)}}]; return s; }
@@ -64,7 +74,9 @@ async function webhook(session,id=crypto.randomUUID(),secret=env.PAYMONGO_WEBHOO
 }
 test('end-to-end local flow: pending slot, verified webhook, receipt and admin email',async()=>{
   const {b,result}=await book(); assert.equal(result.status,'pending'); assert.equal(result.payment_id,null);
-  const available=await (await request(`/availability?date=${b.date}`)).json();assert.deepEqual(available.unavailable,['13:00']);
+  const available=await (await request(`/availability?date=${b.date}`)).json();
+  assert.deepEqual(available.unavailable,['13:45']);
+  assert.deepEqual(available.slots.filter(time=>time!=='13:45').includes('09:00'),true,'the accepted slot list is published for the page');
   const before=await request(`/bookings/${b.id}`,null,{Authorization:`Bearer ${b.token}`}); assert.equal((await before.json()).status,'pending');
   assert.equal((await webhook(pay(b))).status,200);
   const status=await (await request(`/bookings/${b.id}`,null,{Authorization:`Bearer ${b.token}`})).json();assert.equal(status.status,'confirmed');assert.equal(status.amount,10000);
@@ -131,6 +143,31 @@ test('schedule validates Manila day, notice period, impossible dates, blackout a
   const now=Date.parse('2026-09-10T17:00:00Z'); // Friday Sep 11 in Manila
   assert.equal(validateSchedule({bookingDays:[6]},'2026-09-12','13:00',now),Date.parse('2026-09-12T13:00:00+08:00'));
   for(const [s,date,time] of [[{},'2026-09-11','13:00'],[{},'2026-09-12','25:00'],[{blockedDates:['2026-09-12']},'2026-09-12','13:00'],[{bookingEnabled:false},'2026-09-12','13:00'],[{},'2026-02-30','13:00']]) assert.throws(()=>validateSchedule(s,date,time,now));
+  // Studio grid: Sunday closed, Saturday opens at 1 PM, weekdays run 9 AM – 8 PM
+  // in 45-minute steps with a one-hour noon break.
+  assert.throws(()=>validateSchedule({},'2026-09-13','13:00',now));
+  assert.throws(()=>validateSchedule({},'2026-09-12','09:00',now));
+  assert.throws(()=>validateSchedule({},'2026-09-14','12:00',now));
+  assert.throws(()=>validateSchedule({},'2026-09-14','14:00',now));
+  assert.equal(validateSchedule({},'2026-09-14','14:30',now),Date.parse('2026-09-14T14:30:00+08:00'));
+  assert.equal(validateSchedule({bookingDaySlots:{'6':['10:00']}},'2026-09-12','10:00',now),Date.parse('2026-09-12T10:00:00+08:00'));
+  assert.throws(()=>validateSchedule({bookingDaySlots:{'6':['10:00']}},'2026-09-14','10:00',now));
+});
+test('a previously shipped policy wording still checks out, an unknown one is rejected',async()=>{
+  // Rolling deploys: the frontend and the Worker can be live minutes apart, so the
+  // wording the page last shipped must keep working (this is what broke checkout
+  // with "Invalid booking details or consent." before the allowlist).
+  const legacy={...input(),policy:LEGACY_POLICIES[0]};
+  const {b}=await book(legacy);
+  assert.equal(db.prepare('SELECT policy FROM bookings WHERE id=?').get(b.id).policy,LEGACY_POLICIES[0],'the accepted wording is stored');
+  assert.equal((await request('/bookings',{...input(),policy:'Anything else entirely.'})).status,400);
+  assert.equal((await request('/bookings',{...input(),consent:false})).status,400);
+});
+test('the hosted checkout description stays short while the full policy is stored',async()=>{
+  assert.ok(CHECKOUT_DESCRIPTION.length<=255,`checkout description is ${CHECKOUT_DESCRIPTION.length} chars`);
+  const {b}=await book();
+  assert.notEqual(CHECKOUT_DESCRIPTION,POLICY,'the provider copy is a summary, not the 625-character policy');
+  assert.equal(db.prepare('SELECT policy FROM bookings WHERE id=?').get(b.id).policy,POLICY,'the row keeps the full accepted policy');
 });
 test('signature binds raw bytes, timestamp and environment',async()=>{
   const raw='{"a":1}', t=Math.floor(Date.now()/1000);const sig=createHmac('sha256','secret').update(`${t}.${raw}`).digest('hex');const h=`t=${t},te=${sig},li=`;
@@ -172,7 +209,7 @@ test('legacy import is authenticated, enables launch and preserves holds on conf
   db.exec('DELETE FROM deployment_checks');
   assert.equal((await request('/admin/import-legacy',{},headers)).status,200);
   assert.equal(db.prepare('SELECT count(*) n FROM legacy_holds').get().n,1);
-  const second={...input(),time:'14:30'};await book(second);
+  const second={...input(),time:'15:15'};await book(second);
   legacyRecords.push({document:{name:'projects/test/documents/appointments/conflict',fields:{date:{stringValue:second.date},time:{stringValue:second.time},status:{stringValue:'requested'}}}});
   assert.equal((await request('/admin/import-legacy',{},headers)).status,409);
   assert.equal(db.prepare('SELECT count(*) n FROM legacy_holds').get().n,1);

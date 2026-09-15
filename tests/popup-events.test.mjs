@@ -37,8 +37,8 @@ test('backend blocks every pop-up day while preserving drafts and explicit empty
  assert.equal(popupBlocks(s,'2026-09-14'),true);
  assert.equal(popupBlocks(s,'2026-09-15'),true);
  assert.equal(popupBlocks(s,'2026-09-16'),false);
- assert.throws(()=>validateSchedule(s,'2026-09-15','13:00',now));
- assert.doesNotThrow(()=>validateSchedule(s,'2026-09-16','13:00',now));
+ assert.throws(()=>validateSchedule(s,'2026-09-15','13:45',now));
+ assert.doesNotThrow(()=>validateSchedule(s,'2026-09-16','13:45',now));
  assert.equal(popupBlocks({...s,events:s.events.map(e=>({...e,eventActive:false}))},'2026-09-15'),false);
  assert.equal(popupBlocks({...event('legacy','2026-09-15'),events:[]},'2026-09-15'),false);
 });

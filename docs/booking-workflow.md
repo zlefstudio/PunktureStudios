@@ -225,7 +225,16 @@ Staging acceptance, required before a production claim:
 9. Cancel a confirmed booking through staff UI: slot frees, notices are sent, report still shows collected gross fee; handle refund in PayMongo. Refresh legacy safeguards after cancelling or deleting a legacy appointment.
 10. Check mobile and desktop layouts, disabled button appearance, status reload, receipt printing, schedule blackouts/notice changes, Manila midnight edge, admin list, legacy records, and unchanged local cashier revenue.
 
-## Operations, reports and data recovery
+## Studio schedule grid and slot rollout (2026-09-15)
+
+- **Grid:** Monday–Friday 9:00 AM–8:00 PM with a **one-hour noon break (12:00–1:00 PM)** — the day is two windows, so bookable starts are 09:00→11:15 and 13:00→19:45 — and Saturday 1:00 PM–5:00 PM (13:00→16:45); Sunday is closed. `src/schedule.ts` holds the windows and `backend/worker.mjs` mirrors them; `tests/schedule.test.mjs` fails if the two drift apart or if anything lands inside the break.
+- **Settings shape:** `public/public` now carries `bookingDaySlots` (weekday-keyed `HH:MM` lists) because Saturday hours differ from Mon–Fri. When that map exists it wins, and a weekday missing from it is closed; `bookingSlots` remains the flat union for older clients, and `bookingDays` stays the allowed-day list. `publishedExample: {'1': ['09:00', …], '6': ['13:00', …]}`.
+- **Rollout order (avoid a booking dead end):** 1) run the staff app and press **Apply studio hours** → **Save all changes** so the Firestore document already contains the new grid; 2) deploy the Worker (`npx wrangler@4 deploy --config backend/wrangler.jsonc`); 3) publish the public pages. Since 2026-09-15 the customer page only offers the slots `GET /availability` returns, so a half-done rollout shows a shorter grid instead of rejecting bookings — the Worker deployed that day (`8d278117-d722-482e-aed6-71ca3a310f6f`) reported the five legacy slots until the preset is saved.
+- **Before every Worker deploy, read `backend/wrangler.jsonc` out loud:** on 2026-09-15 the file had drifted to `PAYMENT_METHODS="gcash,card"` while the live PayMongo account is Individual-only (`qrph`). Deploying the drifted value would have re-created the *“No payment methods are available”* dead end on the hosted checkout. It is corrected in the repo; treat that line as a check, not a formality.
+- **Policy wording changes must not require a lockstep deploy:** `create()` accepts `POLICY` plus every entry in `LEGACY_POLICIES`, stores the wording the customer agreed to, and sends only the short `CHECKOUT_DESCRIPTION` to PayMongo. This is what fixed the live `400 Invalid booking details or consent.` on 2026-09-15, where a new 625-character policy met the previously deployed 344-character one. Add the outgoing text to `LEGACY_POLICIES` whenever the policy copy changes, and keep the client/server equality test green.
+- **Deposit terms:** the PHP 100.00 deposit is refunded in full on request when cancelled or rescheduled at least 24 hours ahead; less than 24 hours notice or arriving 15 minutes or more late uses the PHP 100.00 as the cancellation or late fee. Refunds are still handled manually in PayMongo — no automatic refund path was added.
+
+
 
 - Worker logs: Cloudflare dashboard or `npx wrangler@4 tail --config backend/wrangler.jsonc`. Do not paste customer access URLs/secrets in logs.
 - Staff panel displays newest bookings (up to 500) and newest 100 unsent notification jobs. D1 holds the full ledger; export through restricted admin tooling when a larger report is needed.

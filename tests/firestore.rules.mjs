@@ -97,6 +97,19 @@ test('settings are readable by document and writable with the supported shape', 
   await assertSucceeds(getDoc(doc(staff(), 'public', 'public')));
   await assertFails(getDocs(collection(staff(), 'public')));
 });
+test('per-weekday booking grids are accepted and malformed maps rejected', async () => {
+  const base = { key: 'public', eventActive: false };
+  await assertSucceeds(setDoc(doc(staff(), 'public', 'public'), {
+    ...base,
+    updatedAt: 2,
+    bookingDays: [1, 2, 3, 4, 5, 6],
+    bookingSlots: ['09:00', '13:00'],
+    bookingDaySlots: { '1': ['09:00', '19:30'], '6': ['13:00'] },
+  }));
+  await assertFails(setDoc(doc(staff(), 'public', 'public'), { ...base, updatedAt: 3, bookingDaySlots: { '7': ['09:00'] } }));
+  await assertFails(setDoc(doc(staff(), 'public', 'public'), { ...base, updatedAt: 4, bookingDaySlots: { '1': '09:00' } }));
+  await assertFails(setDoc(doc(anon(), 'public', 'public'), { ...base, updatedAt: 5, bookingDaySlots: { '1': ['09:00'] } }));
+});
 test('staff writes do not need a station claim', async () => {
   await env.withSecurityRulesDisabled(context => deleteDoc(doc(context.firestore(), 'cloudControl', 'station')));
   await assertSucceeds(setDoc(doc(staff(), 'tickets', 'ticket'), { id: 'ticket', ticketNumber: 1, name: 'Customer', status: 'waiting', createdAt: 1, updatedAt: 1 }));

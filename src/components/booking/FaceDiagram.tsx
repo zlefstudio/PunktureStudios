@@ -4,10 +4,14 @@ import { PiercingMap, type DiagramProps } from './PiercingMap';
 import { ORAL_POINTS } from './mapGeometry';
 import { FACE_IMAGE, FACE_POINTS } from './referenceGeometry';
 import { ReferenceImage } from './ReferenceImage';
+
+/** Placements drawn on the inner-lip schematic instead of the external face. */
+const ORAL_IDS = ['smiley', 'tongue'];
+
 export function FaceDiagram(props: DiagramProps) {
-  const [oral, setOral] = useState(props.previewId === 'smiley' || props.previewId === 'tongue');
+  const [oral, setOral] = useState(ORAL_IDS.includes(props.previewId ?? ''));
   return <PiercingMap {...props} title={oral ? 'Inside the smile' : 'The face'} subtitle={oral ? 'Inner-lip & tongue detail' : 'A little self-expression.'} spots={FACE_HOTSPOTS} points={oral ? ORAL_POINTS : FACE_POINTS}
-    onDetail={id => setOral(id === 'smiley' || id === 'tongue')}
+    onDetail={id => setOral(ORAL_IDS.includes(id))}
     detail={<div className="pm-view-switch"><button type="button" aria-pressed={!oral} onClick={() => setOral(false)}>Face</button><button type="button" aria-pressed={oral} onClick={() => setOral(true)}>Inside the smile</button></div>}>
     {p => oral ? <>
       <rect x="85" y="100" width="230" height="313" rx="110" fill={p.skin}/>

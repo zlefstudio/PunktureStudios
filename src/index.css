@@ -607,6 +607,24 @@ button:disabled,
   }
 }
 
+/* ── Full-screen consent gate (booking waiver modal) ──────────────────────
+   100vh fallback first, then 100dvh, so WebViews that predate the dynamic
+   viewport unit still get a full-height panel instead of one sized by content
+   (which pushed the pay button off-screen). Desktop caps the panel height. */
+.waiver-modal {
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+}
+@media (min-width: 640px) {
+  .waiver-modal {
+    height: auto;
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+  }
+}
+
 /* ── Modal Positioner ──────────────────────────────────────────────────────
    This class handles the POSITIONING of the piercing spot modal.
    It is intentionally NEVER animated — separating layout from animation

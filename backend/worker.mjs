@@ -1,8 +1,58 @@
 import { mailerConfigured, sendGmail } from './gmail.mjs';
-export const POLICY = 'PHP 100.00 reservation deposit secures one appointment after verified payment. This advance payment is deducted from your final total at the studio; you pay only the remaining balance. It is not an additional charge. Contact the studio for cancellation or refund requests. Payments received after expiry require review and do not secure a slot.';
+export const POLICY = 'PHP 100.00 reservation deposit secures one appointment once payment is verified. It is an advance toward your final total at the studio and never an extra charge — you pay only the remaining balance. Plans change, and that is okay: cancel or reschedule at least 24 hours before your appointment and we will refund the PHP 100.00 in full on request. With less than 24 hours notice, or if you arrive 15 minutes or more after your appointment time, the PHP 100.00 deposit serves as the cancellation or late fee for the studio time we kept reserved for you. Payments received after expiry require review and do not secure a slot.';
+/**
+ * Wording shipped by earlier releases. `create()` accepts these too, so a frontend
+ * or Worker deploy on its own can never block checkout with
+ * "Invalid booking details or consent." — the text the customer actually agreed to
+ * is stored on the row, shown on the status page and sent in the receipt.
+ */
+export const LEGACY_POLICIES = [
+  'PHP 100.00 reservation deposit secures one appointment after verified payment. This advance payment is deducted from your final total at the studio; you pay only the remaining balance. It is not an additional charge. Contact the studio for cancellation or refund requests. Payments received after expiry require review and do not secure a slot.',
+];
+const ACCEPTED_POLICIES = [POLICY, ...LEGACY_POLICIES];
+/**
+ * Short copy for the PayMongo hosted page only. The full policy (and the legacy
+ * variants above, at 344–625 characters) stays on the booking page, the receipt
+ * email and the stored row; keeping the provider description short avoids any
+ * provider-side length limit on a live payment path.
+ */
+export const CHECKOUT_DESCRIPTION = 'PHP 100.00 reservation deposit for one appointment, deducted from your final total. Cancel or reschedule 24 hours ahead for a full refund; under 24 hours notice, or 15 minutes late or more, the deposit becomes the cancellation or late fee.';
 const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 const sql = (env, query, ...args) => env.DB.prepare(query).bind(...args);
+// Studio booking grid — mirrors src/schedule.ts (tests/schedule.test.mjs asserts
+// both stay identical). Monday–Friday 9:00 AM–8:00 PM, Saturday 1:00 PM–5:00 PM,
+// Sunday closed, 45-minute slots starting on the hour grid from opening time.
+export const SLOT_INTERVAL_MINUTES = 45;
+// Monday–Friday 9:00 AM–8:00 PM with a one-hour noon break (two windows), so no
+// appointment is booked across 12:00–1:00 PM; Saturday 1:00 PM–5:00 PM; Sunday
+// closed. Cells hold each day's opening windows.
+export const STUDIO_HOURS = {
+  1: [{ open: '09:00', close: '12:00' }, { open: '13:00', close: '20:00' }],
+  2: [{ open: '09:00', close: '12:00' }, { open: '13:00', close: '20:00' }],
+  3: [{ open: '09:00', close: '12:00' }, { open: '13:00', close: '20:00' }],
+  4: [{ open: '09:00', close: '12:00' }, { open: '13:00', close: '20:00' }],
+  5: [{ open: '09:00', close: '12:00' }, { open: '13:00', close: '20:00' }],
+  6: [{ open: '13:00', close: '17:00' }],
+};
+export const DEFAULT_DAYS = [1, 2, 3, 4, 5, 6];
+const pad = n => String(n).padStart(2, '0');
+const minutesOf = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
+export function slotsForWindow(win, interval = SLOT_INTERVAL_MINUTES) {
+  const open = minutesOf(win.open), close = minutesOf(win.close);
+  if (!Number.isFinite(open) || !Number.isFinite(close) || close <= open || interval <= 0) return [];
+  const slots = [];
+  for (let start = open; start < close; start += interval) slots.push(`${pad(Math.floor(start / 60))}:${pad(start % 60)}`);
+  return slots;
+}
+export const DEFAULT_DAY_SLOTS = Object.fromEntries(DEFAULT_DAYS.map(day => [String(day), (STUDIO_HOURS[day] || []).flatMap(win => slotsForWindow(win))]));
+/** Slots a day accepts: per-weekday map → legacy flat list → built-in hours. */
+export function slotsForDay(s, day) {
+  const map = s.bookingDaySlots;
+  if (map && Object.keys(map).length) return map[String(day)] ?? [];
+  if (s.bookingSlots?.length) return s.bookingSlots;
+  return DEFAULT_DAY_SLOTS[String(day)] ?? [];
+}
 const sha = async value => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map(x => x.toString(16).padStart(2, '0')).join('');
 const log = (action, id, code) => console.log(JSON.stringify({ action, booking_id: id, code }));
 async function remote(url, options = {}) {
@@ -36,9 +86,10 @@ export function validateSchedule(s, date, time, now = Date.now()) {
   const instant = Date.parse(`${date}T${time}:00+08:00`);
   const today = new Date(now + 28800000).toISOString().slice(0, 10);
   const daysAhead = (Date.parse(date) - Date.parse(today)) / 86400000;
-  const days = s.bookingDays?.length ? s.bookingDays : [0,1,2,3,4,5,6];
-  const slots = s.bookingSlots?.length ? s.bookingSlots : ['13:00','14:30','16:00','17:30','19:00'];
-  if (!Number.isFinite(instant) || new Date(instant + 28800000).toISOString().slice(0,10) !== date || s.bookingEnabled === false || instant <= now || daysAhead < (s.bookingNoticeDays ?? 1) || daysAhead > 21 || !days.includes(new Date(`${date}T12:00:00+08:00`).getUTCDay()) || !slots.includes(time) || s.blockedDates?.includes(date) || popupBlocks(s,date)) fail(409, 'This schedule is no longer available. Choose another slot.');
+  const day = new Date(`${date}T12:00:00+08:00`).getUTCDay();
+  const days = s.bookingDays?.length ? s.bookingDays : DEFAULT_DAYS;
+  const slots = slotsForDay(s, day);
+  if (!Number.isFinite(instant) || new Date(instant + 28800000).toISOString().slice(0,10) !== date || s.bookingEnabled === false || instant <= now || daysAhead < (s.bookingNoticeDays ?? 1) || daysAhead > 21 || !days.includes(day) || !slots.includes(time) || s.blockedDates?.includes(date) || popupBlocks(s,date)) fail(409, 'This schedule is no longer available. Choose another slot.');
   return instant;
 }
 export async function verifySignature(raw, header, secret, live, now = Date.now()) {
@@ -102,7 +153,7 @@ async function create(request, env) {
     if (typeof b[key] !== 'string' || b[key].length > max || (key !== 'notes' && !b[key].trim())) fail(400, 'Please complete your name, email and contact details.');
     b[key] = b[key].trim();
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email) || b.policy !== POLICY || b.consent !== true || !/^[a-f0-9-]{36}$/.test(b.id || '') || !/^[a-f0-9-]{36}$/.test(b.token || '')) fail(400, 'Invalid booking details or consent.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email) || !ACCEPTED_POLICIES.includes(b.policy) || b.consent !== true || !/^[a-f0-9-]{36}$/.test(b.id || '') || !/^[a-f0-9-]{36}$/.test(b.token || '')) fail(400, 'Invalid booking details or consent.');
   const hash = await sha(b.token);
   const requestHash = await sha(JSON.stringify([b.name,b.email,b.contact,b.notes,b.date,b.time,b.policy]));
   const existing = await sql(env,'SELECT * FROM bookings WHERE id=?',b.id).first();
@@ -117,7 +168,7 @@ async function create(request, env) {
   const requestedFor = validateSchedule(await settings(env), b.date, b.time, now);
   await expire(env);
   try {
-    await sql(env, `INSERT INTO bookings(id,token_hash,request_hash,name,email,contact,notes,date,time,requestedFor,status,createdAt,expiresAt,policy) VALUES(?,?,?,?,?,?,?,?,?,?,'creating',?,?,?)`, b.id,hash,requestHash,b.name,b.email,b.contact,b.notes,b.date,b.time,requestedFor,now,now+900000,POLICY).run();
+    await sql(env, `INSERT INTO bookings(id,token_hash,request_hash,name,email,contact,notes,date,time,requestedFor,status,createdAt,expiresAt,policy) VALUES(?,?,?,?,?,?,?,?,?,?,'creating',?,?,?)`, b.id,hash,requestHash,b.name,b.email,b.contact,b.notes,b.date,b.time,requestedFor,now,now+900000,b.policy).run();
   } catch (e) {
     if (String(e).includes('UNIQUE')) fail(409,'This slot was just taken. Choose another slot.');
     throw e;
@@ -126,7 +177,7 @@ async function create(request, env) {
   try {
     const session = await paymongo(env, '/checkout_sessions', { data: { attributes: {
       billing: { name:b.name,email:b.email }, reference_number:b.id, metadata: { booking_id:b.id },
-      description: POLICY, line_items: [{ name:'Appointment reservation deposit',description:POLICY,amount:10000,currency:'PHP',quantity:1 }],
+      description: CHECKOUT_DESCRIPTION, line_items: [{ name:'Appointment reservation deposit',description:CHECKOUT_DESCRIPTION,amount:10000,currency:'PHP',quantity:1 }],
       payment_method_types: env.PAYMENT_METHODS.split(','), send_email_receipt:true, show_description:true, show_line_items:true,
       success_url:returnUrl, cancel_url:returnUrl + '&cancelled=1',
     } } });
@@ -197,9 +248,12 @@ async function route(request, env) {
     const date = url.searchParams.get('date');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) fail(400,'Invalid date.');
     const schedule = await settings(env);
-    if (popupBlocks(schedule,date)) return json({unavailable:schedule.bookingSlots?.length ? schedule.bookingSlots : ['13:00','14:30','16:00','17:30','19:00'], blocked:true});
+    // `slots` is the server's accepted list for that weekday, so the booking page can
+    // show exactly what POST /bookings will accept (never a doomed slot).
+    const slots = slotsForDay(schedule, new Date(`${date}T12:00:00+08:00`).getUTCDay());
+    if (popupBlocks(schedule,date)) return json({slots, unavailable:slots, blocked:true});
     const occupied = (await sql(env,"SELECT time FROM bookings WHERE date=? AND (status='confirmed' OR (status IN ('creating','pending') AND expiresAt>?)) UNION SELECT time FROM legacy_holds WHERE date=?",date,Date.now(),date).all()).results;
-    return json({unavailable:occupied.map(x=>x.time)});
+    return json({slots, unavailable:occupied.map(x=>x.time)});
   }
   if (request.method==='POST' && url.pathname==='/bookings') return create(request,env);
   if (request.method==='POST' && /^\/bookings\/[^/]+\/release$/.test(url.pathname)) {
