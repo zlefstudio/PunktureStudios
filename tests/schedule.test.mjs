@@ -11,6 +11,10 @@ import {
   studioDaySlots,
   studioHoursLabel,
   studioSlotsForDay,
+  slotsForDate,
+  editableDaySlots,
+  upgradeLegacySchedule,
+  slotEndTime,
 } from '../src/schedule.ts';
 import {
   DEFAULT_DAYS as WORKER_DAYS,
@@ -19,6 +23,8 @@ import {
   SLOT_INTERVAL_MINUTES as WORKER_INTERVAL,
   slotsForDay as workerSlotsForDay,
   validateSchedule,
+  slotsForDate as workerSlotsForDate,
+  upgradeLegacySchedule as workerUpgrade,
 } from '../backend/worker.mjs';
 import { RESERVATION_POLICY } from '../src/bookingApi.ts';
 import { validateSettings } from '../src/validation.ts';
@@ -140,4 +146,56 @@ test('settings accept a per-weekday grid and reject malformed ones', () => {
   ]) {
     assert.throws(() => validateSettings({ ...base, ...bad }), undefined, JSON.stringify(bad));
   }
+});
+
+test('date exclusions affect only that date and cannot shorten the noon break', () => {
+  const s = { bookingDaySlots: studioDaySlots(), blockedDateSlots: { '2026-09-14': ['09:00', '13:45'] } };
+  for (const resolve of [slotsForDate, workerSlotsForDate]) {
+    assert.deepEqual(resolve(s, '2026-09-14'), WEEKDAY_SLOTS.filter(t => !['09:00', '13:45'].includes(t)));
+    assert.deepEqual(resolve(s, '2026-09-21'), WEEKDAY_SLOTS);
+    assert.deepEqual(resolve({ ...s, blockedDates: ['2026-09-14'] }, '2026-09-14'), []);
+    assert.deepEqual(resolve({ bookingDays: [] }, '2026-09-14'), []);
+    assert.deepEqual(resolve({ bookingDaySlots: {}, bookingSlots: ['09:00'] }, '2026-09-14'), []);
+    assert.deepEqual(resolve({ bookingSlots: [] }, '2026-09-14'), []);
+    assert.deepEqual(resolve({ bookingDaySlots: { '1': ['11:30', '12:00', '12:45', '13:00'] } }, '2026-09-14'), ['13:00']);
+    // Moving the weekly grid cannot sneak a booking into an existing time block.
+    assert.deepEqual(resolve({ ...s, bookingDaySlots: { '1': ['09:15', '09:45'] } }, '2026-09-14'), ['09:45']);
+  }
+  const now = Date.parse('2026-09-11T00:00:00+08:00');
+  assert.throws(() => validateSchedule(s, '2026-09-14', '09:00', now));
+  assert.equal(validateSchedule(s, '2026-09-14', '09:45', now), Date.parse('2026-09-14T09:45:00+08:00'));
+  assert.equal(slotEndTime('19:45'), '20:30');
+  assert.equal(slotEndTime('16:45'), '17:30');
+});
+
+test('editing a legacy day materializes the other enabled days without closing them', () => {
+  assert.deepEqual(editableDaySlots({ bookingDays: [1, 2, 6], bookingSlots: ['13:00', '14:30'] }), {
+    '1': ['13:00', '14:30'], '2': ['13:00', '14:30'], '6': ['13:00', '14:30'],
+  });
+});
+
+test('only the exact retired all-week preset upgrades automatically, preserving closures', () => {
+  const old = { bookingDays: [0, 1, 2, 3, 4, 5, 6], bookingSlots: ['13:00', '14:30', '16:00', '17:30', '19:00'], blockedDates: ['2026-09-14'] };
+  assert.deepEqual(upgradeLegacySchedule(old), workerUpgrade(old));
+  assert.deepEqual(upgradeLegacySchedule(old).bookingDaySlots, studioDaySlots());
+  assert.deepEqual(upgradeLegacySchedule(old).blockedDates, old.blockedDates);
+  for (const custom of [{ ...old, bookingDays: [1, 6] }, { ...old, bookingSlots: ['13:00'] }, { ...old, bookingDaySlots: {} }]) {
+    assert.deepEqual(upgradeLegacySchedule(custom), custom);
+    assert.deepEqual(workerUpgrade(custom), custom);
+  }
+});
+
+test('settings reject invalid date exceptions and overlapping or lunch-crossing appointments', () => {
+  const base = { key: 'public', eventActive: false, updatedAt: 1 };
+  const blocks = { '2026-09-14': ['09:00', '13:45'] };
+  assert.deepEqual(validateSettings({ ...base, blockedDateSlots: blocks }).blockedDateSlots, blocks);
+  for (const bad of [
+    { blockedDateSlots: { '2026-02-30': ['09:00'] } },
+    { blockedDateSlots: { '2026-09-14': ['25:00'] } },
+    { blockedDateSlots: { '2026-09-14': ['09:00', '09:00'] } },
+    { blockedDateSlots: [] }, { blockedDates: ['2026-02-30'] },
+    { bookingDaySlots: { '1': ['09:00', '09:30'] } },
+    { bookingDaySlots: { '1': ['11:30'] } },
+    { bookingDaySlots: { '1': ['12:45'] } },
+  ]) assert.throws(() => validateSettings({ ...base, ...bad }));
 });

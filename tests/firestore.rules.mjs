@@ -110,6 +110,16 @@ test('per-weekday booking grids are accepted and malformed maps rejected', async
   await assertFails(setDoc(doc(staff(), 'public', 'public'), { ...base, updatedAt: 4, bookingDaySlots: { '1': '09:00' } }));
   await assertFails(setDoc(doc(anon(), 'public', 'public'), { ...base, updatedAt: 5, bookingDaySlots: { '1': ['09:00'] } }));
 });
+
+test('date-specific time blocks are public-readable, bounded and staff-writable only', async () => {
+  const ref = doc(staff(), 'public', 'public');
+  const base = { key: 'public', eventActive: false, updatedAt: 1 };
+  await assertSucceeds(setDoc(ref, { ...base, blockedDateSlots: { '2026-09-21': ['09:00', '13:45'] } }));
+  await assertSucceeds(getDoc(doc(anon(), 'public', 'public')));
+  await assertFails(setDoc(doc(anon(), 'public', 'public'), { ...base, blockedDateSlots: {} }));
+  await assertFails(setDoc(ref, { ...base, blockedDateSlots: [] }));
+  await assertFails(setDoc(ref, { ...base, blockedDateSlots: Object.fromEntries(Array.from({ length: 367 }, (_, i) => [String(i), []])) }));
+});
 test('staff writes do not need a station claim', async () => {
   await env.withSecurityRulesDisabled(context => deleteDoc(doc(context.firestore(), 'cloudControl', 'station')));
   await assertSucceeds(setDoc(doc(staff(), 'tickets', 'ticket'), { id: 'ticket', ticketNumber: 1, name: 'Customer', status: 'waiting', createdAt: 1, updatedAt: 1 }));

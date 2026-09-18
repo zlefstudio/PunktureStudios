@@ -73,7 +73,7 @@ function toTime24(minutes: number): string {
  * Build the slot grid for one opening window. The first slot starts at the
  * opening time and each following slot is one interval later; the last slot is
  * the latest start that still falls inside the window, so a booking may run a
- * little past closing time (Mon–Fri 9:00 AM – 8:00 PM → last start 7:30 PM).
+ * little past closing time (after lunch, the last weekday start is 7:45 PM).
  */
 export function slotsForWindow(window: BookingWindow, intervalMinutes = SLOT_INTERVAL_MINUTES): string[] {
   const open = toMinutes(window.open);
@@ -102,6 +102,15 @@ export const DEFAULT_SLOTS: string[] = [...new Set(Object.values(DEFAULT_DAY_SLO
 
 /** Allowed days used when the saved settings carry no day list. */
 export const DEFAULT_DAYS: number[] = [...STUDIO_OPEN_DAYS];
+
+/** Replace only the retired, all-seven-days preset; preserve custom schedules. */
+export function upgradeLegacySchedule<T extends Partial<PublicSettings>>(settings: T): T {
+  const old = ['13:00', '14:30', '16:00', '17:30', '19:00'];
+  if (settings.bookingDaySlots !== undefined || settings.bookingDays?.length !== 7
+    || new Set(settings.bookingDays).size !== 7 || !settings.bookingDays.every(day => day >= 0 && day <= 6)
+    || [...(settings.bookingSlots ?? [])].sort().join('|') !== old.join('|')) return settings;
+  return { ...settings, bookingDays: [...DEFAULT_DAYS], bookingDaySlots: studioDaySlots(), bookingSlots: [...DEFAULT_SLOTS] };
+}
 
 /**
  * Human summary of the built-in hours, grouping consecutive days that share a
@@ -162,9 +171,38 @@ export function slotsForDay(
   day: number
 ): string[] {
   const map = schedule?.bookingDaySlots;
-  if (map && Object.keys(map).length > 0) return map[String(day)] ?? [];
-  if (schedule?.bookingSlots?.length) return schedule.bookingSlots;
+  if (map) return map[String(day)] ?? [];
+  if (schedule?.bookingSlots) return schedule.bookingSlots;
   return DEFAULT_DAY_SLOTS[String(day)] ?? [];
+}
+
+/** A booking occupies 45 minutes, even when staff move its start time. */
+export function slotsOverlap(a: string, b: string): boolean {
+  return Math.abs(toMinutes(a) - toMinutes(b)) < SLOT_INTERVAL_MINUTES;
+}
+
+/** Protect the full noon break and keep appointments within the same date. */
+export function validSlotTime(slot: string): boolean {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(slot)) return false;
+  const start = toMinutes(slot);
+  return start + SLOT_INTERVAL_MINUTES < 1440 && (start + SLOT_INTERVAL_MINUTES <= 720 || start >= 780);
+}
+
+export function slotEndTime(slot: string): string {
+  return toTime24(toMinutes(slot) + SLOT_INTERVAL_MINUTES);
+}
+
+/** Resolve closures and date-only exclusions without changing the weekly grid. */
+export function slotsForDate(schedule: Partial<PublicSettings> | null | undefined, date: string): string[] {
+  const day = new Date(`${date}T12:00:00+08:00`).getUTCDay();
+  if (!(schedule?.bookingDays ?? DEFAULT_DAYS).includes(day) || schedule?.blockedDates?.includes(date)) return [];
+  const blocked = schedule?.blockedDateSlots?.[date] ?? [];
+  return slotsForDay(schedule, day).filter(slot => validSlotTime(slot) && !blocked.some(time => slotsOverlap(slot, time))).sort();
+}
+
+/** Materialize every enabled day before editing one legacy weekday. */
+export function editableDaySlots(schedule: Partial<PublicSettings>): Record<string, string[]> {
+  return Object.fromEntries((schedule.bookingDays ?? DEFAULT_DAYS).map(day => [String(day), [...slotsForDay(schedule, day)]]));
 }
 
 /**

@@ -109,7 +109,9 @@ service cloud.firestore {
     function validSlotLists(d) {
       return (!('bookingSlots' in d) || validSlotList(d.bookingSlots))
         && (!('bookingDays' in d) || (d.bookingDays is list && d.bookingDays.size() <= 7))
-        && validDaySlots(d);
+        && validDaySlots(d)
+        // Staff-only bounded map; dates/times are checked by the client and Worker.
+        && (!('blockedDateSlots' in d) || (d.blockedDateSlots is map && d.blockedDateSlots.size() <= 366));
     }
     function validPopups(d) {
       return !('events' in d) || (d.events is list && d.events.size() <= 12
@@ -141,7 +143,7 @@ service cloud.firestore {
     match /public/public {
       allow read: if true;
       allow create, update: if isStaff()
-        && request.resource.data.keys().hasOnly(['key', 'events', 'eventActive', 'updatedAt', 'eventDate', 'eventLocation', 'eventMapUrl', 'eventTitle', 'eventHours', 'studioName', 'studioAddress', 'studioMapUrl', 'bookingEnabled', 'bookingDays', 'bookingSlots', 'bookingDaySlots', 'blockedDates', 'bookingNoticeDays'])
+        && request.resource.data.keys().hasOnly(['key', 'events', 'eventActive', 'updatedAt', 'eventDate', 'eventLocation', 'eventMapUrl', 'eventTitle', 'eventHours', 'studioName', 'studioAddress', 'studioMapUrl', 'bookingEnabled', 'bookingDays', 'bookingSlots', 'bookingDaySlots', 'blockedDates', 'blockedDateSlots', 'bookingNoticeDays'])
         && validPopups(request.resource.data)
         && validSlotLists(request.resource.data)
         && request.resource.data.key == 'public' && request.resource.data.eventActive is bool

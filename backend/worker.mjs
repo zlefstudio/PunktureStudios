@@ -46,12 +46,34 @@ export function slotsForWindow(win, interval = SLOT_INTERVAL_MINUTES) {
   return slots;
 }
 export const DEFAULT_DAY_SLOTS = Object.fromEntries(DEFAULT_DAYS.map(day => [String(day), (STUDIO_HOURS[day] || []).flatMap(win => slotsForWindow(win))]));
+export function upgradeLegacySchedule(s) {
+  const old = ['13:00', '14:30', '16:00', '17:30', '19:00'];
+  if (s.bookingDaySlots !== undefined || s.bookingDays?.length !== 7
+    || new Set(s.bookingDays).size !== 7 || !s.bookingDays.every(day => day >= 0 && day <= 6)
+    || [...(s.bookingSlots ?? [])].sort().join('|') !== old.join('|')) return s;
+  return { ...s, bookingDays: [...DEFAULT_DAYS], bookingDaySlots: structuredClone(DEFAULT_DAY_SLOTS), bookingSlots: [...new Set(Object.values(DEFAULT_DAY_SLOTS).flat())].sort() };
+}
 /** Slots a day accepts: per-weekday map → legacy flat list → built-in hours. */
 export function slotsForDay(s, day) {
   const map = s.bookingDaySlots;
-  if (map && Object.keys(map).length) return map[String(day)] ?? [];
-  if (s.bookingSlots?.length) return s.bookingSlots;
+  if (map) return map[String(day)] ?? [];
+  if (s.bookingSlots) return s.bookingSlots;
   return DEFAULT_DAY_SLOTS[String(day)] ?? [];
+}
+export function slotsOverlap(a, b) {
+  return Math.abs(minutesOf(a) - minutesOf(b)) < SLOT_INTERVAL_MINUTES;
+}
+export function validSlotTime(slot) {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(slot)) return false;
+  const start = minutesOf(slot);
+  return start + SLOT_INTERVAL_MINUTES < 1440 && (start + SLOT_INTERVAL_MINUTES <= 720 || start >= 780);
+}
+export function slotsForDate(s, date) {
+  const day = new Date(`${date}T12:00:00+08:00`).getUTCDay();
+  if (!(s.bookingDays ?? DEFAULT_DAYS).includes(day) || s.blockedDates?.includes(date)) return [];
+  const blocked = s.blockedDateSlots?.[date] ?? [];
+  if (!Array.isArray(blocked) || blocked.some(t => typeof t !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) fail(503, 'Schedule is unavailable. Please try again later.');
+  return slotsForDay(s, day).filter(slot => validSlotTime(slot) && !blocked.some(time => slotsOverlap(slot, time))).sort();
 }
 const sha = async value => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map(x => x.toString(16).padStart(2, '0')).join('');
 const log = (action, id, code) => console.log(JSON.stringify({ action, booking_id: id, code }));
@@ -75,7 +97,7 @@ function decode(field) {
 async function settings(env) {
   const r = await remote(`https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/public/public`);
   if (!r.ok) fail(503, 'Schedule is unavailable. Please try again later.');
-  return Object.fromEntries(Object.entries((await r.json()).fields || {}).map(([k, v]) => [k, decode(v)]));
+  return upgradeLegacySchedule(Object.fromEntries(Object.entries((await r.json()).fields || {}).map(([k, v]) => [k, decode(v)])));
 }
 export function popupBlocks(s, date) {
   const events = s.events ?? (s.eventDate ? [s] : []);
@@ -86,10 +108,8 @@ export function validateSchedule(s, date, time, now = Date.now()) {
   const instant = Date.parse(`${date}T${time}:00+08:00`);
   const today = new Date(now + 28800000).toISOString().slice(0, 10);
   const daysAhead = (Date.parse(date) - Date.parse(today)) / 86400000;
-  const day = new Date(`${date}T12:00:00+08:00`).getUTCDay();
-  const days = s.bookingDays?.length ? s.bookingDays : DEFAULT_DAYS;
-  const slots = slotsForDay(s, day);
-  if (!Number.isFinite(instant) || new Date(instant + 28800000).toISOString().slice(0,10) !== date || s.bookingEnabled === false || instant <= now || daysAhead < (s.bookingNoticeDays ?? 1) || daysAhead > 21 || !days.includes(day) || !slots.includes(time) || s.blockedDates?.includes(date) || popupBlocks(s,date)) fail(409, 'This schedule is no longer available. Choose another slot.');
+  const slots = slotsForDate(s, date);
+  if (!Number.isFinite(instant) || new Date(instant + 28800000).toISOString().slice(0,10) !== date || s.bookingEnabled === false || instant <= now || daysAhead < (s.bookingNoticeDays ?? 1) || daysAhead > 21 || !slots.includes(time) || popupBlocks(s,date)) fail(409, 'This schedule is no longer available. Choose another slot.');
   return instant;
 }
 export async function verifySignature(raw, header, secret, live, now = Date.now()) {
@@ -168,7 +188,15 @@ async function create(request, env) {
   const requestedFor = validateSchedule(await settings(env), b.date, b.time, now);
   await expire(env);
   try {
-    await sql(env, `INSERT INTO bookings(id,token_hash,request_hash,name,email,contact,notes,date,time,requestedFor,status,createdAt,expiresAt,policy) VALUES(?,?,?,?,?,?,?,?,?,?,'creating',?,?,?)`, b.id,hash,requestHash,b.name,b.email,b.contact,b.notes,b.date,b.time,requestedFor,now,now+900000,b.policy).run();
+    // One atomic statement protects all 45 minutes, including older bookings at
+    // start times that staff have since removed or moved in their schedule.
+    const inserted = await sql(env, `INSERT INTO bookings(id,token_hash,request_hash,name,email,contact,notes,date,time,requestedFor,status,createdAt,expiresAt,policy)
+      SELECT ?,?,?,?,?,?,?,?,?,?,'creating',?,?,?
+      WHERE NOT EXISTS (SELECT 1 FROM bookings WHERE status IN ('creating','pending','confirmed') AND requestedFor > ? AND requestedFor < ?)
+      AND NOT EXISTS (SELECT 1 FROM legacy_holds WHERE date=? AND ABS(CAST(substr(time,1,2) AS INTEGER)*60 + CAST(substr(time,4,2) AS INTEGER) - ?) < 45)
+      RETURNING id`, b.id,hash,requestHash,b.name,b.email,b.contact,b.notes,b.date,b.time,requestedFor,now,now+900000,b.policy,
+      requestedFor-2700000,requestedFor+2700000,b.date,minutesOf(b.time)).first();
+    if (!inserted) fail(409,'This slot was just taken. Choose another slot.');
   } catch (e) {
     if (String(e).includes('UNIQUE')) fail(409,'This slot was just taken. Choose another slot.');
     throw e;
@@ -250,10 +278,16 @@ async function route(request, env) {
     const schedule = await settings(env);
     // `slots` is the server's accepted list for that weekday, so the booking page can
     // show exactly what POST /bookings will accept (never a doomed slot).
-    const slots = slotsForDay(schedule, new Date(`${date}T12:00:00+08:00`).getUTCDay());
+    if (!Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10) !== date) fail(400,'Invalid date.');
+    const slots = slotsForDate(schedule, date);
     if (popupBlocks(schedule,date)) return json({slots, unavailable:slots, blocked:true});
     const occupied = (await sql(env,"SELECT time FROM bookings WHERE date=? AND (status='confirmed' OR (status IN ('creating','pending') AND expiresAt>?)) UNION SELECT time FROM legacy_holds WHERE date=?",date,Date.now(),date).all()).results;
-    return json({slots, unavailable:occupied.map(x=>x.time)});
+    const now = Date.now();
+    const unavailable = [...new Set([...occupied.map(x=>x.time), ...slots.filter(slot => {
+      try { validateSchedule(schedule,date,slot,now); } catch { return true; }
+      return occupied.some(x => slotsOverlap(slot,x.time));
+    })])];
+    return json({slots, unavailable});
   }
   if (request.method==='POST' && url.pathname==='/bookings') return create(request,env);
   if (request.method==='POST' && /^\/bookings\/[^/]+\/release$/.test(url.pathname)) {

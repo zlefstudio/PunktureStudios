@@ -38,15 +38,10 @@ import {
   Users,
 } from 'lucide-react';
 import { validAppointmentDate } from '../validation';
-import { DEFAULT_DAYS, DEFAULT_SLOTS, format12Hour, slotRangesLabel, slotsForDay } from '../schedule';
+import { DEFAULT_SLOTS, format12Hour, slotEndTime, slotRangesLabel, slotsForDate, upgradeLegacySchedule } from '../schedule';
 
 type VisualCategory = 'EAR' | 'FACE' | 'BODY' | 'OTHERS';
 type ViewMode = 'diagram' | 'list';
-
-/** Manila weekday of a YYYY-MM-DD date (0 = Sunday … 6 = Saturday). */
-function weekdayOf(dateStr: string): number {
-  return new Date(`${dateStr}T12:00:00+08:00`).getUTCDay();
-}
 
 // Other Services tab order — Aftercare Solution pinned to the top.
 const BOOKING_SERVICES: OtherService[] = [...OTHER_SERVICES].sort((a, b) =>
@@ -120,13 +115,13 @@ export function AppointmentPage() {
     void refresh();
     const timer = setInterval(() => void refresh(), 10000);
     return () => { active = false; clearInterval(timer); };
-  }, [date, payment]);
+  }, [date, payment, publicSettings]);
 
   useEffect(() => {
     const unsub = onSnapshot(
       doc(firestore, 'public', 'public'),
       (snap) => {
-        setPublicSettings(snap.exists() ? (snap.data() as PublicSettings) : null);
+        setPublicSettings(snap.exists() ? upgradeLegacySchedule(snap.data() as PublicSettings) : null);
       },
       () => setPublicSettings(null)
     );
@@ -134,16 +129,19 @@ export function AppointmentPage() {
   }, []);
 
   const bookingEnabled = publicSettings?.bookingEnabled !== false;
-  const allowedDays = publicSettings?.bookingDays && publicSettings.bookingDays.length > 0
-    ? publicSettings.bookingDays
-    : DEFAULT_DAYS;
   // Slots belong to the weekday of the chosen date: Mon–Fri and Saturday differ.
   // The Worker's accepted list wins when it is known, so the grid always matches
   // what POST /bookings will accept.
   const availableSlots = date
-    ? (serverSlots ?? slotsForDay(publicSettings, weekdayOf(date)))
+    ? (serverSlots ?? slotsForDate(publicSettings, date))
     : DEFAULT_SLOTS;
-  const blockedDates = new Set(publicSettings?.blockedDates ?? []);
+  // Firestore edits invalidate the selection immediately, even between polls.
+  useEffect(() => {
+    if (!date) return;
+    const slots = slotsForDate(publicSettings, date);
+    const closed = publicSettings?.bookingEnabled === false || editableEvents(publicSettings).some(e => e.eventActive && e.eventDate <= date && (e.eventEndDate || e.eventDate) >= date);
+    setTime(current => closed || !slots.includes(current) ? '' : current);
+  }, [publicSettings, date]);
 
   // The floating cart's CTA follows the booking step: it advances from step 1/2,
   // and on the details step it just returns the customer to the review they were on.
@@ -272,18 +270,16 @@ export function AppointmentPage() {
         day: '2-digit',
       }).format(d);
 
-      const dayOfWeek = weekdayOf(dateStr); // 0 = Sun, 1 = Mon ...
-      const isAllowedDay = allowedDays.includes(dayOfWeek);
-      const isBlocked = blockedDates.has(dateStr) || editableEvents(publicSettings).some(e => e.eventActive && e.eventDate <= dateStr && (e.eventEndDate || e.eventDate) >= dateStr);
+      const isBlocked = editableEvents(publicSettings).some(e => e.eventActive && e.eventDate <= dateStr && (e.eventEndDate || e.eventDate) >= dateStr);
       // A day with no slot (e.g. Sunday or a fully booked-out grid) is not selectable.
-      const hasSlots = slotsForDay(publicSettings, dayOfWeek).length > 0;
+      const hasSlots = slotsForDate(publicSettings, dateStr).length > 0;
 
       days.push({
         dateStr,
         label: d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' }),
         dayName: d.toLocaleDateString('en-PH', { weekday: 'short', timeZone: 'Asia/Manila' }),
         dayNum: Number(dateStr.slice(8)),
-        available: isAllowedDay && !isBlocked && hasSlots,
+        available: !isBlocked && hasSlots,
       });
     }
     return days;
@@ -893,6 +889,8 @@ export function AppointmentPage() {
                   </h2>
                 </div>
 
+                <p className="text-body-xs text-zinc-400">Each appointment lasts 45 minutes. Lunch break: 12–1 PM. All times are Philippine time. Only open dates and times can be selected.</p>
+
                 {/* Available Date Chips / Horizontal Picker */}
                 <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
                   {upcomingDays.map((day) => {
@@ -900,6 +898,7 @@ export function AppointmentPage() {
                     return (
                       <button
                         key={day.dateStr}
+                        data-booking-date={day.dateStr}
                         type="button"
                         disabled={!day.available}
                         onClick={() => {
@@ -931,7 +930,7 @@ export function AppointmentPage() {
                 {/* Time Slots */}
                 {date && (
                   <div className="space-y-3 pt-3 border-t border-zinc-800">
-                    <h2 className="font-bold text-body text-white flex items-center gap-2">
+                    <h2 className="font-bold text-body text-white flex flex-wrap items-center gap-2">
                       <Clock size={18} className="text-violet-400" />
                       Choose a Time Slot
                       {availableSlots.length > 0 && (
@@ -955,6 +954,8 @@ export function AppointmentPage() {
                             key={slot}
                             type="button"
                             disabled={!availabilityReady || unavailable.includes(slot) || !validAppointmentDate(date, slot)}
+                            aria-label={`${format12Hour(slot)} to ${format12Hour(slotEndTime(slot))}`}
+                            data-booking-slot={slot}
                             onClick={() => setTime(slot)}
                             className="py-3 px-4 rounded-xl font-mono font-bold text-ui-sm text-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
                             style={{
@@ -963,7 +964,8 @@ export function AppointmentPage() {
                               color: isSelected ? '#fff' : 'var(--color-text)',
                             }}
                           >
-                            {format12Hour(slot)}{unavailable.includes(slot) ? ' · Unavailable' : ''}
+                            <span className="block">{format12Hour(slot)}</span>
+                            <span className="block mt-1 text-[11px] font-normal">until {format12Hour(slotEndTime(slot))}{unavailable.includes(slot) ? ' · Unavailable' : ''}</span>
                           </button>
                         );
                       })}

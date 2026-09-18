@@ -1,4 +1,5 @@
 import type { BackupPayload, PiercingItem, PublicSettings, Ticket } from './types';
+import { slotsOverlap, validSlotTime } from './schedule';
 
 const statuses = ['waiting', 'called', 'in_progress', 'finished', 'cancelled'];
 function object(value: unknown): Record<string, unknown> {
@@ -94,6 +95,22 @@ export function validateSettings(value: unknown): PublicSettings {
     for (const [day, slots] of Object.entries(map)) {
       if (!/^[0-6]$/.test(day)) throw new Error('Invalid booking day.');
       slotList(slots, 'booking time slots');
+      for (const [index, slot] of slots.entries()) {
+        if (!validSlotTime(slot)) throw new Error('Keep the full 12–1 PM lunch break and finish appointments before midnight.');
+        if (slots.slice(index + 1).some(other => slotsOverlap(slot, other))) throw new Error('Appointments must be at least 45 minutes apart.');
+      }
+    }
+  }
+  if (s.blockedDates !== undefined) {
+    if (!Array.isArray(s.blockedDates) || s.blockedDates.length > 366 || new Set(s.blockedDates).size !== s.blockedDates.length) throw new Error('Keep up to 366 unique blocked dates.');
+    for (const date of s.blockedDates) calendarDate(date);
+  }
+  if (s.blockedDateSlots !== undefined) {
+    const map = object(s.blockedDateSlots);
+    if (Object.keys(map).length > 366) throw new Error('Keep time blocks on up to 366 dates.');
+    for (const [date, slots] of Object.entries(map)) {
+      calendarDate(date);
+      slotList(slots, 'blocked time slots');
     }
   }
   return pick(s, [
@@ -114,8 +131,14 @@ export function validateSettings(value: unknown): PublicSettings {
     'bookingSlots',
     'bookingDaySlots',
     'blockedDates',
+    'blockedDateSlots',
     'bookingNoticeDays',
   ]) as unknown as PublicSettings;
+}
+function calendarDate(value: unknown): void {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('Invalid blocked date.');
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) throw new Error('Invalid blocked date.');
 }
 /** One `HH:MM` slot list, at most 48 entries and no duplicates. */
 function slotList(value: unknown, label: string): asserts value is string[] {

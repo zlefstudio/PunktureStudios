@@ -13,6 +13,8 @@ globalThis.HTMLElement = dom.window.HTMLElement;
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const { createRoot } = await import('react-dom/client');
 let savedSettings;
+let initialSettings;
+let publicSnapshot;
 let bookingWrites;
 let saveBooking;
 let queueRows;
@@ -23,7 +25,7 @@ let serverSlots;
 const docRef = (_db, col, id) => ({ kind: 'doc', col, id });
 await mock.module('../src/firebase.ts', { namedExports: { auth: {}, firestore: {} } });
 await mock.module('../src/sync.ts', { namedExports: {
-  getLocalPublicSettings: async () => null,
+  getLocalPublicSettings: async () => initialSettings,
   saveLocalPublicSettings: async patch => { savedSettings = patch; return { ...patch, key: 'public', updatedAt: 1 }; },
   syncNow: async () => {},
 } });
@@ -43,7 +45,7 @@ await mock.module('firebase/firestore', { namedExports: {
   onSnapshot: (ref, callback) => {
     if (ref.kind === 'collection') callback({ forEach: visit => queueRows.forEach(row => visit({ data: () => row })) });
     else if (ref.id === 'heartbeat') callback({ data: () => ({ publishedAt: { toMillis: () => heartbeat } }) });
-    else callback({ exists: () => false });
+    else { publicSnapshot = callback; callback({ exists: () => Boolean(initialSettings), data: () => initialSettings }); }
     return () => {};
   },
 } });
@@ -71,7 +73,7 @@ let root;
 let container;
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
-  savedSettings = null; bookingWrites = []; saveBooking = async () => {}; queueRows = []; heartbeat = 0; unavailableSlots = []; availabilityFails = false; serverSlots = null;
+  initialSettings = null; publicSnapshot = null; savedSettings = null; bookingWrites = []; saveBooking = async () => {}; queueRows = []; heartbeat = 0; unavailableSlots = []; availabilityFails = false; serverSlots = null;
   await db.transaction('rw', db.tickets, db.items, db.meta, db.settings, async () => {
     await Promise.all([db.tickets.clear(), db.items.clear(), db.meta.clear(), db.settings.clear()]);
   });
@@ -208,7 +210,7 @@ test('taken slots and availability failures disable schedule buttons', async () 
   // Re-selecting the date re-runs availability with the slot now taken.
   await act(async () => dates[1].click());
   await act(async () => dates[0].click());
-  const takenBtn = [...container.querySelectorAll('button')].find(b => b.textContent.replace(' · Unavailable', '').trim() === taken);
+  const takenBtn = [...container.querySelectorAll('button')].find(b => b.querySelector('span')?.textContent === taken);
   assert.ok(takenBtn, 'the taken slot button exists');
   assert.equal(takenBtn.disabled, true); assert.match(takenBtn.textContent, /Unavailable/);
   availabilityFails = true;
@@ -227,7 +229,7 @@ test('unpaid success return does not display booking confirmation', async () => 
 /** Slot labels rendered in step 2, e.g. '9:00 AM'. */
 function slotLabels() {
   return [...container.querySelectorAll('button')]
-    .map(b => b.textContent.replace(' · Unavailable', '').trim())
+    .map(b => b.querySelector('span')?.textContent ?? '')
     .filter(text => /^\d{1,2}:\d{2} (AM|PM)$/.test(text));
 }
 /** '1:30 PM' → '13:30'. */
@@ -314,7 +316,7 @@ test('deposit card states the 24-hour refund window and the 15-minute late fee',
   await openScheduleStep();
   const chip = dateChips().find(c => !c.disabled);
   await act(async () => chip.click());
-  const slot = [...container.querySelectorAll('button')].find(b => /^\d{1,2}:\d{2} (AM|PM)$/.test(b.textContent.trim()));
+  const slot = container.querySelector('button[data-booking-slot]');
   await act(async () => slot.click());
   const nextBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Next: Client Details'));
   await act(async () => nextBtn.click());
@@ -350,7 +352,7 @@ test('the booking page highlights the three-person visit limit', async () => {
   await openScheduleStep();
   const chip = dateChips().find(c => !c.disabled);
   await act(async () => chip.click());
-  const slot = [...container.querySelectorAll('button')].find(b => /^\d{1,2}:\d{2} (AM|PM)$/.test(b.textContent.trim()));
+  const slot = container.querySelector('button[data-booking-slot]');
   await act(async () => slot.click());
   const nextBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Next: Client Details'));
   await act(async () => nextBtn.click());
@@ -394,7 +396,7 @@ test('the cart CTA label follows the current booking step', async () => {
   await openScheduleStep();
   const chip = dateChips().find(c => !c.disabled);
   await act(async () => chip.click());
-  const slot = [...container.querySelectorAll('button')].find(b => /^\d{1,2}:\d{2} (AM|PM)$/.test(b.textContent.trim()));
+  const slot = container.querySelector('button[data-booking-slot]');
   await act(async () => slot.click());
   await act(async () => fab().click());
   assert.ok(panelCTA()?.textContent.includes('Next: Client Details'), 'step 2 → Next: Client Details');
@@ -433,7 +435,7 @@ test('the waiver modal is full screen with the pay button outside the scrolling 
   await openScheduleStep();
   const chip = dateChips().find(c => !c.disabled);
   await act(async () => chip.click());
-  const slot = [...container.querySelectorAll('button')].find(b => /^\d{1,2}:\d{2} (AM|PM)$/.test(b.textContent.trim()));
+  const slot = container.querySelector('button[data-booking-slot]');
   await act(async () => slot.click());
   const nextBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Next: Client Details'));
   await act(async () => nextBtn.click());
@@ -485,4 +487,69 @@ test('settings schedule panel offers studio hours and per-weekday slots', async 
   assert.ok(!('0' in savedSettings.bookingDaySlots), 'no Sunday grid is saved');
   assert.equal(savedSettings.bookingSlots[0], '09:00');
   assert.equal(savedSettings.bookingSlots[savedSettings.bookingSlots.length - 1], '19:45');
+});
+
+test('date controls block and reopen a time without changing the weekly schedule', async () => {
+  await render(PublicSettingsView);
+  await fill('input[aria-label="Date to adjust"]', '2026-09-21');
+  const button = label => [...container.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === label || b.textContent === label);
+  const save = async () => act(async () => [...container.querySelectorAll('button')].find(b => b.textContent.includes('Save changes')).click());
+  await act(async () => button('Block 9:00 AM on 2026-09-21').click());
+  await save();
+  assert.deepEqual(savedSettings.blockedDateSlots, { '2026-09-21': ['09:00'] });
+  assert.ok(savedSettings.bookingDaySlots['1'].includes('09:00'));
+  await act(async () => button('Reopen 9:00 AM on 2026-09-21').click());
+  await act(async () => button('Block afternoon').click());
+  await save();
+  assert.equal(savedSettings.blockedDateSlots['2026-09-21'].length, 10);
+  await act(async () => button('Block whole date').click());
+  await save();
+  assert.deepEqual(savedSettings.blockedDates, ['2026-09-21']);
+  await act(async () => button('Restore weekly schedule for 2026-09-21').click());
+  await save();
+  assert.deepEqual(savedSettings.blockedDates, []);
+  assert.deepEqual(savedSettings.blockedDateSlots, {});
+});
+
+test('editing one legacy weekday preserves other weekdays and re-enabling seeds the default', async () => {
+  initialSettings = { key: 'public', eventActive: false, updatedAt: 1, bookingDays: [1, 2, 6], bookingSlots: ['13:00', '14:30'] };
+  await render(PublicSettingsView);
+  await act(async () => container.querySelector('button[title="Remove 1:00 PM from Monday"]').click());
+  const save = () => [...container.querySelectorAll('button')].find(b => b.textContent.includes('Save changes'));
+  await act(async () => save().click());
+  assert.deepEqual(savedSettings.bookingDaySlots, { '1': ['14:30'], '2': ['13:00', '14:30'], '6': ['13:00', '14:30'] });
+  const monday = [...container.querySelectorAll('button')].find(b => b.textContent === 'Monday');
+  await act(async () => monday.click());
+  await act(async () => monday.click());
+  await act(async () => save().click());
+  assert.equal(savedSettings.bookingDaySlots['1'][0], '09:00');
+});
+
+test('weekly custom times reject overlaps and lunch before saving', async () => {
+  await render(PublicSettingsView);
+  const input = 'input[aria-label="Add time for Monday"]';
+  const add = () => container.querySelector(input).parentElement.querySelector('button');
+  await fill(input, '09:15');
+  await act(async () => add().click());
+  assert.match(container.querySelector('[role="status"]').textContent, /at least 45 minutes/);
+  await fill(input, '11:30');
+  await act(async () => add().click());
+  assert.match(container.querySelector('[role="status"]').textContent, /12–1 PM/);
+  assert.equal(container.querySelector('input[aria-label="Add time for Tuesday"]').value, '', 'weekday inputs are independent');
+});
+
+test('live date closures clear the selected appointment and disable the closed date', async () => {
+  await render(AppointmentPage);
+  await openScheduleStep();
+  const date = dateChips().find(b => !b.disabled);
+  await act(async () => date.click());
+  const slot = container.querySelector('button[data-booking-slot]');
+  await act(async () => slot.click());
+  const next = () => [...container.querySelectorAll('button')].find(b => b.textContent.includes('Next: Client Details'));
+  assert.equal(next().disabled, false);
+  assert.match(slot.textContent, /until/);
+  const closedDate = date.getAttribute('data-booking-date');
+  await act(async () => publicSnapshot({ exists: () => true, data: () => ({ blockedDates: [closedDate] }) }));
+  assert.equal(next().disabled, true);
+  assert.equal(container.querySelector(`button[data-booking-date="${closedDate}"]`).disabled, true);
 });

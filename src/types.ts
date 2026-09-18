@@ -93,6 +93,8 @@ export interface PublicSettings {
   bookingDaySlots?: Record<string, string[]>;
   /** Blackout dates when studio is unavailable, e.g. ['2026-09-15']. */
   blockedDates?: string[];
+  /** Unavailable 45-minute appointments on specific Manila dates (YYYY-MM-DD). */
+  blockedDateSlots?: Record<string, string[]>;
   /** Minimum days in advance to book (default: 1). */
   bookingNoticeDays?: number;
   updatedAt: number;

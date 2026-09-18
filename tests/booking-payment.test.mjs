@@ -6,7 +6,7 @@ import { createHmac } from 'node:crypto';
 import { gmailScript } from './helpers/gmail-script.mjs';
 import { RESERVATION_POLICY } from '../src/bookingApi.ts';
 import worker, { POLICY, LEGACY_POLICIES, CHECKOUT_DESCRIPTION, verifySignature, validateSchedule, paidPayment, deliver, emailMessage } from '../backend/worker.mjs';
-let db, env, originalFetch, sessions, sends, createCalls, providerDown, emailDown, legacyRecords, staffEnabled, mailer;
+let db, env, originalFetch, sessions, sends, createCalls, providerDown, emailDown, legacyRecords, staffEnabled, mailer, scheduleFields;
 function adapter(database) {
   const prepare = query => ({ bind: (...args) => ({
     first: async () => database.prepare(query).get(...args) || null,
@@ -23,6 +23,7 @@ beforeEach(() => {
   db=new DatabaseSync(':memory:'); db.exec(readFileSync('backend/migrations/0001_booking.sql','utf8'));
   db.exec("INSERT INTO deployment_checks VALUES('legacy_import',0)");
   env={ DB:adapter(db), BOOKING_LAUNCH_READY:'true', PUBLIC_ORIGIN:'https://studio.example', ALLOWED_ORIGINS:'https://studio.example', PAYMONGO_SECRET_KEY:'sk_test_fake',PAYMONGO_WEBHOOK_SECRET:'webhook-secret',PAYMONGO_LIVE:'false',PAYMENT_METHODS:'gcash,card',GMAIL_SCRIPT_URL:'https://script.google.com/macros/s/test/exec',GMAIL_SCRIPT_SECRET:'test-gmail-secret-12345678901234567890',ADMIN_EMAIL:'admin@example.com',FIREBASE_PROJECT_ID:'test',FIREBASE_API_KEY:'fake' };
+  scheduleFields = { bookingEnabled:{booleanValue:true},bookingNoticeDays:{integerValue:'1'} };
   mailer=gmailScript();
   sessions=new Map(); sends=[]; createCalls=0; providerDown=false; emailDown=false; legacyRecords=[]; staffEnabled=true;
   originalFetch=globalThis.fetch;
@@ -30,7 +31,7 @@ beforeEach(() => {
     if (String(url).includes('identitytoolkit.googleapis.com')) return Response.json({users:[{localId:'staff'}]});
     if (String(url).includes('/staff/')) return Response.json({fields:{enabled:{booleanValue:staffEnabled}}});
     if (String(url).endsWith('documents:runQuery')) return Response.json(legacyRecords);
-    if (String(url).includes('firestore.googleapis.com')) return Response.json({fields:{ bookingEnabled:{booleanValue:true},bookingNoticeDays:{integerValue:'1'} }});
+    if (String(url).includes('firestore.googleapis.com')) return Response.json({fields:scheduleFields});
     if (String(url).includes('script.google.com')) {
       const envelope=JSON.parse(options.body); const message=JSON.parse(envelope.payload);
       sends.push({body:{...message,to:[message.to]},key:message.id});
@@ -268,4 +269,41 @@ test('full cart snapshot survives checkout, staff retrieval and admin notificati
   await webhook(pay(b));await deliver(env);
   assert.ok(sends.find(message=>message.body.to[0]==='admin@example.com').body.text.includes(notes));
   assert.equal((await request('/bookings',{...input(),notes:'x'.repeat(20001)})).status,400);
+});
+
+
+test('date blocks are enforced by availability and checkout, even for direct requests', async () => {
+  const b = input();
+  scheduleFields.blockedDateSlots = { mapValue: { fields: { [b.date]: { arrayValue: { values: [{ stringValue: b.time }] } } } } };
+  const availability = await (await request(`/availability?date=${b.date}`)).json();
+  assert.ok(!availability.slots.includes(b.time));
+  assert.equal((await request('/bookings', b)).status, 409);
+  assert.equal(createCalls, 0);
+  scheduleFields.blockedDateSlots = { mapValue: { fields: {} } };
+  assert.equal((await request('/bookings', b)).status, 200);
+});
+
+test('shifted schedule cannot overlap an existing paid booking or hold', async () => {
+  const { b } = await book();
+  const day = String(new Date(`${b.date}T12:00:00+08:00`).getUTCDay());
+  scheduleFields.bookingDaySlots = { mapValue: { fields: { [day]: { arrayValue: { values: ['13:15', '14:00', '14:30'].map(stringValue => ({ stringValue })) } } } } };
+  const availability = await (await request(`/availability?date=${b.date}`)).json();
+  assert.ok(availability.unavailable.includes('13:15'));
+  assert.ok(availability.unavailable.includes('14:00'));
+  assert.ok(!availability.unavailable.includes('14:30'));
+  for (const time of ['13:15', '14:00']) {
+    assert.equal((await request('/bookings', { ...input(), date: b.date, time })).status, 409);
+  }
+  assert.equal(createCalls, 1, 'conflicts never start another payment');
+  assert.equal((await request('/bookings', { ...input(), date: b.date, time: '14:30' })).status, 200);
+});
+
+test('45-minute overlap protection includes legacy holds', async () => {
+  const b = input();
+  db.prepare('INSERT INTO legacy_holds VALUES(?,?,?)').run('legacy', b.date, '14:00');
+  assert.equal((await request('/bookings', b)).status, 409);
+  const availability = await (await request(`/availability?date=${b.date}`)).json();
+  assert.ok(availability.unavailable.includes('13:45'));
+  assert.ok(availability.unavailable.includes('14:30'));
+  assert.equal(createCalls, 0);
 });
