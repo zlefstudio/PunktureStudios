@@ -366,7 +366,6 @@ test('the booking page follows the slot list the Worker publishes', async () => 
   const chip = dateChips().find(c => !c.disabled);
   await act(async () => chip.click());
   assert.deepEqual(slotLabels(), ['1:00 PM', '2:30 PM'], 'only the accepted slots are offered');
-  assert.match(container.textContent, /1:00 PM, 2:30 PM/, 'the block label reflects the accepted list');
 
   // An empty accepted list (closed day) explains itself instead of showing a bare grid.
   serverSlots = [];
@@ -547,7 +546,7 @@ test('live date closures clear the selected appointment and disable the closed d
   await act(async () => slot.click());
   const next = () => [...container.querySelectorAll('button')].find(b => b.textContent.includes('Next: Client Details'));
   assert.equal(next().disabled, false);
-  assert.match(slot.textContent, /until/);
+  assert.doesNotMatch(slot.textContent, /until/);
   const closedDate = date.getAttribute('data-booking-date');
   await act(async () => publicSnapshot({ exists: () => true, data: () => ({ blockedDates: [closedDate] }) }));
   assert.equal(next().disabled, true);

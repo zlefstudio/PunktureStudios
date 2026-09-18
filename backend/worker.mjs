@@ -48,16 +48,39 @@ export function slotsForWindow(win, interval = SLOT_INTERVAL_MINUTES) {
 export const DEFAULT_DAY_SLOTS = Object.fromEntries(DEFAULT_DAYS.map(day => [String(day), (STUDIO_HOURS[day] || []).flatMap(win => slotsForWindow(win))]));
 export function upgradeLegacySchedule(s) {
   const old = ['13:00', '14:30', '16:00', '17:30', '19:00'];
-  if (s.bookingDaySlots !== undefined || s.bookingDays?.length !== 7
-    || new Set(s.bookingDays).size !== 7 || !s.bookingDays.every(day => day >= 0 && day <= 6)
-    || [...(s.bookingSlots ?? [])].sort().join('|') !== old.join('|')) return s;
+  const oldKey = old.join('|');
+  const isOldFlat = [...(s.bookingSlots ?? [])].sort().join('|') === oldKey;
+  const isOldDaySlots = s.bookingDaySlots !== undefined &&
+    Object.keys(s.bookingDaySlots).length > 0 &&
+    Object.entries(s.bookingDaySlots).every(([day, slots]) =>
+      day === '0' || (s.bookingDays && !s.bookingDays.includes(Number(day)))
+        ? slots.length === 0
+        : [...slots].sort().join('|') === oldKey
+    );
+
+  if (s.bookingDaySlots !== undefined && !isOldDaySlots) return s;
+  if (!isOldFlat && !isOldDaySlots) return s;
+  if (s.bookingDays?.length !== 7
+    || new Set(s.bookingDays).size !== 7
+    || !s.bookingDays.every(day => day >= 0 && day <= 6)) {
+    if (!isOldDaySlots) return s;
+  }
+
   return { ...s, bookingDays: [...DEFAULT_DAYS], bookingDaySlots: structuredClone(DEFAULT_DAY_SLOTS), bookingSlots: [...new Set(Object.values(DEFAULT_DAY_SLOTS).flat())].sort() };
 }
 /** Slots a day accepts: per-weekday map → legacy flat list → built-in hours. */
 export function slotsForDay(s, day) {
   const map = s.bookingDaySlots;
-  if (map) return map[String(day)] ?? [];
-  if (s.bookingSlots) return s.bookingSlots;
+  const oldKey = '13:00|14:30|16:00|17:30|19:00';
+  if (map) {
+    const slots = map[String(day)] ?? [];
+    if ([...slots].sort().join('|') === oldKey) return DEFAULT_DAY_SLOTS[String(day)] ?? [];
+    return slots;
+  }
+  if (s.bookingSlots) {
+    if ([...s.bookingSlots].sort().join('|') === oldKey) return DEFAULT_DAY_SLOTS[String(day)] ?? [];
+    return s.bookingSlots;
+  }
   return DEFAULT_DAY_SLOTS[String(day)] ?? [];
 }
 export function slotsOverlap(a, b) {

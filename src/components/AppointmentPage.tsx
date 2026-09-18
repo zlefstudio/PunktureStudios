@@ -38,7 +38,7 @@ import {
   Users,
 } from 'lucide-react';
 import { validAppointmentDate } from '../validation';
-import { DEFAULT_SLOTS, format12Hour, slotEndTime, slotRangesLabel, slotsForDate, upgradeLegacySchedule } from '../schedule';
+import { DEFAULT_SLOTS, format12Hour, slotsForDate, upgradeLegacySchedule } from '../schedule';
 
 type VisualCategory = 'EAR' | 'FACE' | 'BODY' | 'OTHERS';
 type ViewMode = 'diagram' | 'list';
@@ -104,7 +104,9 @@ export function AppointmentPage() {
         // saved schedule and this bundle were published in a different order.
         const data = await bookingApi<{ slots?: string[]; unavailable: string[] }>(`/availability?date=${date}`);
         if (!active) return;
-        const slots = Array.isArray(data.slots) ? data.slots : null;
+        const rawSlots = Array.isArray(data.slots) ? data.slots : null;
+        const oldKey = '13:00|14:30|16:00|17:30|19:00';
+        const slots = rawSlots !== null && [...rawSlots].sort().join('|') === oldKey ? null : rawSlots;
         setServerSlots(slots);
         setUnavailable(data.unavailable);
         setAvailabilityReady(true);
@@ -630,10 +632,10 @@ export function AppointmentPage() {
 
                 {/* View Mode Toggle & Anatomy Advisory (when not searching) */}
                 {activeCategory !== 'OTHERS' && !isSearching && (
-                  <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+                  <div className="flex flex-col items-center gap-2 pt-1">
                     {/* Segmented Graphic vs List toggle */}
                     <div
-                      className="inline-flex items-center p-1 rounded-xl mx-auto sm:mx-0"
+                      className="inline-flex items-center p-1 rounded-xl"
                       style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)' }}
                     >
                       <button
@@ -662,8 +664,8 @@ export function AppointmentPage() {
                       </button>
                     </div>
 
-                    {/* General anatomy advisory note */}
-                    <span className="text-[11px] text-amber-300/90 font-medium flex items-center gap-1 mx-auto sm:mx-0">
+                    {/* General anatomy advisory note — centered below the toggle */}
+                    <span className="text-[11px] text-amber-300/90 font-medium flex items-center gap-1">
                       <AlertTriangle size={12} className="text-amber-400" />
                       Anatomy suitability assessed during appointment
                     </span>
@@ -889,7 +891,7 @@ export function AppointmentPage() {
                   </h2>
                 </div>
 
-                <p className="text-body-xs text-zinc-400">Each appointment lasts 45 minutes. Lunch break: 12–1 PM. All times are Philippine time. Only open dates and times can be selected.</p>
+                <p className="text-body-xs text-zinc-400">All times are Philippine time. Only open dates and times can be selected.</p>
 
                 {/* Available Date Chips / Horizontal Picker */}
                 <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2">
@@ -933,11 +935,6 @@ export function AppointmentPage() {
                     <h2 className="font-bold text-body text-white flex flex-wrap items-center gap-2">
                       <Clock size={18} className="text-violet-400" />
                       Choose a Time Slot
-                      {availableSlots.length > 0 && (
-                        <span className="text-body-xs font-normal" style={{ color: 'var(--color-text-muted)' }}>
-                          {slotRangesLabel(availableSlots)} · 45-minute appointments
-                        </span>
-                      )}
                     </h2>
                     {availabilityError && <p role="alert" className="text-red-300">{availabilityError}</p>}
                     {!availabilityReady && !availabilityError && <p>Checking slot availability…</p>}
@@ -949,12 +946,13 @@ export function AppointmentPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                       {availableSlots.map((slot) => {
                         const isSelected = time === slot;
+                        const isUnavailable = unavailable.includes(slot);
                         return (
                           <button
                             key={slot}
                             type="button"
-                            disabled={!availabilityReady || unavailable.includes(slot) || !validAppointmentDate(date, slot)}
-                            aria-label={`${format12Hour(slot)} to ${format12Hour(slotEndTime(slot))}`}
+                            disabled={!availabilityReady || isUnavailable || !validAppointmentDate(date, slot)}
+                            aria-label={isUnavailable ? `${format12Hour(slot)} - Unavailable` : format12Hour(slot)}
                             data-booking-slot={slot}
                             onClick={() => setTime(slot)}
                             className="py-3 px-4 rounded-xl font-mono font-bold text-ui-sm text-center transition-all disabled:opacity-30 disabled:cursor-not-allowed"
@@ -965,7 +963,9 @@ export function AppointmentPage() {
                             }}
                           >
                             <span className="block">{format12Hour(slot)}</span>
-                            <span className="block mt-1 text-[11px] font-normal">until {format12Hour(slotEndTime(slot))}{unavailable.includes(slot) ? ' · Unavailable' : ''}</span>
+                            {isUnavailable && (
+                              <span className="block mt-1 text-[11px] font-normal text-zinc-400">Unavailable</span>
+                            )}
                           </button>
                         );
                       })}

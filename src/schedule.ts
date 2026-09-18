@@ -103,12 +103,27 @@ export const DEFAULT_SLOTS: string[] = [...new Set(Object.values(DEFAULT_DAY_SLO
 /** Allowed days used when the saved settings carry no day list. */
 export const DEFAULT_DAYS: number[] = [...STUDIO_OPEN_DAYS];
 
-/** Replace only the retired, all-seven-days preset; preserve custom schedules. */
+/** Replace only the retired preset; preserve custom schedules. */
 export function upgradeLegacySchedule<T extends Partial<PublicSettings>>(settings: T): T {
   const old = ['13:00', '14:30', '16:00', '17:30', '19:00'];
-  if (settings.bookingDaySlots !== undefined || settings.bookingDays?.length !== 7
-    || new Set(settings.bookingDays).size !== 7 || !settings.bookingDays.every(day => day >= 0 && day <= 6)
-    || [...(settings.bookingSlots ?? [])].sort().join('|') !== old.join('|')) return settings;
+  const oldKey = old.join('|');
+  const isOldFlat = [...(settings.bookingSlots ?? [])].sort().join('|') === oldKey;
+  const isOldDaySlots = settings.bookingDaySlots !== undefined &&
+    Object.keys(settings.bookingDaySlots).length > 0 &&
+    Object.entries(settings.bookingDaySlots).every(([day, slots]) =>
+      day === '0' || (settings.bookingDays && !settings.bookingDays.includes(Number(day)))
+        ? slots.length === 0
+        : [...slots].sort().join('|') === oldKey
+    );
+
+  if (settings.bookingDaySlots !== undefined && !isOldDaySlots) return settings;
+  if (!isOldFlat && !isOldDaySlots) return settings;
+  if (settings.bookingDays?.length !== 7
+    || new Set(settings.bookingDays).size !== 7
+    || !settings.bookingDays.every(day => day >= 0 && day <= 6)) {
+    if (!isOldDaySlots) return settings;
+  }
+
   return { ...settings, bookingDays: [...DEFAULT_DAYS], bookingDaySlots: studioDaySlots(), bookingSlots: [...DEFAULT_SLOTS] };
 }
 
@@ -171,8 +186,16 @@ export function slotsForDay(
   day: number
 ): string[] {
   const map = schedule?.bookingDaySlots;
-  if (map) return map[String(day)] ?? [];
-  if (schedule?.bookingSlots) return schedule.bookingSlots;
+  const oldKey = '13:00|14:30|16:00|17:30|19:00';
+  if (map) {
+    const slots = map[String(day)] ?? [];
+    if ([...slots].sort().join('|') === oldKey) return DEFAULT_DAY_SLOTS[String(day)] ?? [];
+    return slots;
+  }
+  if (schedule?.bookingSlots) {
+    if ([...schedule.bookingSlots].sort().join('|') === oldKey) return DEFAULT_DAY_SLOTS[String(day)] ?? [];
+    return schedule.bookingSlots;
+  }
   return DEFAULT_DAY_SLOTS[String(day)] ?? [];
 }
 
