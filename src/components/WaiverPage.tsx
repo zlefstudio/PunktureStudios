@@ -56,12 +56,14 @@ export function WaiverPage() {
         {langBtn('fil', 'Tagalog')}
       </div>
 
-      <h1 className="font-black leading-tight" style={{ fontSize: 24 }}>
-        {t.title}
-      </h1>
-      <p className="text-body-sm mt-1.5 mb-5" style={{ color: 'var(--color-text-muted)' }}>
-        {t.intro}
-      </p>
+      <div className="text-center mb-5">
+        <h1 className="font-black leading-tight" style={{ fontSize: 24 }}>
+          {t.title}
+        </h1>
+        <p className="text-body-sm mt-1.5" style={{ color: 'var(--color-text-muted)' }}>
+          {t.intro}
+        </p>
+      </div>
 
       <div className="space-y-4">
         {/* Health Check: Cannot pierce & Disclose */}

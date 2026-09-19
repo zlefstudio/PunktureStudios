@@ -1,12 +1,9 @@
-import { eventDateRange, nextEventSettings } from '../popupEvents';
 import { useEffect, useMemo, useState } from 'react';
 import { onSnapshot, collection, query, doc } from 'firebase/firestore';
 import { firestore } from '../firebase';
 import { Ticket, CalendarHeart } from 'lucide-react';
-import type { PublicSettings } from '../types';
 import { PiercingRitualAnimation } from './PiercingRitualAnimation';
 import { PublicShell } from './PublicShell';
-import { safeHttpUrl } from '../validation';
 
 /**
  * PUBLIC LIVE QUEUE — customer-facing, real-time, privacy-safe.
@@ -53,9 +50,6 @@ export function LiveQueuePage() {
   }, () => setHeartbeat(0)), []);
   const [rows, setRows] = useState<PublicRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [rawSettings, setPublicSettings] = useState<PublicSettings | null>(null);
-  const publicSettings = nextEventSettings(rawSettings);
-
   useEffect(() => {
     const q = query(collection(firestore, 'publicQueue'));
     const unsub = onSnapshot(
@@ -72,19 +66,6 @@ export function LiveQueuePage() {
       },
       (err) => {
         setError(friendlyError(err));
-      }
-    );
-    return unsub;
-  }, []);
-
-  useEffect(() => {
-    const unsub = onSnapshot(
-      doc(firestore, 'public', 'public'),
-      (snap) => {
-        setPublicSettings(snap.exists() ? snap.data() as PublicSettings : null);
-      },
-      () => {
-        setPublicSettings(null);
       }
     );
     return unsub;
@@ -111,48 +92,42 @@ export function LiveQueuePage() {
   const live = hasLive && fresh && !error;
   const nowServing = data.inProgress[0] ?? data.called[0];
   const nextUp = data.waiting[0];
-  const ps = publicSettings;
-  const hasEvent =
-    ps !== null &&
-    ps.eventActive === true &&
-    typeof ps.eventDate === 'string' &&
-    ps.eventDate.length > 0 && (ps.eventEndDate || ps.eventDate) >= new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-  const eventDateLabel = hasEvent ? eventDateRange(publicSettings) : "";
-  const mapUrl = safeHttpUrl(publicSettings?.eventMapUrl);
-  const studioMapUrl = safeHttpUrl(publicSettings?.studioMapUrl);
-  const eventTitle = publicSettings?.eventTitle?.trim() || 'Next pop-up event coming soon';
-  const eventHours = publicSettings?.eventHours?.trim();
-  const showStage = hasEvent || hasLive;
+  const showStage = hasLive && !error;
 
   return (
     <PublicShell page="live" wide>
-      {/* Status row */}
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
-        <span
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold"
-          style={{
-            background: live ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.06)',
-            color: live ? '#34d399' : 'var(--color-text-faint)',
-            border: `1px solid ${live ? 'rgba(16,185,129,0.35)' : 'var(--color-border)'}`,
-          }}
-        >
-          <span className="relative flex h-2 w-2">
-            {live && (
-              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-            )}
-            <span className={`relative inline-flex rounded-full h-2 w-2 ${live ? 'bg-emerald-400' : 'bg-white/20'}`} />
-          </span>
-          {live ? 'LIVE' : hasLive ? 'UPDATES PAUSED' : fresh ? 'QUEUE EMPTY' : 'OFFLINE'}
-        </span>
-        <span className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
-          {lastUpdated
-            ? `Updated ${new Date(lastUpdated).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}`
-            : 'Waiting for updates…'}
-        </span>
-      </div>
+      {hasLive && (
+        <>
+          <h1 className="sr-only">Live Queue</h1>
+          {/* Status row */}
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-5">
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold"
+              style={{
+                background: live ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.06)',
+                color: live ? '#34d399' : 'var(--color-text-faint)',
+                border: `1px solid ${live ? 'rgba(16,185,129,0.35)' : 'var(--color-border)'}`,
+              }}
+            >
+              <span className="relative flex h-2 w-2">
+                {live && (
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                )}
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${live ? 'bg-emerald-400' : 'bg-white/20'}`} />
+              </span>
+              {live ? 'LIVE' : 'UPDATES PAUSED'}
+            </span>
+            <span className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>
+              {lastUpdated
+                ? `Updated ${new Date(lastUpdated).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}`
+                : 'Waiting for updates…'}
+            </span>
+          </div>
+        </>
+      )}
 
       {hasLive && !fresh && <p role="status" className="mb-4 rounded-xl bg-amber-950 p-3 text-amber-100">Updates are paused. This is the last known queue; please check with staff.</p>}
-      <div className={`grid grid-cols-1 ${showStage ? 'sm:grid-cols-2' : ''} gap-5 sm:gap-8 items-start`}>
+      <div className={`grid grid-cols-1 ${showStage ? 'sm:grid-cols-2' : 'max-w-2xl mx-auto'} gap-5 sm:gap-8 items-start`}>
         {showStage && (
           <div className="w-full flex justify-center md:sticky md:top-6">
             <PiercingRitualAnimation />
@@ -186,99 +161,43 @@ export function LiveQueuePage() {
               </p>
             </div>
           ) : !hasLive ? (
-            hasEvent ? (
-              <div
-                id="next-popup"
-                className="rounded-3xl p-8 text-center space-y-3 overflow-hidden"
-                style={{
-                  background: 'linear-gradient(145deg, rgba(139,92,246,0.16), rgba(217,119,6,0.08))',
-                  border: '1px solid rgba(168,85,247,0.35)',
-                }}
-              >
-                <div className="text-3xl" style={{ animation: 'pk-logo-float 2.6s ease-in-out infinite' }}>
-                  <CalendarHeart size={30} style={{ margin: '0 auto', color: 'var(--color-brand-text)' }} />
-                </div>
-                <p className="text-label-xs" style={{ color: 'var(--color-warn-text)' }}>
-                  SAVE THE DATE
-                </p>
-                <p className="font-black leading-tight tracking-tight" style={{ fontSize: 28, color: 'var(--color-text)' }}>
-                  {eventTitle}
-                </p>
-                <p className="font-black" style={{ fontSize: 20 }}>
-                  {eventDateLabel}
-                </p>
-                {publicSettings?.eventLocation && (
-                  <p className="font-semibold text-body" style={{ color: 'var(--color-text)' }}>
-                    📍 {publicSettings.eventLocation}
-                  </p>
-                )}
-                {eventHours && (
-                  <p className="text-body-sm font-mono" style={{ color: 'var(--color-text-muted)' }}>
-                    🕒 {eventHours}
-                  </p>
-                )}
-                {mapUrl && (
-                  <a
-                    href={mapUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-2xl font-bold"
-                    style={{ background: 'var(--color-brand)', color: '#fff', boxShadow: 'var(--shadow-brand)', textDecoration: 'none' }}
-                  >
-                    Open in Maps
-                  </a>
-                )}
+            <div
+              id="no-queue"
+              className="rounded-3xl p-8 text-center space-y-4 overflow-hidden"
+              style={{
+                background: 'linear-gradient(145deg, rgba(139,92,246,0.14), rgba(217,119,6,0.06))',
+                border: '1px solid rgba(168,85,247,0.30)',
+              }}
+            >
+              <div style={{ animation: 'pk-logo-float 2.6s ease-in-out infinite' }}>
+                <Ticket size={32} style={{ margin: '0 auto', color: 'var(--color-brand-text)' }} />
               </div>
-            ) : (
-              <div
-                id="next-popup"
-                className="rounded-3xl p-8 text-center space-y-3 overflow-hidden"
-                style={{
-                  background: 'linear-gradient(145deg, rgba(139,92,246,0.16), rgba(217,119,6,0.06))',
-                  border: '1px solid rgba(168,85,247,0.30)',
-                }}
-              >
-                <div className="text-3xl" style={{ animation: 'pk-logo-float 2.6s ease-in-out infinite' }}>✨</div>
-                <p className="text-label-xs" style={{ color: 'var(--color-warn-text)' }}>
-                  SAVE THE DATE
+              <div className="space-y-1.5">
+                <p className="font-black leading-tight tracking-tight" style={{ fontSize: 26, color: 'var(--color-text)' }}>
+                  No active queue right now
                 </p>
-                <p className="font-black leading-tight tracking-tight" style={{ fontSize: 28, color: 'var(--color-text)' }}>
-                  {eventTitle}
+                <p className="text-body-sm max-w-xs mx-auto" style={{ color: 'var(--color-text-muted)' }}>
+                  Want to get pierced? Check out our next pop-up event or secure a private home studio appointment.
                 </p>
-                {publicSettings?.studioAddress && (
-                  <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-                    📍 {publicSettings.studioAddress}
-                  </p>
-                )}
-                {(studioMapUrl || mapUrl) && (
-                  <a
-                    href={studioMapUrl || mapUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-2xl font-bold"
-                    style={{ background: 'var(--color-brand)', color: '#fff', boxShadow: 'var(--shadow-brand)', textDecoration: 'none' }}
-                  >
-                    View location
-                  </a>
-                )}
-                <div className="flex flex-col sm:flex-row items-stretch justify-center gap-2 pt-1">
-                  <a
-                    href="/appointment.html"
-                    className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-2xl font-bold"
-                    style={{ background: 'var(--color-brand)', color: '#fff', boxShadow: 'var(--shadow-brand)', textDecoration: 'none' }}
-                  >
-                    Book an appointment
-                  </a>
-                  <a
-                    href="/popup.html"
-                    className="inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-2xl font-bold"
-                    style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--color-text)', border: '1px solid var(--color-border)', textDecoration: 'none' }}
-                  >
-                    Next pop-up event
-                  </a>
-                </div>
               </div>
-            )
+              <div className="flex flex-col sm:flex-row items-stretch justify-center gap-2.5 pt-1">
+                <a
+                  href="/popup.html"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-ui-sm transition-transform active:scale-95"
+                  style={{ background: 'var(--color-brand)', color: '#fff', boxShadow: 'var(--shadow-brand)', textDecoration: 'none' }}
+                >
+                  <CalendarHeart size={15} />
+                  Next pop-up event
+                </a>
+                <a
+                  href="/appointment.html"
+                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-bold text-ui-sm transition-transform active:scale-95"
+                  style={{ background: 'rgba(255,255,255,0.06)', color: 'var(--color-text)', border: '1px solid var(--color-border)', textDecoration: 'none' }}
+                >
+                  Book an appointment
+                </a>
+              </div>
+            </div>
           ) : (
             <>
               {/* Now serving */}

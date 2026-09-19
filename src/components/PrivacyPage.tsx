@@ -4,12 +4,14 @@ import { PublicShell, SectionCard } from './PublicShell';
 export function PrivacyPage() {
   return (
     <PublicShell page="privacy">
-      <h1 className="font-black leading-tight" style={{ fontSize: 24 }}>
-        Privacy &amp; Legal
-      </h1>
-      <p className="text-body-sm mt-1.5 mb-5" style={{ color: 'var(--color-text-muted)' }}>
-        Your privacy matters to us. Here is exactly what we do (and do not) collect.
-      </p>
+      <div className="text-center mb-5">
+        <h1 className="font-black leading-tight" style={{ fontSize: 24 }}>
+          Privacy &amp; Legal
+        </h1>
+        <p className="text-body-sm mt-1.5" style={{ color: 'var(--color-text-muted)' }}>
+          Your privacy matters to us. Here is exactly what we do (and do not) collect.
+        </p>
+      </div>
 
       <div className="space-y-4">
         <SectionCard title="What we collect">

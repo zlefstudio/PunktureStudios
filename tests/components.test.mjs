@@ -198,6 +198,43 @@ test('an old queue heartbeat shows paused updates', async () => {
   assert.match(container.textContent, /last known queue/);
 });
 
+test('piercing animation does not render when queue is empty and shows empty queue CTA', async () => {
+  queueRows = [];
+  initialSettings = {
+    eventActive: true,
+    eventDate: '2026-09-25',
+    eventTitle: 'Upcoming Pop-up',
+  };
+  await render(LiveQueuePage);
+  assert.doesNotMatch(container.textContent, /Animation/);
+  assert.doesNotMatch(container.textContent, /Pop-up Event\/s/);
+  assert.doesNotMatch(container.textContent, /QUEUE EMPTY/);
+  assert.doesNotMatch(container.textContent, /Waiting for updates…/);
+  assert.match(container.textContent, /No active queue right now/);
+  assert.match(container.textContent, /Next pop-up event/);
+  assert.match(container.textContent, /Book an appointment/);
+});
+
+test('piercing animation renders when tickets are queued', async () => {
+  queueRows = [{ ticketNumber: 1, status: 'waiting', position: 0, seq: 0, updatedAt: Date.now() }];
+  await render(LiveQueuePage);
+  assert.match(container.textContent, /Animation/);
+});
+
+test('footer uses flexbox sticky bottom layout classes', async () => {
+  await render(LiveQueuePage);
+  const shell = container.querySelector('.public-shell');
+  assert.ok(shell.classList.contains('min-h-dvh'));
+  assert.ok(shell.classList.contains('flex'));
+  assert.ok(shell.classList.contains('flex-col'));
+
+  const main = container.querySelector('.public-content');
+  assert.ok(main.classList.contains('flex-1'));
+
+  const footer = container.querySelector('footer');
+  assert.ok(footer);
+});
+
 test('taken slots and availability failures disable schedule buttons', async () => {
   await render(AppointmentPage);
   const proceed = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Next: Pick Schedule') || b.textContent.includes('Skip to Schedule'));

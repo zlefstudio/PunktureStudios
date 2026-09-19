@@ -80,7 +80,7 @@ export function PublicShell({
 
   return (
     <div
-      className={`public-shell min-h-dvh w-full ${page !== 'home' ? 'studio-premium' : ''}`}
+      className={`public-shell min-h-dvh w-full flex flex-col ${page !== 'home' ? 'studio-premium' : ''}`}
       style={{
         background:
           'radial-gradient(1000px 500px at 50% -10%, rgba(139,92,246,0.18) 0%, transparent 60%), var(--color-base)',
@@ -137,10 +137,9 @@ export function PublicShell({
       </div>
 
       <main id="public-content" tabIndex={-1}
-        className={`public-content mx-auto w-full ${wide ? 'md:max-w-4xl lg:max-w-5xl px-4 sm:px-6 py-6 md:py-8' : 'max-w-2xl px-4 sm:px-6 py-6 sm:py-9'}`}
+        className={`public-content mx-auto w-full flex-1 ${wide ? 'md:max-w-4xl lg:max-w-5xl px-4 sm:px-6 py-6 md:py-8' : 'max-w-2xl px-4 sm:px-6 py-6 sm:py-9'}`}
         style={{ animation: 'pk-fade-in 0.5s cubic-bezier(0.16,1,0.3,1) both' }}
       >
-
         {children}
 
         {/* ── Quick action on live page (Aftercare only, without emoji) ── */}
@@ -160,27 +159,27 @@ export function PublicShell({
             </a>
           </nav>
         )}
-
-        {/* ── Footer ── */}
-        <footer className="mx-auto w-full max-w-md pt-7 pb-2 text-center space-y-1.5">
-          {showFooterLinks && (
-            <div className="flex items-center justify-center gap-4 text-[11px] font-semibold">
-              <a href="/privacy.html" className="hover:text-white transition-colors" style={{ color: 'var(--color-text-faint)', textDecoration: 'none' }}>
-                Privacy
-              </a>
-              <a href="/privacy.html#legal" className="hover:text-white transition-colors" style={{ color: 'var(--color-text-faint)', textDecoration: 'none' }}>
-                Legal
-              </a>
-            </div>
-          )}
-          <p className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>
-            © PUNKTURE STUDIOS. All rights reserved.
-          </p>
-          <p className="text-[10px]" style={{ color: 'var(--color-text-faint)', opacity: 0.6 }}>
-            Made by ZLEF
-          </p>
-        </footer>
       </main>
+
+      {/* ── Footer — outside <main> so it always anchors to the bottom of the viewport ── */}
+      <footer className="mx-auto w-full max-w-md px-4 pt-6 pb-4 text-center space-y-1.5">
+        {showFooterLinks && (
+          <div className="flex items-center justify-center gap-4 text-[11px] font-semibold">
+            <a href="/privacy.html" className="hover:text-white transition-colors" style={{ color: 'var(--color-text-faint)', textDecoration: 'none' }}>
+              Privacy
+            </a>
+            <a href="/privacy.html#legal" className="hover:text-white transition-colors" style={{ color: 'var(--color-text-faint)', textDecoration: 'none' }}>
+              Legal
+            </a>
+          </div>
+        )}
+        <p className="text-[10px]" style={{ color: 'var(--color-text-faint)' }}>
+          © PUNKTURE STUDIOS. All rights reserved.
+        </p>
+        <p className="text-[10px]" style={{ color: 'var(--color-text-faint)', opacity: 0.6 }}>
+          Made by ZLEF
+        </p>
+      </footer>
 
       {/* ── Slide-out Navigation Drawer ── */}
       {drawerOpen && (

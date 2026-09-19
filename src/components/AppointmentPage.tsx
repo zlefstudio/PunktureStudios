@@ -293,14 +293,14 @@ export function AppointmentPage() {
     <PublicShell page="appointment">
       <div className="space-y-6 pb-20 sm:pb-12">
         {/* Page Header */}
-        <div>
+        <div className="text-center">
           <p className="text-[10px] uppercase tracking-[0.2em] mb-1" style={{ color: 'var(--color-brand-text)' }}>
             PRIVATE HOME STUDIO
           </p>
           <h1 className="font-bold text-3xl sm:text-4xl text-white tracking-tight leading-tight">
             BOOK AN APPOINTMENT
           </h1>
-          <p className="text-body-xs sm:text-body-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
+          <p className="text-body-xs sm:text-body-sm mt-1 mx-auto max-w-sm" style={{ color: 'var(--color-text-muted)' }}>
             Pick your desired piercing placements, select an available date &amp; time, and confirm your booking.
           </p>
         </div>
@@ -317,9 +317,9 @@ export function AppointmentPage() {
             >
               <Clock size={24} />
             </div>
-            <h2 className="font-bold text-lg text-white">Online Bookings Temporarily Closed</h2>
-            <p className="text-body-xs text-zinc-400 max-w-sm mx-auto">
-              We are currently not accepting new automated bookings. Please message us directly on Instagram for private appointment inquiries.
+            <h2 className="font-bold text-lg text-white">Not Accepting Automated Bookings</h2>
+            <p className="text-body-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+              We're currently taking a pause on automated bookings — we're either restocking jewelry, prepping the studio, taking personal time, or gearing up for our next pop-up event. For updates, reach us on Instagram.
             </p>
             <a
               href="https://www.instagram.com/punkture_studios/"
@@ -329,7 +329,7 @@ export function AppointmentPage() {
               style={{ background: 'var(--color-brand)' }}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
-              Message @punkture_studios ↗
+              @punkture_studios ↗
             </a>
           </div>
         ) : (

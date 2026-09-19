@@ -579,3 +579,21 @@ Release order: deploy the Worker with the increased notes limit first, then publ
 **Validation:** `npm test` **122/122 passed**, `npm run lint` and `npm run build` passed. Tests cover date blocking/reopening, weekly edit isolation, the retired-preset upgrade, empty closures, lunch overlap, shifted occupied bookings, legacy holds, and live selection invalidation. The local staff scheduling controls were also visually checked in-browser. The public page's loaded live settings currently pause bookings, so the customer scheduling flow was verified through component tests rather than changing that live pause. `npm run test:rules` was attempted but could not start: this Mac's temporary Java 21 runtime is missing `lib/jvm.cfg`. New emulator cases cover the staff-only bounded date-block map; they must be rerun after repairing Java.
 
 **Release:** no production deployment or live settings write was performed. Deploy the Worker first, then Firestore rules, then publish the public frontend/reload the local staff app; do not save date-specific exclusions until both Worker and rules support them. The Worker deployment must preserve the live `qrph` payment configuration. Existing custom schedules can be reset with **Apply studio hours → Save changes** after deployment. Restore the Java test runtime and pass `npm run test:rules` before publishing the changed rules.
+
+## Public UI/UX polish & sticky footer layout (2026-09-19)
+
+**Empty queue behavior (`LiveQueuePage.tsx`):**
+- `showStage` is strictly gated to `hasLive && !error`. The live piercing ritual animation renders only when tickets are actively in queue (`waiting`, `called`, or `in_progress`).
+- When the queue is empty, the animation stage, "QUEUE EMPTY", and "Waiting for updates…" status rows are replaced with a single unified CTA card:
+  - Title: "No active queue right now"
+  - Description: "Want to get pierced? Check out our next pop-up event or secure a private home studio appointment."
+  - Action buttons: "Next pop-up event" (links to `/popup.html`) and "Book an appointment" (links to `/appointment.html`).
+- Cleaned up unneeded Firestore settings subscriptions and legacy conditionals from `LiveQueuePage`.
+
+**Sticky public footer layout (`PublicShell.tsx`):**
+- Restructured `PublicShell` layout hierarchy: `<div className="public-shell min-h-dvh w-full flex flex-col">` wrapping `<header>`, `<main className="public-content ... flex-1">`, and `<footer>` directly as sibling to `<main>`.
+- The footer anchors reliably to the bottom of the viewport on short/empty pages across all device sizes, and flows naturally below long scrollable content.
+
+**Centered headers & booking closed notice:**
+- Centered headers across public informational pages: `WaiverPage.tsx`, `AftercarePage.tsx`, `PrivacyPage.tsx`, and `AppointmentPage.tsx`.
+- Updated booking closed announcement on `AppointmentPage.tsx`: concise header "Not Accepting Automated Bookings" and context-rich advisory explaining studio preparations/restocking/events with link to `@punkture_studios` on Instagram.
