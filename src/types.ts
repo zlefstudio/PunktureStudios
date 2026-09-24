@@ -156,3 +156,18 @@ export interface PaymentBooking {
   last_error?: string | null;
   emails?: { kind: string; status: string }[];
 }
+
+/** Sanitized public mirror. */
+export interface PublicQueueRow {
+  id: string;
+  ticketNumber: number;
+  status: 'waiting' | 'called' | 'in_progress';
+  position: number | null;
+  seq: number | null;
+  createdAt?: number;
+  calledAt?: number | null;
+  startedAt?: number | null;
+  updatedAt?: number;
+  maskedNickname?: string;
+  estimatedDurationMinutes?: number;
+}

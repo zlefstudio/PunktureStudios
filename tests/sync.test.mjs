@@ -136,3 +136,17 @@ test('a second restore during a stalled first restore keeps its own intent', asy
   assert.equal(remote.get(`tickets/${first.tickets[0].id}`).name, 'Second restore');
   assert.equal(await db.meta.get('restorePending'), undefined);
 });
+
+
+test('public mirror masks nickname and updates order duration without leaking private fields', async () => {
+  const t = await store().addTicket('Punkture', 'private notes');
+  await store().addItem({ ticketId: t.id, placementName: 'Lobe', basePrice: 250, upgradeLabel: 'Free', upgradePrice: 0, quantity: 1 });
+  await syncNow();
+  const row = remote.get(`publicQueue/${t.id}`);
+  assert.equal(row.maskedNickname, 'P******e');
+  assert.equal(row.estimatedDurationMinutes, 5);
+  assert.equal(row.name, undefined); assert.equal(row.notes, undefined);
+  await store().updateItem(store().items[0].id, { quantity: 2 });
+  await syncNow();
+  assert.equal(remote.get(`publicQueue/${t.id}`).estimatedDurationMinutes, 10);
+});

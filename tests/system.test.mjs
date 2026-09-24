@@ -117,3 +117,55 @@ test('reorder failure restores the previous visible order', async () => {
   finally { db.tickets.update = update; }
   assert.deepEqual(store().tickets, before);
 });
+
+
+test('Manila midnight rolls over once, preserves carryovers and history', async () => {
+  const { rolloverQueueDay, manilaDay } = await import('../src/queueDay.ts');
+  const { withDataLock } = await import('../src/dataLock.ts');
+  const midnight = Date.parse('2026-09-24T00:00:00+08:00');
+  const a = await store().addTicket('Done'); await addItem(a.id); await store().finishTicket(a.id);
+  const b = await store().addTicket('Waiting');
+  const c = await store().addTicket('First'); await store().moveWaitingTicket(c.id, 0);
+  await db.meta.put({ key: 'queueDay', value: manilaDay(midnight - 1) });
+  assert.equal(await withDataLock(() => rolloverQueueDay(midnight - 1)), false);
+  assert.equal(await withDataLock(() => rolloverQueueDay(midnight)), true);
+  await store().loadAll();
+  assert.deepEqual(sortWaiting(store().tickets).map(t => [t.id, t.ticketNumber]), [[c.id, 1], [b.id, 2]]);
+  assert.ok((await db.tickets.get(a.id)).archivedAt);
+  assert.equal((await db.items.toArray()).length, 1);
+  assert.equal(await withDataLock(() => rolloverQueueDay(midnight + 1)), false);
+});
+
+test('public estimates match staff and react to early completion and overtime', async () => {
+  const { maskNickname } = await import('../src/publicQueue.ts');
+  assert.equal(maskNickname('Punkture'), 'P******e');
+  assert.equal(maskNickname('Al'), '***');
+  const a = await store().addTicket('Private'); await addItem(a.id); await store().startPiercing(a.id);
+  const b = await store().addTicket('Next'); await addItem(b.id);
+  const tickets = store().tickets;
+  const start = tickets.find(t => t.id === a.id).startedAt;
+  const durations = new Map([[a.id, 5], [b.id, 5]]);
+  const staff = calculateQueueWaitTimes(tickets, store().items, start + 120000);
+  const publicTiming = calculateQueueWaitTimes(tickets, [], start + 120000, durations);
+  assert.equal(publicTiming.estimates.get(b.id).waitMinutes, staff.estimates.get(b.id).waitMinutes);
+  assert.equal(publicTiming.estimates.get(b.id).waitMinutes, 3);
+  assert.equal(calculateQueueWaitTimes(tickets.filter(t => t.id !== a.id), [], start + 120000, durations).estimates.get(b.id).waitMinutes, 0);
+  const overtime = calculateQueueWaitTimes(tickets, [], start + 600000, durations);
+  assert.equal(overtime.inProgressEstimate.isOvertime, true);
+  assert.equal(overtime.estimates.get(b.id).waitMinutes, 1);
+});
+
+
+test('local preview projects masked names and durations without cloud sync', async () => {
+  const { buildPublicQueue } = await import('../src/publicQueue.ts');
+  const t = await store().addTicket('Punkture', 'private'); await addItem(t.id);
+  const project = () => buildPublicQueue(store().tickets, store().items);
+  assert.equal(project()[0].maskedNickname, 'P******e');
+  assert.equal(project()[0].estimatedDurationMinutes, 5);
+  assert.equal(project()[0].name, undefined);
+  assert.equal(project()[0].notes, undefined);
+  await store().updateItem(store().items[0].id, { quantity: 2 });
+  assert.equal(project()[0].estimatedDurationMinutes, 10);
+  await store().finishTicket(t.id);
+  assert.deepEqual(project(), []);
+});

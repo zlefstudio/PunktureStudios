@@ -162,3 +162,15 @@ test('event ranges cannot overlap or end before they start', async () => {
  await assertFails(setDoc(doc(staff(),'public','public'),{...s,events:[e,{...e,id:'other',eventDate:'2026-09-15'}]}));
  await assertFails(setDoc(doc(staff(),'public','public'),{...s,events:[{...e,eventEndDate:'2026-09-13'}]}));
 });
+
+
+test('public queue permits masked nickname and duration but rejects raw names and invalid duration', async () => {
+  const row = { id: 'safe', ticketNumber: 1, status: 'waiting', position: 0, seq: 0, createdAt: 1, updatedAt: 1, calledAt: null, startedAt: null, maskedNickname: 'P******e', estimatedDurationMinutes: 5 };
+  const target = doc(staff(), 'publicQueue', 'safe');
+  await assertSucceeds(setDoc(target, row));
+  await assertSucceeds(getDoc(doc(anon(), 'publicQueue', 'safe')));
+  await assertFails(setDoc(target, { ...row, maskedNickname: 'Punkture' }));
+  await assertFails(setDoc(target, { ...row, name: 'Punkture' }));
+  await assertFails(setDoc(target, { ...row, estimatedDurationMinutes: -1 }));
+  await assertFails(setDoc(doc(anon(), 'publicQueue', 'safe'), row));
+});

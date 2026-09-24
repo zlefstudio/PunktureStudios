@@ -1,3 +1,4 @@
+import { rolloverQueueDay } from './queueDay';
 import { create } from 'zustand';
 import { db, allocateTicketNumber, setTicketCounter, recordItemDeletions } from './db';
 import type { Ticket, PiercingItem, BackupPayload } from './types';
@@ -21,6 +22,8 @@ interface AppState {
   items: PiercingItem[];
   activeTicketId: string | null;
   loaded: boolean;
+
+  checkQueueDay: () => Promise<void>;
 
   // Init
   loadAll: () => Promise<void>;
@@ -87,6 +90,10 @@ export const useStore = create<AppState>((set, get) => ({
   activeTicketId: null,
   activeTab: 'active',
   loaded: false,
+
+  checkQueueDay: async () => {
+    if (await rolloverQueueDay()) await get().loadAll();
+  },
 
   loadAll: async () => {
     let [rows, rawItems] = await Promise.all([
@@ -494,12 +501,17 @@ export const useStore = create<AppState>((set, get) => ({
 
 // Sync and every local mutation share one lock. callNext delegates to callTicket.
 const serializedActions = [
-  'addTicket', 'callTicket', 'startPiercing', 'cancelSession', 'finishTicket',
+  'checkQueueDay', 'addTicket', 'callTicket', 'startPiercing', 'cancelSession', 'finishTicket',
   'cancelTicket', 'sendToEnd', 'moveWaitingTicket', 'updateTicketNotes',
   'reopenTicket', 'clearHistoryAndResetNumbering', 'addItem', 'updateItem',
   'deleteItem', 'deleteItemsByTicket', 'importBackup', 'exportBackup',
 ] as const;
 for (const key of serializedActions) {
   const action = useStore.getState()[key] as (...args: never[]) => Promise<unknown>;
-  useStore.setState({ [key]: (...args: never[]) => withDataLock(() => action(...args)) });
+  useStore.setState({ [key]: (...args: never[]) => withDataLock(async () => {
+    if (key === 'addTicket' || key === 'reopenTicket') {
+      if (await rolloverQueueDay()) await useStore.getState().loadAll();
+    }
+    return action(...args);
+  }) });
 }

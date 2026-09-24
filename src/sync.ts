@@ -1,11 +1,13 @@
+import { buildPublicQueue } from './publicQueue';
+import { rolloverQueueDay, manilaDay } from './queueDay';
 // Cloud sync service — offline-first.
 //
 // The local IndexedDB (Dexie) is always the source of truth while working.
 // When online AND signed in, this module:
 //   · pushes local tickets/items that changed (newer updatedAt) → Firestore
 //   · pulls remote changes into the local DB (last-write-wins by updatedAt)
-//   · republishes a sanitized "publicQueue" mirror (ticket # + status ONLY —
-//     never names) for the public live-queue page to read.
+//   · republishes a sanitized "publicQueue" mirror (ticket #, masked nickname and duration —
+//     never raw names/orders) for the public live-queue page to read.
 //
 // Multiple cashier browsers can connect; records merge by updatedAt.
 
@@ -28,7 +30,6 @@ import {
 import { firestore, auth } from './firebase';
 import { db, setTicketCounter, listItemDeletions, clearItemDeletions } from './db';
 import { useStore } from './store';
-import { sortWaiting } from './queue';
 import { withDataLock } from './dataLock';
 import { validateTicket, validateItem, validateSettings } from './validation';
 import type { Ticket, PiercingItem, PublicSettings } from './types';
@@ -288,7 +289,7 @@ async function pullRemoteChanges(): Promise<void> {
         // sure the primary key is set before bulkPut.
         const row = validateTicket({ ...remote, id });
         incomingTickets.push(row);
-        if (typeof row.archivedAt !== 'number' && row.ticketNumber > maxNumber) {
+        if (typeof row.archivedAt !== 'number' && manilaDay(row.createdAt) === manilaDay(Date.now()) && row.ticketNumber > maxNumber) {
           maxNumber = row.ticketNumber;
         }
       }
@@ -393,67 +394,15 @@ async function pushPublicSettings(): Promise<void> {
  * cancelled, archived or gone) are removed from the public collection.
  */
 async function publishPublicQueue(): Promise<void> {
-  const localTickets = await db.tickets.toArray();
-  const live = localTickets.filter(
-    (t) => (t.status === 'waiting' || t.status === 'called' || t.status === 'in_progress') &&
-      typeof t.archivedAt !== 'number'
-  );
-  const waiting = sortWaiting(localTickets);
-  const waitingIndex = new Map(waiting.map((t, i) => [t.id, i]));
-  const called = live
-    .filter((t) => t.status === 'called')
-    .sort((a, b) => (a.calledAt ?? 0) - (b.calledAt ?? 0));
-  const active = live
-    .filter((t) => t.status === 'in_progress')
-    .sort((a, b) => (a.startedAt ?? 0) - (b.startedAt ?? 0));
-
-  const desired = new Map<string, Record<string, unknown>>();
-
-  for (const t of called) {
-    desired.set(t.id, {
-      ticketNumber: t.ticketNumber,
-      status: t.status,
-      position: null,
-      seq: 100 + desired.size,
-      createdAt: t.createdAt,
-      calledAt: t.calledAt ?? null,
-      startedAt: null,
-      updatedAt: t.updatedAt,
-    });
-  }
-  for (const t of active) {
-    desired.set(t.id, {
-      ticketNumber: t.ticketNumber,
-      status: t.status,
-      position: null,
-      seq: 200 + desired.size,
-      createdAt: t.createdAt,
-      calledAt: t.calledAt ?? null,
-      startedAt: t.startedAt ?? null,
-      updatedAt: t.updatedAt,
-    });
-  }
-  for (const t of live) {
-    if (t.status !== 'waiting') continue;
-    const position = waitingIndex.get(t.id) ?? 0;
-    desired.set(t.id, {
-      ticketNumber: t.ticketNumber,
-      status: t.status,
-      position,
-      seq: position,
-      createdAt: t.createdAt,
-      calledAt: null,
-      startedAt: null,
-      updatedAt: t.updatedAt,
-    });
-  }
-
+  const [tickets, items] = await db.transaction('r', db.tickets, db.items, () =>
+    Promise.all([db.tickets.toArray(), db.items.toArray()]));
+  const desired = new Map(buildPublicQueue(tickets, items).map(row => [row.id, row]));
   const remote = await readRemoteRows(PUBLIC_QUEUE);
   const upserts: CloudRow[] = [];
   for (const [id, data] of desired) {
     const previous = remote.get(id) as unknown as Record<string, unknown> | undefined;
     if (!previous || Object.entries(data).some(([key, value]) => previous[key] !== value)) {
-      upserts.push({ id, ...data } as CloudRow);
+      upserts.push({ ...data } as CloudRow);
     }
   }
   await writeRows(PUBLIC_QUEUE, upserts);
@@ -492,6 +441,9 @@ export async function syncNow(): Promise<void> {
     const restored = await applyPendingRestore();
     if (!restored) { await pullRemoteChanges(); await pullPublicSettings(); }
     if (await db.meta.get('restorePending')) { scheduleSync(0); return; }
+    await withDataLock(async () => {
+      if (await rolloverQueueDay()) await useStore.getState().loadAll();
+    });
     await pushLocalChanges();
     await pushPublicSettings();
     if (await db.meta.get('restorePending')) { scheduleSync(0); return; }

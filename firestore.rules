@@ -64,7 +64,9 @@ service cloud.firestore {
       allow read: if true;
       allow delete: if isStaff();
       allow create, update: if isStaff()
-        && request.resource.data.keys().hasOnly(['id', 'ticketNumber', 'status', 'position', 'seq', 'createdAt', 'calledAt', 'startedAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['id', 'ticketNumber', 'status', 'position', 'seq', 'createdAt', 'calledAt', 'startedAt', 'updatedAt', 'maskedNickname', 'estimatedDurationMinutes'])
+        && (!('maskedNickname' in request.resource.data) || (request.resource.data.maskedNickname is string && request.resource.data.maskedNickname.size() <= 400 && request.resource.data.maskedNickname.matches('[^*]?[*]+[^*]?')))
+        && (!('estimatedDurationMinutes' in request.resource.data) || (request.resource.data.estimatedDurationMinutes is number && request.resource.data.estimatedDurationMinutes >= 0))
         && request.resource.data.id == id
         && request.resource.data.ticketNumber is int && request.resource.data.ticketNumber > 0
         && request.resource.data.status in ['waiting', 'called', 'in_progress']

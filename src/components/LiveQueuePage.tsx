@@ -1,3 +1,5 @@
+import type { PublicQueueRow as PublicRow, Ticket as QueueTicket } from '../types';
+import { calculateQueueWaitTimes } from '../queueEstimates';
 import { useEffect, useMemo, useState } from 'react';
 import { onSnapshot, collection, query, doc } from 'firebase/firestore';
 import { firestore } from '../firebase';
@@ -8,21 +10,8 @@ import { PublicShell } from './PublicShell';
 /**
  * PUBLIC LIVE QUEUE — customer-facing, real-time, privacy-safe.
  * Reads only the sanitized `publicQueue` collection that the cashier app
- * publishes (ticket number + status; NEVER names/notes/prices).
+ * publishes (ticket number, masked nickname, duration; NEVER raw names/notes/prices).
  */
-
-type LiveStatus = 'waiting' | 'called' | 'in_progress';
-
-interface PublicRow {
-  ticketNumber: number;
-  status: LiveStatus;
-  position: number | null;
-  seq: number | null;
-  createdAt?: number;
-  calledAt?: number | null;
-  startedAt?: number | null;
-  updatedAt?: number;
-}
 
 interface QueueData {
   waiting: PublicRow[];
@@ -41,16 +30,21 @@ function friendlyError(err: unknown): string {
   return 'Cannot load the live queue right now. Check your connection and refresh.';
 }
 
-export function LiveQueuePage() {
+export function LiveQueuePage({ localPreview }: { localPreview?: { rows: PublicRow[] | null; error: string | null } } = {}) {
   const [heartbeat, setHeartbeat] = useState(0);
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(timer); }, []);
-  useEffect(() => onSnapshot(doc(firestore, 'public', 'heartbeat'), snap => {
-    const stamp = snap.data()?.publishedAt; setHeartbeat(stamp?.toMillis?.() ?? 0);
-  }, () => setHeartbeat(0)), []);
-  const [rows, setRows] = useState<PublicRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const isLocal = localPreview !== undefined;
   useEffect(() => {
+    if (isLocal) return;
+    return onSnapshot(doc(firestore, 'public', 'heartbeat'), snap => {
+    const stamp = snap.data()?.publishedAt; setHeartbeat(stamp?.toMillis?.() ?? 0);
+  }, () => setHeartbeat(0));
+  }, [isLocal]);
+  const [cloudRows, setRows] = useState<PublicRow[] | null>(null);
+  const [cloudError, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (isLocal) return;
     const q = query(collection(firestore, 'publicQueue'));
     const unsub = onSnapshot(
       q,
@@ -59,7 +53,7 @@ export function LiveQueuePage() {
         snap.forEach((d) => {
           const data = d.data() as PublicRow;
           if (typeof data.ticketNumber !== 'number') return;
-          out.push(data);
+          out.push({ ...data, id: d.id });
         });
         setRows(out);
         setError(null);
@@ -69,7 +63,9 @@ export function LiveQueuePage() {
       }
     );
     return unsub;
-  }, []);
+  }, [isLocal]);
+  const rows = localPreview ? localPreview.rows : cloudRows;
+  const error = localPreview ? localPreview.error : cloudError;
 
   const data: QueueData = useMemo(() => {
     const waiting = (rows ?? [])
@@ -88,11 +84,15 @@ export function LiveQueuePage() {
     ? Math.max(...rows.map((r) => r.updatedAt ?? 0))
     : undefined;
   const hasLive = (data.waiting.length + data.called.length + data.inProgress.length) > 0;
-  const fresh = heartbeat > 0 && now - heartbeat < 90000 && now - heartbeat > -60000;
+  const fresh = isLocal || (heartbeat > 0 && now - heartbeat < 90000 && now - heartbeat > -60000);
   const live = hasLive && fresh && !error;
   const nowServing = data.inProgress[0] ?? data.called[0];
   const nextUp = data.waiting[0];
   const showStage = hasLive && !error;
+  const timing = useMemo(() => calculateQueueWaitTimes(
+    (rows ?? []).map(r => ({ ...r, name: '', createdAt: r.createdAt ?? 0, updatedAt: r.updatedAt ?? 0, queueOrder: r.position ?? 0, startedAt: r.startedAt ?? undefined, calledAt: r.calledAt ?? undefined }) as QueueTicket),
+    [], now, new Map((rows ?? []).map(r => [r.id, r.estimatedDurationMinutes ?? 6]))
+  ), [rows, now]);
 
   return (
     <PublicShell page="live" wide>
@@ -200,22 +200,37 @@ export function LiveQueuePage() {
             </div>
           ) : (
             <>
+              <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
+                <strong className="font-semibold" style={{ color: 'var(--color-text)' }}>Please note:</strong>{' '}Times are estimates in Philippine time and may change depending on session duration. Please proceed to our booth as your turn approaches. Once your name or number is called, come to the booth promptly. If you miss 3 calls, you will be removed from the queue.
+              </p>
               {/* Now serving */}
               {nowServing && (
                 <div
-                  className="relative overflow-hidden rounded-3xl p-6 text-center"
+                  key={nowServing.id}
+                  data-moving={live && nowServing.status === 'in_progress'}
+                  className="queue-serving relative rounded-3xl px-5 py-4 text-center"
                   style={{
                     background: 'linear-gradient(145deg, rgba(139,92,246,0.22), rgba(139,92,246,0.06))',
                     border: '1px solid rgba(168,85,247,0.45)',
                     boxShadow: '0 0 0 1px rgba(168,85,247,0.12), 0 18px 50px -20px rgba(139,92,246,0.5)',
                   }}
                 >
-                  <p className="text-label-xs mb-1" style={{ color: 'var(--color-brand-text)' }}>
-                    {nowServing.status === 'in_progress' ? '⚡ NOW SERVING' : '📣 NOW CALLING'}
+                  <p className="queue-serving-label text-label-xs mb-1" style={{ color: 'var(--color-brand-text)' }}>
+                    <span className="queue-session-signal" aria-hidden="true"><i /><i /><i /></span>
+                    {nowServing.status === 'in_progress' ? 'NOW SERVING' : 'NOW CALLING'}
                   </p>
-                  <p className="font-black leading-none" style={{ fontSize: 'clamp(44px, 14vw, 72px)', fontFamily: 'var(--font-mono)', color: '#fff' }}>
+                  <p className="queue-serving-number font-black" style={{ fontSize: 'clamp(40px, 11vw, 56px)', fontFamily: 'var(--font-mono)', color: '#fff' }}>
                     #{nowServing.ticketNumber}
                   </p>
+                  {nowServing.maskedNickname && <p className="mt-2 font-semibold break-all">{nowServing.maskedNickname}</p>}
+                  {live && <div className="queue-session-duration mt-2 text-body-xs">
+                    <span>Estimated session: {nowServing.estimatedDurationMinutes ?? 6} min</span>
+                    {timing.inProgressEstimate?.ticketId === nowServing.id && timing.inProgressEstimate.elapsedMinutes - timing.inProgressEstimate.totalDuration >= 1 && (
+                      <span className="queue-overtime-badge" aria-label={`${Math.floor(timing.inProgressEstimate.elapsedMinutes - timing.inProgressEstimate.totalDuration)} minutes over the estimated session duration`}>
+                        +{Math.floor(timing.inProgressEstimate.elapsedMinutes - timing.inProgressEstimate.totalDuration)} min
+                      </span>
+                    )}
+                  </div>}
                   <p className="mt-2 text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
                     {nowServing.status === 'in_progress'
                       ? 'This ticket is at the piercing chair now ✨'
@@ -226,32 +241,40 @@ export function LiveQueuePage() {
 
               {/* Queue card */}
               <div className="w-full rounded-3xl p-5 sm:p-6 space-y-3" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-                {nextUp && (
-                  <div
-                    className="flex items-center justify-between rounded-2xl px-5 py-4"
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)' }}
-                  >
-                    <span className="text-body-sm font-semibold" style={{ color: 'var(--color-text-muted)' }}>
-                      Next in line
-                    </span>
-                    <span className="font-black font-mono" style={{ fontSize: 22, color: '#a78bfa' }}>
-                      #{nextUp.ticketNumber}
-                    </span>
-                  </div>
-                )}
-
                 {data.waiting.length > 0 && (
-                  <div className="space-y-2">
                     <p className="flex items-center gap-1.5 text-label-xs" style={{ color: 'var(--color-text-faint)' }}>
                       <Ticket size={12} />
                       In line · {data.waiting.length} {data.waiting.length === 1 ? 'person' : 'people'}
                     </p>
+                )}
+                {nextUp && (
+                  <div
+                    key={nextUp.id}
+                    data-moving={live}
+                    className="queue-next rounded-2xl px-4 py-3"
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)' }}
+                  >
+                    <span className="queue-next-aura" aria-hidden="true" />
+                    <div className="queue-next-layout">
+                      <span className="queue-next-ticket font-black font-mono">#{nextUp.ticketNumber}</span>
+                      <div className="queue-next-copy">
+                        <p className="queue-next-eyebrow">Next in line</p>
+                        {nextUp.maskedNickname && <p className="queue-next-name">{nextUp.maskedNickname}</p>}
+                        <p className="queue-next-estimate">{live ? timing.estimates.get(nextUp.id)?.formattedEstimate : 'Estimate paused'}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {data.waiting.length > 1 && (
+                  <div className="space-y-2">
+
                     <div
                       className={`space-y-2 ${data.waiting.length > 7 ? 'max-h-[385px] overflow-y-auto pr-1' : ''}`}
                     >
-                      {data.waiting.map((w, i) => (
+                      {data.waiting.slice(1).map((w, i) => (
                         <div
-                          key={`${w.ticketNumber}-${w.position}`}
+                          key={w.id}
                           className="flex items-center gap-3 rounded-2xl px-4 py-3"
                           style={{
                             background: 'rgba(255,255,255,0.03)',
@@ -267,25 +290,23 @@ export function LiveQueuePage() {
                               fontSize: 11,
                             }}
                           >
-                            {(w.position ?? i) + 1}
+                            {(w.position ?? i + 1) + 1}
                           </span>
                           <span className="font-black font-mono" style={{ fontSize: 15 }}>
                             #{w.ticketNumber}
                           </span>
-                          {w.position === 0 && !nowServing && (
-                            <span
-                              className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full"
-                              style={{ background: 'rgba(217,119,6,0.15)', color: 'var(--color-warn-text)', border: '1px solid rgba(217,119,6,0.3)' }}
-                            >
-                              NEXT
-                            </span>
-                          )}
+                          <div className="min-w-0 flex-1 text-body-xs">
+                            {w.maskedNickname && <p className="font-semibold break-all">{w.maskedNickname}</p>}
+                            <p style={{ color: 'var(--color-text-muted)' }}>{live ? timing.estimates.get(w.id)?.formattedEstimate : 'Estimate paused'}</p>
+                          </div>
+
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
+
             </>
           )}
         </div>

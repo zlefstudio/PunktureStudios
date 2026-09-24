@@ -1,0 +1,76 @@
+/* Decorative activity cues; these never represent measured procedure progress. */
+.queue-serving, .queue-next {
+  isolation: isolate;
+  transition: border-color 280ms ease, box-shadow 280ms ease;
+}
+.queue-serving-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.queue-serving-label { margin-bottom: 8px; }
+.studio-premium .queue-serving-number { line-height: 1.1; }
+.studio-premium .queue-serving > p:not(.queue-serving-number) { line-height: 1.5; }
+.queue-session-signal { display: inline-flex; align-items: center; gap: 3px; height: 13px; }
+.queue-session-signal i { width: 2px; height: 9px; border-radius: 2px; background: #c4b5fd; transform: scaleY(.5); }
+.queue-session-signal i:nth-child(2) { height: 13px; transform: scaleY(.8); }
+.queue-next { position: relative; overflow: hidden; }
+.queue-next-layout { display: grid; grid-template-columns: minmax(62px, auto) minmax(0, 1fr); gap: 16px; align-items: center; padding: 3px 0; }
+.queue-next-ticket { color: #c4b5fd; font-size: 28px; line-height: 1; letter-spacing: -.04em; text-align: center; }
+.queue-next-copy { min-width: 0; padding-left: 16px; border-left: 1px solid rgba(196,181,253,.15); }
+.studio-premium .queue-next-copy p { margin: 0; line-height: 1.5; }
+.queue-next-eyebrow { color: #a99abc; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.studio-premium .queue-next-copy .queue-next-name { margin-top: 4px; color: #eee9f8; font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
+.studio-premium .queue-next-copy .queue-next-estimate { margin-top: 3px; color: var(--color-text-muted); font-size: 12px; }
+.queue-next-aura {
+  position: absolute; inset: 0; padding: 1px; border-radius: inherit;
+  pointer-events: none; overflow: hidden;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+.queue-next-aura::before {
+  content: ''; position: absolute; left: -100%; top: -100%; width: 300%; height: 300%;
+  background: conic-gradient(from 0deg, transparent 0deg 260deg, rgba(139,92,246,.12) 285deg, rgba(167,139,250,.85) 320deg, rgba(139,92,246,.18) 345deg, transparent 360deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .queue-next[data-moving="true"] .queue-next-aura::before { animation: aura-orbit 7s linear infinite; }
+  .queue-serving, .queue-next { animation: queue-card-arrive 420ms cubic-bezier(.2,.7,.3,1) both; }
+  .queue-serving[data-moving="true"] .queue-session-signal i { animation: queue-session-breathe 2.4s ease-in-out infinite; }
+  .queue-serving[data-moving="true"] .queue-session-signal i:nth-child(2) { animation-delay: 180ms; }
+  .queue-serving[data-moving="true"] .queue-session-signal i:nth-child(3) { animation-delay: 360ms; }
+}
+@media (hover: hover) {
+  .queue-serving:hover { box-shadow: 0 0 0 1px rgba(196,181,253,.2), 0 22px 48px -26px rgba(139,92,246,.6) !important; }
+  .queue-next:hover { border-color: rgba(196,181,253,.35) !important; box-shadow: inset 0 0 24px rgba(139,92,246,.06); }
+}
+.queue-next:active { border-color: rgba(196,181,253,.45) !important; }
+@keyframes queue-session-breathe { 0%,100% { transform: scaleY(.45); opacity: .6; } 50% { transform: scaleY(1); opacity: 1; } }
+@keyframes queue-card-arrive { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Glow lives outside the card; animate opacity rather than repainting a blur. */
+.queue-serving::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  box-shadow: 0 0 0 1px rgba(192,151,255,.4), 0 0 22px 2px rgba(139,92,246,.24), 0 12px 28px -9px rgba(139,92,246,.38);
+  opacity: .3;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .queue-serving[data-moving="true"]::before { animation: queue-violet-glow 4.8s ease-in-out infinite; }
+}
+@keyframes queue-violet-glow { 0%,100% { opacity: .2; } 50% { opacity: .95; } }
+
+.queue-session-duration { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 7px; }
+.queue-overtime-badge {
+  display: inline-flex; align-items: center; padding: 2px 7px;
+  border: 1px solid rgba(196,181,253,.22); border-radius: 999px;
+  color: #d4c3fa; background: rgba(139,92,246,.12);
+  font-size: 10px; font-weight: 600; line-height: 1.4; font-variant-numeric: tabular-nums;
+}

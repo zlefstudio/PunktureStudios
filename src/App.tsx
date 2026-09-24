@@ -22,6 +22,7 @@ export function App() {
     let closed = false;
     const initialize = async () => {
       if (closed) return;
+      await useStore.getState().checkQueueDay();
       await loadAll();
       if (!closed) startSyncWatcher();
     };
@@ -30,6 +31,13 @@ export function App() {
     });
     return () => { closed = true; };
   }, [loadAll]);
+
+  useEffect(() => {
+    const check = () => { void useStore.getState().checkQueueDay(); };
+    const timer = window.setInterval(check, 15000);
+    window.addEventListener('focus', check);
+    return () => { clearInterval(timer); window.removeEventListener('focus', check); };
+  }, []);
 
   if (!loaded || initError) {
     return (

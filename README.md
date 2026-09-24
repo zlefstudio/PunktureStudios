@@ -307,7 +307,7 @@ Customer/admin emails include acknowledgement receipt details after verification
 - **Staff Authentication**: Managed via Firebase Auth. Staff accounts are authorized by creating a Firestore document at **`staff/{UID}`** with `{ enabled: true }`. Clients cannot self-authorize.
 - **Manila Timezone (UTC+8)**: Appointments strictly validate that the ISO date and time match the epoch millisecond `requestedFor` in Asia/Manila (+08:00).
 - **Public Privacy Safeguards**:
-  - `publicQueue` documents strip all customer names and notes; only `ticketNumber`, `status`, `position`, `seq`, and timestamps are exposed.
+  - `publicQueue` documents strip raw customer names, notes and orders; ticket numbers, status/order, timestamps, `maskedNickname` and aggregate `estimatedDurationMinutes` are exposed.
   - Public users cannot create, list or inspect Firestore appointments. Staff may read/cancel/delete legacy records, but cannot create or confirm them; new payments are backend-only.
 
 ### Firestore Collections Contract
@@ -597,3 +597,33 @@ Release order: deploy the Worker with the increased notes limit first, then publ
 **Centered headers & booking closed notice:**
 - Centered headers across public informational pages: `WaiverPage.tsx`, `AftercarePage.tsx`, `PrivacyPage.tsx`, and `AppointmentPage.tsx`.
 - Updated booking closed announcement on `AppointmentPage.tsx`: concise header "Not Accepting Automated Bookings" and context-rich advisory explaining studio preparations/restocking/events with link to `@punkture_studios` on Instagram.
+
+## Daily queue and public estimates (2026-09-24)
+
+The staff app checks the Manila calendar day at startup, every 15 seconds, on focus, before add/reopen, and during sync. `queueDay.ts` persists a numeric `queueDay` marker in Dexie meta and performs rollover under the shared data lock and one transaction. Finished/cancelled tickets are archived without removing orders/revenue; carryover active tickets come first, followed by the existing waiting order, numbered from #1. The next new ticket follows those carryovers (or starts at #1 for an empty queue). Sleep/closed-app rollover happens on resuming/opening. Old cloud history cannot inflate today's counter.
+
+`queueEstimates.ts` is the shared pure duration/wait engine; staff hooks remain in `timeEstimate.ts`, so the public page does not import the staff store. The public mirror adds only `maskedNickname` (Punkture → P******e; names shorter than three characters become ***) and aggregate `estimatedDurationMinutes`, never raw names, placements, prices or notes. Item edits recompute the duration at the next sync. The live page recomputes every 15 seconds and on snapshots, includes called sessions and the remaining active-session time, and removes completed sessions from subsequent waits. Overtime retains the existing rolling one-minute buffer and explicitly warns that the finish time is unknown; estimates keep moving until staff finishes the session. All estimate clocks use Asia/Manila. Stale heartbeat estimates are hidden as “Estimate paused”. Older public rows fall back to six minutes with no nickname.
+
+Release requires updated Firestore rules before publishing the frontend and reloading the local staff app so it publishes the new sanitized fields. Staff pages remain local-only on port 5174.
+
+**Validation/release:** 128/128 application tests and 16/16 Firestore emulator tests passed; lint and production build passed. Published Firestore rules and the seven public pages to `punkture-studios` on 2026-09-24 (Manila). Reload the local admin and keep cloud sync connected to publish masked names and durations for existing tickets.
+
+**Local live preview fix (2026-09-24):** Vite development `/live` now loads `LocalLiveQueuePreview`, a read-only Dexie live query over the same browser/origin's staff queue. Nicknames and order durations update immediately even offline or before cloud sync, using `buildPublicQueue` (also used by cloud publishing) as the shared privacy projection. The local page uses the same customer-facing presentation as production. Open admin and preview in the same browser at localhost:5174; other browser profiles have different local databases. Production builds eliminate this development import and continue reading only sanitized Firestore public rows. No GitHub push is required for local changes.
+
+Validation for local preview: 129 application tests, lint and build passed. Browser check confirmed the local preview loads; the agent browser has separate storage from the user's Brave profile. This follow-up was not deployed.
+
+**Live queue motion polish (2026-09-24):** Removed development-only source copy and the LOCAL PREVIEW badge so local and deployed presentations match. `liveQueue.css` gives Now Serving a quiet staggered activity signal and a thin flowing accent; Next in Line uses a breathing ring and occasional 3px chevron nudge. Both have restrained hover feedback and an entrance transition keyed to ticket changes. Activity stops when cloud updates pause; reduced-motion users see static indicators. These are decorative activity cues, never measured piercing progress or completion percentages. Data-source selection and queue timing remain unchanged.
+
+Motion polish validation: 129 tests, lint and production build passed; serving/next cards were visually checked using a temporary isolated fixture without changing customer data. No deployment in this follow-up.
+
+**Compact live queue cards (2026-09-24):** Now Serving uses a smaller ticket number, tighter spacing and an explicit line height to avoid the shared paragraph style inflating the card. An external violet halo softly fades in/out while serving, with static fallback for paused/reduced-motion states. In Line count sits above the queue; the first waiting client appears only in Next in Line, which now includes masked nickname and wait estimate. Remaining clients render once beneath it with their original positions. No timing or data changes.
+
+Compact-card validation: 129 tests, lint and build passed. A populated visual fixture confirmed the smaller card and one next-client entry with nickname/time retained. Not deployed in this follow-up.
+
+**Next-client alignment and queue reminder (2026-09-24):** Next in Line now uses a consistent two-column layout: ticket number on the left; label, masked nickname and estimate aligned on the right, separated by a fine divider. A violet-only orbiting border follows the staff session-aura technique, with paused/reduced-motion static fallback; extra dot/arrow motion is removed. Now Serving no longer has the center loading line. Added the customer reminder that being passed over five times removes a person from the queue. This is displayed studio policy only; no automatic skip counting or cancellation was added.
+
+Alignment polish validated with 129 passing tests, lint, build and a populated browser fixture. No production deployment in this follow-up.
+
+**Queue notice wording (2026-09-24):** The estimate notice now reads “Please note: Times are estimates in Philippine time and may change depending on session duration.” The booth reminder asks customers to approach as their turn nears and attend promptly when called; the displayed removal policy is now **3 missed calls**, superseding the earlier five-pass wording. This remains a displayed policy, with staff handling removal manually.
+
+**Quiet overtime and unified notice (2026-09-24):** Live queue reminders are combined above the cards, with only “Please note:” bold. Grammar-checked booth and three-missed-calls wording is preserved. The standalone overtime warning is removed; Now Serving shows a small static violet `+N min` badge beside the estimated session duration, counting full minutes beyond the estimate (appears at +1 min), with an accessible overtime description. The badge follows the existing clock, disappears on completion/cancellation or paused updates, and does not change wait calculations.
