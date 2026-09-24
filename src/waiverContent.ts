@@ -21,7 +21,7 @@ export interface WaiverCopy {
 
 export const WAIVER_CONTENT: Record<WaiverLang, WaiverCopy> = {
   en: {
-    title: 'Before we pierce',
+    title: 'Piercing Consent & Waiver',
     intro: 'Read carefully. Your safety and healing are our top priorities, and this takes less than a minute.',
     cannotPierceTitle: 'For your safety, we cannot pierce you today if:',
     cannotPierceItems: [
@@ -56,7 +56,7 @@ export const WAIVER_CONTENT: Record<WaiverLang, WaiverCopy> = {
     cta: 'Proceed',
   },
   fil: {
-    title: 'Bago tayo mag-pierce',
+    title: 'Pahintulot at Waiver sa Piercing',
     intro: 'Basahin nang mabuti. Kaligtasan at tamang paghilom mo ang aming prayoridad, sandali lamang ito.',
     cannotPierceTitle: 'Para sa iyong kaligtasan, hindi kami makakapag-pierce sa iyo ngayon kung:',
     cannotPierceItems: [

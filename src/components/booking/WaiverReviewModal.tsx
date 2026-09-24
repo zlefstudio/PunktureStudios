@@ -81,13 +81,13 @@ export function WaiverReviewModal({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="Before We Pierce — Studio Waiver"
+        aria-label="Piercing Consent & Waiver"
       >
         {/* Header — title + close only; the language switch lives inside the body */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-zinc-800 gap-2 flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <ShieldCheck size={22} className="text-violet-400 flex-shrink-0" />
-            <h3 className="font-bold text-body text-white truncate">Before We Pierce — Studio Waiver</h3>
+            <h3 className="min-w-0 font-bold text-body text-white leading-snug">Piercing Consent &amp; Waiver</h3>
           </div>
           <button
             type="button"
@@ -249,4 +249,3 @@ export function WaiverReviewModal({
     document.body
   );
 }
-

@@ -27,7 +27,7 @@ export function PublicShell({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const showFooterLinks = page !== 'privacy';
-  const showLiveAftercare = page === 'live';
+  const showLiveGuides = page === 'live';
 
   const closeDrawer = useCallback(() => {
     if (isClosing || !drawerOpen) return;
@@ -70,7 +70,7 @@ export function PublicShell({
 
   const navLinks = [
     { label: 'Home', href: '/home.html', current: page === 'home' },
-    { label: 'Before we pierce', href: '/waiver.html', current: page === 'waiver' },
+    { label: 'Piercing Consent & Waiver', href: '/waiver.html', current: page === 'waiver' },
     { label: 'Live queue', href: '/live.html', current: page === 'live' },
     { label: 'Book an appointment', href: '/appointment.html', current: page === 'appointment' },
     { label: 'Aftercare guide', href: '/aftercare.html', current: page === 'aftercare' },
@@ -142,21 +142,27 @@ export function PublicShell({
       >
         {children}
 
-        {/* ── Quick action on live page (Aftercare only, without emoji) ── */}
-        {showLiveAftercare && (
-          <nav className="mx-auto w-full max-w-md mt-7">
-            <a
-              href="/aftercare.html"
-              className="flex items-center justify-center py-3.5 rounded-2xl text-ui font-bold transition-all"
-              style={{
-                background: 'rgba(255,255,255,0.06)',
-                color: 'var(--color-text)',
-                border: '1px solid var(--color-border-strong)',
-                textDecoration: 'none',
-              }}
-            >
-              Aftercare guide
-            </a>
+        {/* Live links also work from the local queue preview. */}
+        {showLiveGuides && (
+          <nav aria-label="Piercing guides" className="mx-auto w-full max-w-xl mt-7 grid grid-cols-2 gap-2 sm:gap-3">
+            {[
+              { label: 'Aftercare guide', href: 'https://punkture-studios.web.app/aftercare.html' },
+              { label: 'Piercing Consent & Waiver', href: 'https://punkture-studios.web.app/waiver.html' },
+            ].map(link => (
+              <a
+                key={link.href}
+                href={link.href}
+                className="flex min-w-0 min-h-14 items-center justify-center px-3 py-3 rounded-2xl text-center text-[13px] sm:text-sm leading-snug font-bold transition-colors break-words"
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  color: 'var(--color-text)',
+                  border: '1px solid var(--color-border-strong)',
+                  textDecoration: 'none',
+                }}
+              >
+                {link.label}
+              </a>
+            ))}
           </nav>
         )}
       </main>
@@ -243,16 +249,16 @@ export function PublicShell({
                     key={item.label}
                     href={item.href}
                     onClick={closeDrawer}
-                    className="flex items-center justify-between px-3.5 py-2.5 rounded-xl font-semibold text-ui-sm transition-all"
+                    className="flex min-h-11 items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-ui-sm transition-all"
                     style={{
                       background: item.current ? 'rgba(255,255,255,0.08)' : 'transparent',
                       color: item.current ? '#fff' : 'var(--color-text-muted)',
                       textDecoration: 'none',
                     }}
                   >
-                    <span>{item.label}</span>
+                    <span className="min-w-0 break-words">{item.label}</span>
                     {item.current && (
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--color-brand-light)' }} />
+                      <span className="w-1.5 h-1.5 shrink-0 rounded-full" style={{ background: 'var(--color-brand-light)' }} />
                     )}
                   </a>
                 ))}

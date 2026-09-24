@@ -63,7 +63,7 @@ const PREVIEW_LINKS = [
   { label: 'Live queue', href: LIVE_URL },
   { label: 'Booking', href: BOOKING_URL },
   { label: 'Next pop-up', href: POPUP_URL },
-  { label: 'Before we pierce', href: WAIVER_URL },
+  { label: 'Piercing Consent & Waiver', href: WAIVER_URL },
   { label: 'Aftercare', href: AFTERCARE_URL },
   { label: 'Privacy', href: PRIVACY_URL },
 ];
