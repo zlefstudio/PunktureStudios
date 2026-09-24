@@ -21,6 +21,7 @@ let queueRows;
 let heartbeat;
 let unavailableSlots;
 let availabilityFails;
+let availabilityRequests = 0;
 let serverSlots;
 const docRef = (_db, col, id) => ({ kind: 'doc', col, id });
 await mock.module('../src/firebase.ts', { namedExports: { auth: {}, firestore: {} } });
@@ -53,6 +54,7 @@ await mock.module('../src/bookingApi.ts', { namedExports: {
   RESERVATION_POLICY: 'PHP 100.00 reservation fee',
   bookingApi: async (path, options = {}) => {
     if (path.startsWith('/availability')) {
+      availabilityRequests++;
       if (availabilityFails) throw new Error('Availability unavailable');
       return serverSlots ? { slots: serverSlots, unavailable: unavailableSlots } : { unavailable: unavailableSlots };
     }
@@ -255,6 +257,30 @@ test('taken slots and availability failures disable schedule buttons', async () 
   const slots = [...container.querySelectorAll('button')].filter(b => /\d:\d\d (AM|PM)/.test(b.textContent));
   assert.ok(slots.length > 0); assert.ok(slots.every(b => b.disabled));
   assert.match(container.textContent, /Availability unavailable/);
+});
+
+test('booking availability stops while hidden and refreshes immediately on return', async t => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  await render(AppointmentPage);
+  await act(async () => [...container.querySelectorAll('button')].find(b => /Next: Pick Schedule|Skip to Schedule/.test(b.textContent)).click());
+  await act(async () => dateChips().find(b => !b.disabled).click());
+  const before = availabilityRequests;
+  try {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    await act(async () => document.dispatchEvent(new window.Event('visibilitychange')));
+    // Changing date while hidden must also avoid requesting availability.
+    await act(async () => dateChips().filter(b => !b.disabled)[1].click());
+    await act(async () => t.mock.timers.tick(30000));
+    assert.equal(availabilityRequests, before);
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    await act(async () => document.dispatchEvent(new window.Event('visibilitychange')));
+    assert.equal(availabilityRequests, before + 1);
+    await act(async () => t.mock.timers.tick(10000));
+    assert.equal(availabilityRequests, before + 2);
+  } finally {
+    delete document.hidden;
+    t.mock.timers.reset();
+  }
 });
 test('unpaid success return does not display booking confirmation', async () => {
   window.history.replaceState(null, '', '/appointment.html#booking=unpaid&token=private');

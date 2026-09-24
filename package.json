@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "deploy": "npm run build && npx --yes firebase-tools@15.29.0 deploy --only hosting,firestore:rules",
+    "media:prepare": "node scripts/prepare-media.mjs",
+    "media:verify": "node scripts/verify-media.mjs",
+    "deploy": "npm run build && npm run media:verify -- --if-configured && npx --yes firebase-tools@15.29.0 deploy --only hosting,firestore:rules",
     "firebase:login": "npx --yes firebase-tools@15.29.0 login",
     "test": "node --experimental-test-module-mocks --import ./tests/register.mjs --test tests/*.test.mjs",
     "test:rules": "node scripts/run-rules-tests.cjs"

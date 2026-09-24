@@ -33,7 +33,11 @@ jobs:
       - name: Build production bundle
         env:
           VITE_BOOKING_API_URL: ${{ vars.VITE_BOOKING_API_URL || 'https://punkture-booking.zlef-dev.workers.dev' }}
+          VITE_MEDIA_BASE_URL: ${{ vars.VITE_MEDIA_BASE_URL || 'https://punkture-media.zlef-dev.workers.dev' }}
         run: npm run build
+
+      - name: Verify external media before publishing frontend
+        run: npm run media:verify -- --if-configured
 
       - name: Deploy to Firebase (Hosting & Firestore Rules)
         env:

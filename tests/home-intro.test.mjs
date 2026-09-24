@@ -55,6 +55,7 @@ test('master timeline preloads only one item, reveals, then hands off exactly on
     assert.equal(document.documentElement.dataset.homeIntro, 'pending');
     await flush();
     assert.equal(f.requests.length, 1);
+    assert.equal(f.requests[0], '/videos/posters/1.jpg', 'intro never downloads a disposable video');
     assert.equal(document.documentElement.dataset.homeIntro, 'revealing');
     f.frame(100); f.frame(750);
     assert.equal(gate.ready, false);

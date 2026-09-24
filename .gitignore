@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-media
 *.local
 
 # Firebase CLI local cache (not part of the repo)

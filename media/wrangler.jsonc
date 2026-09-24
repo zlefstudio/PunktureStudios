@@ -1,0 +1,6 @@
+{
+  "name": "punkture-media",
+  "compatibility_date": "2026-09-24",
+  "workers_dev": true,
+  "assets": { "directory": "../dist-media", "not_found_handling": "none" }
+}

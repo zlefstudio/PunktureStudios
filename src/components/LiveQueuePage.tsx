@@ -6,6 +6,7 @@ import { firestore } from '../firebase';
 import { Ticket, CalendarHeart } from 'lucide-react';
 import { PiercingRitualAnimation } from './PiercingRitualAnimation';
 import { PublicShell } from './PublicShell';
+import { whilePageVisible } from '../visibleSubscription';
 
 /**
  * PUBLIC LIVE QUEUE — customer-facing, real-time, privacy-safe.
@@ -35,18 +36,19 @@ export function LiveQueuePage({ localPreview }: { localPreview?: { rows: PublicR
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 15000); return () => clearInterval(timer); }, []);
   const isLocal = localPreview !== undefined;
-  useEffect(() => {
-    if (isLocal) return;
-    return onSnapshot(doc(firestore, 'public', 'heartbeat'), snap => {
-    const stamp = snap.data()?.publishedAt; setHeartbeat(stamp?.toMillis?.() ?? 0);
-  }, () => setHeartbeat(0));
-  }, [isLocal]);
   const [cloudRows, setRows] = useState<PublicRow[] | null>(null);
+  const hasCloudRows = !!cloudRows?.length;
+  useEffect(() => {
+    if (isLocal || !hasCloudRows) return;
+    return whilePageVisible(() => onSnapshot(doc(firestore, 'public', 'heartbeat'), snap => {
+    const stamp = snap.data()?.publishedAt; setHeartbeat(stamp?.toMillis?.() ?? 0);
+  }, () => setHeartbeat(0)), () => { setHeartbeat(0); setNow(Date.now()); });
+  }, [isLocal, hasCloudRows]);
   const [cloudError, setError] = useState<string | null>(null);
   useEffect(() => {
     if (isLocal) return;
     const q = query(collection(firestore, 'publicQueue'));
-    const unsub = onSnapshot(
+    const unsub = whilePageVisible(() => onSnapshot(
       q,
       (snap) => {
         const out: PublicRow[] = [];
@@ -61,7 +63,7 @@ export function LiveQueuePage({ localPreview }: { localPreview?: { rows: PublicR
       (err) => {
         setError(friendlyError(err));
       }
-    );
+    ));
     return unsub;
   }, [isLocal]);
   const rows = localPreview ? localPreview.rows : cloudRows;

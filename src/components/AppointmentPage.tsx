@@ -97,13 +97,18 @@ export function AppointmentPage() {
     let active = true;
     setAvailabilityReady(false);
     setServerSlots(null);
+    let refreshing = false;
+    let visibilityVersion = 0;
     const refresh = async () => {
+      if (document.hidden || refreshing) return;
+      refreshing = true;
+      const startedVersion = visibilityVersion;
       try {
         // `slots` is the Worker's accepted list for this weekday. Using it (when sent)
         // means the page can never offer a slot the backend would reject — even if the
         // saved schedule and this bundle were published in a different order.
         const data = await bookingApi<{ slots?: string[]; unavailable: string[] }>(`/availability?date=${date}`);
-        if (!active) return;
+        if (!active || document.hidden || startedVersion !== visibilityVersion) return;
         const rawSlots = Array.isArray(data.slots) ? data.slots : null;
         const oldKey = '13:00|14:30|16:00|17:30|19:00';
         const slots = rawSlots !== null && [...rawSlots].sort().join('|') === oldKey ? null : rawSlots;
@@ -113,10 +118,20 @@ export function AppointmentPage() {
         setAvailabilityError('');
         setTime(t => (!t || data.unavailable.includes(t) || (slots !== null && !slots.includes(t)) ? '' : t));
       } catch (e) { if (active) { setAvailabilityReady(false); setAvailabilityError(e instanceof Error ? e.message : 'Availability unavailable.'); } }
+      finally {
+        refreshing = false;
+        if (active && !document.hidden && startedVersion !== visibilityVersion) void refresh();
+      }
     };
+    const visibility = () => {
+      visibilityVersion++;
+      setAvailabilityReady(false);
+      if (!document.hidden) void refresh();
+    };
+    document.addEventListener('visibilitychange', visibility);
     void refresh();
     const timer = setInterval(() => void refresh(), 10000);
-    return () => { active = false; clearInterval(timer); };
+    return () => { active = false; clearInterval(timer); document.removeEventListener('visibilitychange', visibility); };
   }, [date, payment, publicSettings]);
 
   useEffect(() => {

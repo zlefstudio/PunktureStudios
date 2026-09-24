@@ -7,6 +7,15 @@ let failure = null;
 let pauseWrite = null;
 let writes = [];
 let reads = 0;
+const subscriptions = new Set();
+function emitSnapshots() {
+  for (const sub of subscriptions) {
+    const path = sub.ref.path;
+    const metadata = { fromCache: false, hasPendingWrites: false };
+    const docs = [...remote.keys()].filter(key => key.startsWith(path + '/')).map(key => ({ id: key.split('/')[1], data: () => structuredClone(remote.get(key)) }));
+    sub.next(path.includes('/') ? { ...snap(path), metadata } : { docs, metadata });
+  }
+}
 const auth = { currentUser: { uid: 'staff-user' } };
 const storage = new Map();
 globalThis.localStorage = { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v) };
@@ -17,6 +26,7 @@ async function write(path, value) {
   if (pauseWrite) { const wait = pauseWrite; pauseWrite = null; await wait(); }
   if (failure && path.startsWith(failure)) { failure = null; throw new Error('Simulated interrupted write'); }
   remote.set(path, structuredClone(value)); writes.push(path);
+  emitSnapshots();
 }
 await mock.module('../src/firebase.ts', { namedExports: { firestore: {}, auth } });
 await mock.module('firebase/auth', { namedExports: {
@@ -24,13 +34,20 @@ await mock.module('firebase/auth', { namedExports: {
 } });
 await mock.module('firebase/firestore', { namedExports: {
   collection: ref, doc: ref,
+  onSnapshot: (ref, _options, next, error) => {
+    reads++;
+    const sub = { ref, next, error };
+    subscriptions.add(sub);
+    queueMicrotask(emitSnapshots);
+    return () => subscriptions.delete(sub);
+  },
   getDocFromServer: async r => { reads++; return snap(r.path); },
   getDocsFromServer: async r => {
     reads++;
     return { forEach: fn => { for (const path of remote.keys()) if (path.startsWith(r.path + '/')) fn({ id: path.split('/')[1], data: () => structuredClone(remote.get(path)) }); } };
   },
   setDoc: (r, value) => write(r.path, value),
-  deleteDoc: async r => { remote.delete(r.path); },
+  deleteDoc: async r => { remote.delete(r.path); emitSnapshots(); },
   serverTimestamp: () => ({ seconds: Math.floor(Date.now() / 1000) }),
   runTransaction: async (_db, fn) => fn({ get: async r => snap(r.path), set: (r, value) => { remote.set(r.path, value); } }),
   writeBatch: () => {
@@ -41,6 +58,7 @@ await mock.module('firebase/firestore', { namedExports: {
 const { db } = await import('../src/db.ts');
 const { useStore } = await import('../src/store.ts');
 const { syncNow, getSyncStatus, signOutCloud } = await import('../src/sync.ts');
+const { createRemoteRows } = await import('../src/remoteRows.ts');
 const store = () => useStore.getState();
 beforeEach(async () => {
   await signOutCloud();
@@ -55,6 +73,26 @@ beforeEach(async () => {
   await store().loadAll();
 });
 after(() => db.close());
+
+test('cached and pending snapshots cannot authorize a merge; confirmed data unblocks and reset rejects waiters', async () => {
+  const rows = createRemoteRows(() => {});
+  try {
+    await rows.read('tickets');
+    const sub = [...subscriptions].find(s => s.ref.path === 'tickets');
+    sub.next({ docs: [], metadata: { fromCache: true, hasPendingWrites: false } });
+    let finished = false;
+    const pending = rows.read('tickets').then(value => { finished = true; return value; });
+    await Promise.resolve(); assert.equal(finished, false);
+    sub.next({ docs: [], metadata: { fromCache: false, hasPendingWrites: true } });
+    await Promise.resolve(); assert.equal(finished, false);
+    emitSnapshots();
+    assert.equal((await pending).size, 0);
+    sub.next({ docs: [], metadata: { fromCache: true, hasPendingWrites: false } });
+    const rejected = assert.rejects(rows.read('tickets'), /session changed/);
+    rows.reset(); await rejected;
+    assert.equal(subscriptions.size, 0);
+  } finally { rows.reset(); }
+});
 async function ticketWithItem() {
   const t = await store().addTicket('Customer');
   await store().addItem({ ticketId: t.id, placementName: 'Lobe', basePrice: 250, upgradeLabel: 'Free', upgradePrice: 0, quantity: 1 });
@@ -101,12 +139,46 @@ test('another browser can sync despite a legacy station claim', async () => {
   await syncNow(); log.mock.restore();
   assert.equal(getSyncStatus().phase, 'synced'); assert.ok(reads > 0); assert.ok(writes.some(path => path.startsWith('tickets/')));
 });
-test('each sync refreshes other device changes without rewriting unchanged public queue', async () => {
+test('idle sync reuses server listeners without redundant queue, counter or heartbeat writes', async () => {
   const t = await ticketWithItem(); await syncNow(); const readCount = reads;
   writes = []; await syncNow();
-  assert.ok(reads > readCount);
+  assert.equal(reads, readCount);
   assert.ok(!writes.includes(`publicQueue/${t.id}`));
-  assert.ok(writes.includes('public/heartbeat'));
+  assert.deepEqual(writes, []);
+});
+
+test('another device changes and tombstones arrive through the retained listener', async () => {
+  const t = await ticketWithItem(); await syncNow();
+  const count = reads;
+  remote.get(`tickets/${t.id}`).name = 'Other device';
+  remote.get(`tickets/${t.id}`).updatedAt += 1000;
+  emitSnapshots(); await syncNow();
+  assert.equal((await db.tickets.get(t.id)).name, 'Other device');
+  const item = store().items[0];
+  remote.set(`items/${item.id}`, { id: item.id, deleted: true, updatedAt: Date.now() + 2000 });
+  emitSnapshots(); await syncNow();
+  assert.equal(await db.items.get(item.id), undefined);
+  assert.equal(reads, count);
+});
+
+test('heartbeat remains fresh on the periodic cycle, without rewriting the counter', async () => {
+  await ticketWithItem(); await syncNow(); writes = [];
+  const now = Date.now();
+  const clock = mock.method(Date, 'now', () => now + 30000);
+  try { await syncNow(); } finally { clock.mock.restore(); }
+  assert.deepEqual(writes, ['public/heartbeat']);
+});
+
+test('listener failure stops publication and retry obtains fresh server snapshots', async () => {
+  await ticketWithItem(); await syncNow(); writes = [];
+  for (const sub of subscriptions) if (sub.ref.path === 'tickets') sub.error(new Error('Listener disconnected'));
+  const log = mock.method(console, 'error', () => {});
+  try { await syncNow(); } finally { log.mock.restore(); }
+  assert.equal(getSyncStatus().phase, 'error');
+  assert.deepEqual(writes, []);
+  assert.equal(subscriptions.size, 0);
+  await syncNow();
+  assert.equal(getSyncStatus().phase, 'synced');
 });
 test('local cashier edits remain available during stalled cloud writes', async () => {
   await ticketWithItem();

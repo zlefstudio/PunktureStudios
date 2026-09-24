@@ -1,12 +1,14 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { mediaAssets } from './scripts/media-assets.ts'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     tailwindcss(),
+    mediaAssets(loadEnv(mode, process.cwd(), 'VITE_').VITE_MEDIA_BASE_URL ?? 'https://punkture-media.zlef-dev.workers.dev'),
   ],
   server: {
     // CRITICAL: pin one origin. IndexedDB is scoped per origin
@@ -42,4 +44,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))

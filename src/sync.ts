@@ -12,12 +12,9 @@ import { rolloverQueueDay, manilaDay } from './queueDay';
 // Multiple cashier browsers can connect; records merge by updatedAt.
 
 import {
-  collection,
   doc,
   setDoc,
   deleteDoc,
-  getDocsFromServer,
-  getDocFromServer,
   serverTimestamp,
   writeBatch,
 } from 'firebase/firestore';
@@ -33,6 +30,7 @@ import { useStore } from './store';
 import { withDataLock } from './dataLock';
 import { validateTicket, validateItem, validateSettings } from './validation';
 import type { Ticket, PiercingItem, PublicSettings } from './types';
+import { createRemoteRows, type CloudRow } from './remoteRows';
 
 const TICKETS = 'tickets';
 const ITEMS = 'items';
@@ -83,6 +81,7 @@ if (typeof window !== 'undefined') {
   });
   window.addEventListener('offline', () => {
     online = false;
+    resetRemoteSession();
     setStatus({ phase: 'offline', message: 'No internet — data is safe locally.' });
   });
 }
@@ -111,6 +110,7 @@ export async function signInToCloud(email: string, password: string): Promise<vo
 }
 
 export async function signOutCloud(): Promise<void> {
+  resetRemoteSession();
   remoteCache.clear();
   try {
     await signOut(auth);
@@ -131,26 +131,24 @@ function friendlyAuthError(e: unknown): string {
 }
 
 // ── Remote helpers ──
-interface CloudRow {
-  id: string;
-  updatedAt?: number;
-  deleted?: boolean;
+const remoteRows = createRemoteRows(() => {
+  if (watcherStarted && !running) scheduleSync(800);
+});
+let lastHeartbeatAt = 0;
+let lastCounter: number | undefined;
+function resetRemoteSession() {
+  remoteRows.reset();
+  remoteCache.clear();
+  lastHeartbeatAt = 0;
+  lastCounter = undefined;
 }
 
-// Reuse snapshots within a sync cycle; refresh each cycle for other devices.
+// Per-cycle working copy; persistent listeners receive other devices' changes.
 const remoteCache = new Map<string, { at: number; rows: Map<string, CloudRow> }>();
 async function readRemoteRows(col: string): Promise<Map<string, CloudRow>> {
   const cached = remoteCache.get(col);
   if (cached && Date.now() - cached.at < 300000) return cached.rows;
-  const rows = new Map<string, CloudRow>();
-  if (col === PUBLIC_COL) {
-    // Settings rules allow this document, not arbitrary collection queries.
-    const snap = await getDocFromServer(doc(firestore, PUBLIC_COL, 'public'));
-    if (snap.exists()) rows.set('public', { ...snap.data(), id: 'public' } as CloudRow);
-  } else {
-    const snap = await getDocsFromServer(collection(firestore, col));
-    snap.forEach(d => rows.set(d.id, { ...d.data(), id: d.id } as CloudRow));
-  }
+  const rows = await remoteRows.read(col);
   remoteCache.set(col, { at: Date.now(), rows });
   return rows;
 }
@@ -202,6 +200,8 @@ async function applyPendingRestore(): Promise<boolean> {
   }));
   const pending = snapshot.pending;
   if (!pending) return false;
+  // Explicit replacement needs a fresh server view, including all tombstones.
+  remoteRows.reset();
   remoteCache.clear();
   for (const [col, local] of [[TICKETS, snapshot.tickets], [ITEMS, snapshot.items]] as const) {
     const ids = new Set(local.map(row => row.id));
@@ -212,6 +212,7 @@ async function applyPendingRestore(): Promise<boolean> {
   const settings = snapshot.settings ?? { key: 'public', eventActive: false, updatedAt: pending.value };
   await setDoc(doc(firestore, PUBLIC_COL, 'public'), sanitizeForFirestore(settings));
   await setDoc(doc(firestore, 'cloudControl', 'counter'), { value: snapshot.counter });
+  lastCounter = snapshot.counter;
   await withDataLock(async () => {
     if ((await db.meta.get('restorePending'))?.value === pending.value) {
       // Keep edits made while the network request was running.
@@ -448,14 +449,21 @@ export async function syncNow(): Promise<void> {
     await pushPublicSettings();
     if (await db.meta.get('restorePending')) { scheduleSync(0); return; }
     await publishPublicQueue();
-    await setDoc(doc(firestore, 'public', 'heartbeat'), { publishedAt: serverTimestamp() });
-    await setDoc(doc(firestore, 'cloudControl', 'counter'), { value: (await db.meta.get('ticketCounter'))?.value ?? 0 });
+    if (Date.now() - lastHeartbeatAt >= 25000) {
+      await setDoc(doc(firestore, 'public', 'heartbeat'), { publishedAt: serverTimestamp() });
+      lastHeartbeatAt = Date.now();
+    }
+    const counter = (await db.meta.get('ticketCounter'))?.value ?? 0;
+    if (counter !== lastCounter) {
+      await setDoc(doc(firestore, 'cloudControl', 'counter'), { value: counter });
+      lastCounter = counter;
+    }
     setStatus({ phase: 'synced', lastSyncAt: Date.now(), message: undefined });
   } catch (e) {
     const code = typeof e === 'object' && e !== null && 'code' in e ? String((e as { code: unknown }).code) : '';
     // eslint-disable-next-line no-console
     console.error('[sync] syncNow failed (code=' + code + '):', e);
-    remoteCache.clear();
+    resetRemoteSession();
     let message = e instanceof Error ? e.message : 'Cloud sync failed.';
     if (code.includes('permission-denied')) {
       message = 'Firestore rules are blocking sync. Publish the rules from firestore.rules.';
@@ -494,7 +502,7 @@ export function startSyncWatcher(): void {
   watcherStarted = true;
 
   onAuthStateChanged(auth, (user) => {
-    remoteCache.clear();
+    resetRemoteSession();
     if (user) {
       scheduleSync(300);
     } else {
