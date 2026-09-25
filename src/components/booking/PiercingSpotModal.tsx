@@ -1,3 +1,4 @@
+import { useDialogFocus } from './useDialogFocus';
 import { useState, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { PiercingHotspot } from './types';
@@ -39,6 +40,7 @@ export function PiercingSpotModal({
   onRemove,
   onClose,
 }: PiercingSpotModalProps) {
+  const dialogRef = useDialogFocus();
   const [selectedUpgrade, setSelectedUpgrade] = useState<number>(() => {
     const allowed = allowedJewelryPrices(spot);
     if (
@@ -78,11 +80,12 @@ export function PiercingSpotModal({
     allowedJewelryPrices(spot).includes(u.price)
   );
   const upgradeObj = UPGRADES.find((u) => u.price === selectedUpgrade) ?? UPGRADES[0];
-  const sideMultiplier = side === 'both' ? 2 : 1;
+  const sideMultiplier = spot.category === 'EAR' && side === 'both' ? 2 : 1;
   const totalPrice = (spot.basePrice + selectedUpgrade) * sideMultiplier;
 
   function handleSave() {
     const newItem: BookingSelectedPiercing = {
+      ...existingSelection,
       id: existingSelection?.id ?? crypto.randomUUID(),
       name: spot.name,
       category: spot.category,
@@ -140,10 +143,12 @@ export function PiercingSpotModal({
       >
         {/* ── ANIMATED inner panel ── */}
         <div
+          ref={dialogRef}
+          tabIndex={-1}
           role="dialog"
           aria-modal="true"
           aria-labelledby="piercing-spot-title"
-          className="rounded-t-3xl sm:rounded-3xl flex flex-col overflow-hidden w-full"
+          className="booking-dialog rounded-t-3xl sm:rounded-3xl flex flex-col overflow-hidden w-full"
           style={{
             background: 'var(--color-surface)',
             border: '1px solid var(--color-border-strong)',
@@ -176,7 +181,7 @@ export function PiercingSpotModal({
               </span>
               {existingSelection && (
                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 uppercase">
-                  ✓ Active
+                  In your cart
                 </span>
               )}
             </div>
@@ -195,7 +200,7 @@ export function PiercingSpotModal({
         </div>
 
         {/* ── Scrollable Content Body ── */}
-        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-3 space-y-3">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-3 space-y-3">
           {/* Anatomical Locator Graphic */}
           <SpotLocationGraphic spot={spot} />
 
@@ -220,7 +225,7 @@ export function PiercingSpotModal({
           )}
 
           {/* Description */}
-          <p className="text-[12px] leading-relaxed text-zinc-300">
+          <p className="text-[13px] leading-relaxed text-zinc-300">
             {spot.description}
           </p>
 
@@ -260,6 +265,7 @@ export function PiercingSpotModal({
                     key={s}
                     type="button"
                     onClick={() => setSide(s)}
+                    aria-pressed={side === s}
                     className="py-2 px-2 rounded-xl text-[12px] font-bold transition-all text-center capitalize"
                     style={{
                       background: side === s ? 'var(--color-brand)' : 'rgba(255,255,255,0.04)',
@@ -274,6 +280,7 @@ export function PiercingSpotModal({
             </div>
           )}
 
+          {spot.category === 'EAR' && side === 'both' && <p className="text-[11px] text-zinc-400">Two piercings with the same jewelry. This replaces any separate left/right selections for {spot.name}.</p>}
           {/* Jewelry Upgrade Selector */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
@@ -294,7 +301,8 @@ export function PiercingSpotModal({
                     key={u.price}
                     type="button"
                     onClick={() => setSelectedUpgrade(u.price)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-[12px] font-semibold transition-all text-left"
+                    aria-pressed={isSelected}
+                    className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-[12px] font-semibold transition-all text-left"
                     style={{
                       background: isSelected ? 'rgba(139,92,246,0.18)' : 'rgba(255,255,255,0.03)',
                       border: isSelected ? '1px solid var(--color-brand-light)' : '1px solid var(--color-border)',
@@ -302,13 +310,14 @@ export function PiercingSpotModal({
                     }}
                   >
                     <span>{u.label}</span>
-                    <span className="font-mono font-bold text-violet-300">
+                    <span className="shrink-0 font-mono font-bold text-violet-300">
                       {u.price === 0 ? 'Included' : `+₱${u.price}`}
                     </span>
                   </button>
                 );
               })}
             </div>
+            <p className="text-[11px] text-zinc-400 pt-1">₱{spot.basePrice} service + ₱{selectedUpgrade} jewelry{sideMultiplier === 2 ? ' per ear' : ''}.</p>
           </div>
         </div>
 
@@ -322,13 +331,13 @@ export function PiercingSpotModal({
             paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))',
           }}
         >
-          <div className="flex items-center justify-between gap-3">
+          <div className="spot-footer-row">
             <div>
-              <span className="text-[10px] font-semibold text-zinc-400 block">Est. Total</span>
+              <span className="text-[10px] font-semibold text-zinc-400 block">{sideMultiplier === 2 ? '2 piercings · est. total' : 'Estimated total'}</span>
               <span className="font-black text-2xl font-mono text-white leading-none">₱{totalPrice}</span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="spot-actions">
               {existingSelection && onRemove && (
                 <button
                   type="button"
@@ -342,7 +351,8 @@ export function PiercingSpotModal({
                     color: 'var(--color-error-text)',
                     border: '1px solid rgba(239, 68, 68, 0.25)',
                   }}
-                  title="Remove from session"
+                  aria-label={`Remove ${spot.name} from cart`}
+                  title="Remove from cart"
                 >
                   <Trash2 size={15} />
                   <span className="hidden sm:inline">Remove</span>
@@ -352,7 +362,7 @@ export function PiercingSpotModal({
               <button
                 type="button"
                 onClick={handleSave}
-                className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-[13px] transition-transform active:scale-95 text-white"
+                className="spot-save flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-[13px] transition-transform active:scale-95 text-white"
                 style={{
                   background: 'var(--color-brand)',
                   boxShadow: 'var(--shadow-brand)',
@@ -360,7 +370,7 @@ export function PiercingSpotModal({
                 }}
               >
                 {existingSelection ? <Check size={15} /> : <Plus size={15} />}
-                <span>{existingSelection ? 'Update Selection' : 'Add to Session'}</span>
+                <span>{existingSelection ? 'Save changes' : 'Add to cart'}</span>
               </button>
             </div>
           </div>

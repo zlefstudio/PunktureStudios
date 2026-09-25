@@ -117,7 +117,7 @@ export function ItemsList({ ticket, items, readOnly = false }: Props) {
               {/* Upgrade chips */}
               <div className="flex gap-1 flex-wrap">
                 {UPGRADES.map((u) => {
-                  const isSelected = item.upgradeLabel === u.label;
+                  const isSelected = item.upgradePrice === u.price;
                   return (
                     <button
                       key={u.label}

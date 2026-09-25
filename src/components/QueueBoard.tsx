@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
-import { UserPlus, Search, X } from 'lucide-react';
+import { UserPlus, Search, X, ListOrdered, History, Settings, type LucideIcon } from 'lucide-react';
 import { useStore } from '../store';
 import { sortWaiting } from '../queue';
 import { TicketCard } from './TicketCard';
@@ -11,10 +11,10 @@ import logoImg from '../assets/logo.png';
 
 type Tab = 'active' | 'history' | 'settings';
 
-const TAB_META: { id: Tab; label: string }[] = [
-  { id: 'active', label: '🗂 Queue' },
-  { id: 'history', label: '📋 History' },
-  { id: 'settings', label: '⚙️ Settings' },
+const TAB_META: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: 'active', label: 'Queue', icon: ListOrdered },
+  { id: 'history', label: 'History', icon: History },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 export function QueueBoard() {
@@ -102,13 +102,13 @@ export function QueueBoard() {
           className="flex gap-1 p-1 rounded-xl"
           style={{ background: 'rgba(255,255,255,0.04)' }}
         >
-          {TAB_META.map(({ id, label }) => {
+          {TAB_META.map(({ id, label, icon: Icon }) => {
             const isActive = tab === id;
             return (
               <button
                 key={id}
                 onClick={() => setTab(id)}
-                className="flex-1 py-1.5 px-2 rounded-lg text-label-xs transition-all"
+                className="flex flex-1 items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-label-xs transition-all"
                 style={
                   isActive
                     ? {
@@ -124,7 +124,8 @@ export function QueueBoard() {
                 onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.color = 'var(--color-text)'; }}
                 onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.color = 'var(--color-text-faint)'; }}
               >
-                {label}
+                <Icon size={14} className="shrink-0" aria-hidden="true" />
+                <span>{label}</span>
               </button>
             );
           })}

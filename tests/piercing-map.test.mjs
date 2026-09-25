@@ -25,8 +25,8 @@ test('Hidden Helix offers only the required 200 jewelry tier and saves a 600 sin
  act(()=>root.render(React.createElement(PiercingSpotModal,{spot,onAdd:item=>saved=item,onClose:()=>{}})));
  const buttons=[...document.querySelectorAll('button')];
  assert.equal(buttons.filter(b=>b.textContent.includes('200 Titanium')).length,1);
- for(const label of ['Free Stainless Studs','Rhinestone Stainless','150 Titanium']) assert.ok(!buttons.some(b=>b.textContent.includes(label)));
- act(()=>buttons.find(b=>b.textContent.includes('Add to Session')).dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true})));
+ for(const label of ['Surgical Steel','Rhinestone Jewelry','150 Titanium']) assert.ok(!buttons.some(b=>b.textContent.includes(label)));
+ act(()=>buttons.find(b=>b.textContent.includes('Add to cart')).dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true})));
  assert.equal(saved.name,'Hidden Helix');
  assert.equal(saved.basePrice,400);
  assert.equal(saved.upgradePrice,200);
@@ -88,8 +88,18 @@ test('reference transforms preserve source pixels and original asset dimensions'
  const { EAR_IMAGE,FACE_IMAGE,BODY_IMAGE,onReference }=await import('../src/components/booking/referenceGeometry.ts');
  for(const image of [EAR_IMAGE,FACE_IMAGE,BODY_IMAGE]) {
   const bytes=readFileSync(new URL(`../public${image.src}`,import.meta.url));
-  assert.equal(bytes.readUInt32BE(16),image.width);
-  assert.equal(bytes.readUInt32BE(20),image.height);
+  if (image.src.endsWith('.jpg')) {
+   let offset=2, dimensions;
+   while(offset<bytes.length) {
+    const marker=bytes.readUInt16BE(offset);offset+=2;
+    if ([0xffc0,0xffc1,0xffc2].includes(marker)) { dimensions=[bytes.readUInt16BE(offset+5),bytes.readUInt16BE(offset+3)];break; }
+    offset+=bytes.readUInt16BE(offset);
+   }
+   assert.deepEqual(dimensions,[image.width,image.height]);
+  } else {
+   assert.equal(bytes.readUInt32BE(16),image.width);
+   assert.equal(bytes.readUInt32BE(20),image.height);
+  }
   const mapped=onReference(image,{id:'anchor',x:123,y:234,offset:[7,11]});
   assert.ok(Math.abs((mapped.x-image.x)/image.scale-123)<.0001);
   assert.ok(Math.abs((mapped.y-image.y)/image.scale-234)<.0001);
@@ -130,6 +140,16 @@ test('body markers keep their own tap cells on the shared torso graphic', async(
    assert.ok(own<=otherDistance+.00001,`${point.id} target crossed into ${other.id}`);
   }
  }
+});
+
+test('navel callouts keep a shared upper-rim anchor on the new torso', async()=>{
+ const { BODY_IMAGE,NAVEL_POINTS,NIPPLE_POINT }=await import('../src/components/booking/referenceGeometry.ts');
+ for(const point of NAVEL_POINTS) {
+  assert.ok(Math.abs((point.x+point.offset[0])/BODY_IMAGE.scale-266)<.001);
+  assert.ok(Math.abs((point.y+point.offset[1])/BODY_IMAGE.scale-452)<.001);
+ }
+ assert.ok(NIPPLE_POINT.y<NAVEL_POINTS[0].y);
+ assert.equal(NAVEL_POINTS[0].y,NAVEL_POINTS[1].y,'floating is not a lower navel placement');
 });
 test('the studio rate list is fully bookable on the face & oral tab', ()=>{
  const names=new Set(FACE_HOTSPOTS.map(spot=>spot.name));

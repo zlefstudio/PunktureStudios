@@ -20,9 +20,9 @@ const TAB_LABELS: Record<PanelTab, string> = {
   ORAL: 'ORAL',
   FACE: 'FACE',
   BODY: 'BODY',
-  SERVICES: '🧰 SERVICES',
+  SERVICES: 'SERVICES',
   CUSTOM: 'CUSTOM',
-  JEWELRY: '💍 JEWELRY',
+  JEWELRY: 'JEWELRY',
 };
 
 interface Props {
@@ -146,7 +146,6 @@ export function AddPiercingPanel({ ticket }: Props) {
                   el.style.borderColor = 'rgba(217,119,6,0.30)';
                 }}
               >
-                <span>💍</span>
                 <span>{shortUpgradeLabel(j.price, j.label)}</span>
                 <span style={{ color: 'var(--color-warn)', fontSize: '10px' }}>₱{j.price}</span>
               </button>

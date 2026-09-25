@@ -59,8 +59,8 @@ export const PLACEMENTS: PlacementEntry[] = [
 // ---------------------------------------------------------------------------
 
 export const UPGRADES: UpgradeOption[] = [
-  { label: 'Free Stainless Studs', price: 0 },
-  { label: '+50 Rhinestone Stainless', price: 50 },
+  { label: 'Surgical Steel', price: 0 },
+  { label: 'Rhinestone Jewelry', price: 50 },
   { label: '150 Titanium', price: 150 },
   { label: '200 Titanium', price: 200 },
 ];
@@ -71,8 +71,8 @@ export const JEWELRY_OPTIONS: UpgradeOption[] = UPGRADES.filter((u) => u.price >
 
 /** Compact label for tight upgrade/jewelry buttons (ItemsList, staff chips). */
 export function shortUpgradeLabel(price: number, label: string): string {
-  if (price === 0) return 'Stainless Studs';
-  if (price === 50) return '+50 Rhinestone';
+  if (price === 0) return 'Surgical Steel';
+  if (price === 50) return 'Rhinestone Jewelry';
   return label; // e.g. "150 Titanium" / "200 Titanium"
 }
 

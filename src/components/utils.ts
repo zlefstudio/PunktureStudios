@@ -91,9 +91,10 @@ export function formatJewelryName(label: string): string {
   // Strip leading price numbers or symbols like "150 ", "200 ", "+50 "
   clean = clean.replace(/^(\+?\d+\s*)/, '');
 
-  // If this is the rhinestone upgrade, name the material explicitly.
+  // Normalize old saved labels for display without rewriting order history.
+  if (/stainless|surgical steel/i.test(label) && !/rhinestone/i.test(label)) return 'Surgical Steel';
   if (label.toLowerCase().includes('rhinestone')) {
-    clean = 'Rhinestone Stainless';
+    clean = 'Rhinestone Jewelry';
   } else if (label.includes('+50')) {
     // Legacy +50 upgrades display simply as "Jewelry"
     clean = 'Jewelry';
@@ -121,7 +122,7 @@ export function buildBreakdownText(ticket: Ticket, items: PiercingItem[]): strin
   const header = `${ticket.name} (#${ticket.ticketNumber})`;
   const lines = items.map((item) => {
     const member  = item.memberLabel ? `${item.memberLabel} - ` : '';
-    const upgrade = item.upgradePrice === 0 ? 'Stainless Studs' : formatJewelryName(item.upgradeLabel);
+    const upgrade = item.upgradePrice === 0 ? 'Surgical Steel' : formatJewelryName(item.upgradeLabel);
     const total   = (item.basePrice + item.upgradePrice) * item.quantity;
     return `- ${member}${item.placementName} - ${item.basePrice} + ${upgrade} x${item.quantity} = ${total}`;
   });

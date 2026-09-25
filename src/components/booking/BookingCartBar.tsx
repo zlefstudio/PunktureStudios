@@ -1,253 +1,107 @@
 import { itemEstimate } from './cartSnapshot';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { BookingSelectedPiercing } from '../../types';
-import { ShoppingBag, X, Trash2, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ShoppingBag, X, Trash2, ArrowRight, Pencil } from 'lucide-react';
+import { UPGRADES } from '../../constants';
+import { useDialogFocus } from './useDialogFocus';
 
 interface BookingCartBarProps {
   items: BookingSelectedPiercing[];
   onRemoveItem: (id: string) => void;
+  onEditItem?: (item: BookingSelectedPiercing) => void;
+  canEditItem?: (item: BookingSelectedPiercing) => boolean;
   onProceed: () => void;
-  /** Hide the floating button while a full-screen modal (waiver, spot detail) owns the screen. */
   hidden?: boolean;
-  /** Footer CTA label — follows the current booking step. */
   nextLabel?: string;
 }
 
-export function BookingCartBar({ items, onRemoveItem, onProceed, hidden = false, nextLabel = 'Next: Schedule' }: BookingCartBarProps) {
+export function BookingCartBar({ items, onRemoveItem, onEditItem, canEditItem, onProceed, hidden = false, nextLabel = 'Next: Schedule' }: BookingCartBarProps) {
   const [open, setOpen] = useState(false);
+  const visible = open && !hidden && items.length > 0;
+  const dialogRef = useDialogFocus(visible);
 
-  // Close modal on Escape key
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
+  useLayoutEffect(() => {
+    if (!visible) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
     }
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
-
-  // Lock body scroll when modal is open. The panel unmounts itself the moment the
-  // last item is removed or a modal takes over, so the lock also depends on those
-  // — otherwise a stuck `overflow: hidden` left the booking page unscrollable.
-  useEffect(() => {
-    if (!open || hidden || items.length === 0) return;
-    const prev = document.body.style.overflow;
+    const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [open, hidden, items.length]);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [visible]);
 
-  // Emptying the cart or opening a full-screen modal closes the panel (and releases
-  // the lock above) instead of leaving it "open" with nothing to show.
   useEffect(() => {
     if (open && (hidden || items.length === 0)) setOpen(false);
   }, [open, hidden, items.length]);
 
   if (hidden || items.length === 0) return null;
+  const totalEstimate = items.reduce((sum, item) => sum + itemEstimate(item), 0);
+  const quantity = items.reduce((sum, item) => sum + (item.side === 'both' ? 2 : 1), 0);
 
-  const totalEstimate = items.reduce(
-    (sum, item) => sum + itemEstimate(item),
-    0
-  );
+  return createPortal(<>
+    <button data-booking-cart-trigger type="button" aria-label={`View cart — ${quantity} item${quantity !== 1 ? 's' : ''} selected`}
+      aria-haspopup="dialog" aria-expanded={visible} onClick={() => setOpen(true)}
+      className="booking-cart-trigger fixed flex items-center justify-center rounded-2xl text-white"
+      style={{ zIndex: 900, background: 'var(--color-brand)', boxShadow: '0 8px 32px #0006', border: '1px solid #c4b5fd66' }}>
+      <ShoppingBag size={20} aria-hidden="true" />
+      <span className="text-[12px] font-bold">View cart ({quantity})</span>
+      <span className="text-[12px] font-mono border-l border-white/30 pl-3">₱{totalEstimate.toLocaleString()}</span>
+    </button>
 
-  return createPortal(
-    <>
-      {/* ── Floating Cart FAB (bottom-right, always visible) ── */}
-      <button
-        type="button"
-        aria-label={`View cart — ${items.length} piercing${items.length !== 1 ? 's' : ''} selected`}
-        onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-5 sm:bottom-8 sm:right-8 flex items-center justify-center rounded-2xl transition-transform active:scale-90 hover:scale-105"
-        style={{
-          zIndex: 900,
-          width: 58,
-          height: 58,
-          background: 'var(--color-brand)',
-          boxShadow: '0 8px 32px rgba(139,92,246,0.55), 0 2px 8px rgba(0,0,0,0.5)',
-          border: '1.5px solid rgba(196,181,253,0.35)',
-          animation: 'pk-modal-up 0.3s cubic-bezier(0.16,1,0.3,1) both',
-        }}
-      >
-        <ShoppingBag size={22} color="#fff" />
-        {/* Item count badge */}
-        <span
-          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-emerald-500 text-black font-black text-[10px] flex items-center justify-center shadow-lg"
-          style={{ border: '2px solid var(--color-bg)' }}
-        >
-          {items.length}
-        </span>
-      </button>
-
-      {/* ── Cart Modal ── */}
-      {open && (
-        <>
-          {/* Backdrop */}
-          <div
-            aria-hidden="true"
-            className="fixed inset-0"
-            style={{
-              zIndex: 9100,
-              background: 'rgba(0,0,0,0.78)',
-              backdropFilter: 'blur(10px)',
-              WebkitBackdropFilter: 'blur(10px)',
-              animation: 'pk-fade-in 0.18s ease-out both',
-            }}
-            onClick={() => setOpen(false)}
-          />
-
-          {/* Panel — bottom-sheet on mobile, centered on desktop */}
-          <div
-            className="modal-positioner"
-            style={{ zIndex: 9101 }}
-            onClick={() => setOpen(false)}
-          >
-            <div
-              className="rounded-t-3xl sm:rounded-3xl flex flex-col overflow-hidden w-full"
-              style={{
-                background: 'var(--color-surface)',
-                border: '1px solid var(--color-border-strong)',
-                boxShadow: '0 -8px 48px rgba(0,0,0,0.65), 0 0 0 1px rgba(139,92,246,0.12)',
-                maxHeight: 'min(88svh, 88dvh, 88vh)',
-                animation: 'pk-modal-up 0.28s cubic-bezier(0.16,1,0.3,1) both',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Drag pill (mobile) */}
-              <div className="flex justify-center pt-2.5 pb-1 flex-shrink-0 sm:hidden">
-                <div className="w-10 h-1 rounded-full bg-zinc-600/50" />
-              </div>
-
-              {/* Header */}
-              <div
-                className="px-5 pt-3 pb-4 border-b flex items-center justify-between gap-3 flex-shrink-0"
-                style={{ borderColor: 'var(--color-border)' }}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: 'var(--color-brand)', boxShadow: 'var(--shadow-brand)' }}
-                  >
-                    <ShoppingBag size={16} color="#fff" />
-                  </div>
-                  <div>
-                    <p className="font-black text-white text-[15px] leading-tight">Your Session Cart</p>
-                    <p className="text-[11px] text-zinc-400">
-                      {items.length} piercing{items.length !== 1 ? 's' : ''} selected
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  aria-label="Close cart"
-                  className="p-2 rounded-xl text-zinc-400 hover:text-white bg-white/5 transition-colors"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Scrollable item list */}
-              <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-3 space-y-2">
-                <div className="flex items-center gap-1.5 pb-1">
-                  <Sparkles size={12} className="text-violet-400" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                    Selected Piercings
-                  </span>
-                </div>
-
-                {items.map((it) => (
-                  <div
-                    key={it.id}
-                    className="flex items-center gap-3 p-3 rounded-2xl"
-                    style={{
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid var(--color-border)',
-                    }}
-                  >
-                    {/* Check icon */}
-                    <div className="flex-shrink-0 w-7 h-7 rounded-xl bg-emerald-500/15 flex items-center justify-center">
-                      <CheckCircle2 size={14} className="text-emerald-400" />
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-white text-[13px] truncate">{it.name}</span>
-                        {it.side && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-zinc-800 text-zinc-300 capitalize">
-                            {it.side}
-                          </span>
-                        )}
-                        {it.isCustom && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-violet-500/20 text-violet-300">
-                            Custom
-                          </span>
-                        )}
-                      </div>
-                      {it.upgradeLabel && (
-                        <p className="text-[10px] text-violet-300 mt-0.5">+{it.upgradeLabel}</p>
-                      )}
-                    </div>
-
-                    {/* Price + Remove */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="font-mono font-bold text-white text-[13px]">
-                        ₱{itemEstimate(it)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => onRemoveItem(it.id)}
-                        className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                        title="Remove"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Sticky footer — Total + CTA */}
-              <div
-                className="flex-shrink-0 px-5 py-4 border-t space-y-3"
-                style={{
-                  background: 'var(--color-surface)',
-                  borderColor: 'var(--color-border)',
-                  paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
-                }}
-              >
-                {/* Total row */}
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-zinc-400">Estimated Total</span>
-                  <span className="font-black text-2xl font-mono text-white leading-none">
-                    ₱{totalEstimate}
-                    <span className="text-[11px] font-normal text-zinc-400 ml-1">est.</span>
-                  </span>
-                </div>
-
-                {/* Next-step CTA — the label follows the booking step */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    onProceed();
-                  }}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-[14px] text-white transition-transform active:scale-95"
-                  style={{
-                    background: 'linear-gradient(135deg, var(--color-brand), var(--color-brand-light))',
-                    boxShadow: 'var(--shadow-brand)',
-                    border: 'none',
-                  }}
-                >
-                  <span>{nextLabel}</span>
-                  <ArrowRight size={18} />
-                </button>
-              </div>
+    {visible && <>
+      <div aria-hidden="true" className="fixed inset-0" onClick={() => setOpen(false)}
+        style={{ zIndex: 9100, background: 'rgba(0,0,0,.78)', backdropFilter: 'blur(10px)' }} />
+      <div className="modal-positioner" style={{ zIndex: 9101 }} onClick={() => setOpen(false)}>
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="booking-cart-title" tabIndex={-1}
+          className="booking-dialog rounded-t-3xl sm:rounded-3xl flex flex-col overflow-hidden w-full"
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-strong)', maxHeight: 'min(88svh, 88dvh, 88vh)' }}
+          onClick={event => event.stopPropagation()}>
+          <div className="booking-dialog-header px-5 py-4 border-b flex items-center justify-between gap-3 shrink-0" style={{ borderColor: 'var(--color-border)' }}>
+            <div>
+              <h2 id="booking-cart-title" className="font-bold text-lg text-white">Your cart</h2>
+              <p className="text-[12px] text-zinc-400">{quantity} item{quantity !== 1 ? 's' : ''} · review before scheduling</p>
             </div>
+            <button type="button" aria-label="Close cart" onClick={() => setOpen(false)} className="px-3 rounded-xl bg-white/5 text-zinc-300"><X size={18}/></button>
           </div>
-        </>
-      )}
-    </>,
-    document.body
-  );
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-3 space-y-3">
+            {items.map(item => <div key={item.id} className="booking-cart-row">
+              <div className="min-w-0">
+                <p className="font-bold text-white text-[14px] break-words">{item.name}</p>
+                {item.side && <p className="text-[12px] text-zinc-300 mt-1 capitalize">{item.side === 'both' ? 'Both ears · 2 piercings' : `${item.side} ear`}</p>}
+                {!item.isCustom && !['CUSTOM', 'JEWELRY'].includes(item.category) && <p className="text-[12px] text-violet-300 mt-1">
+                  {UPGRADES.find(upgrade => upgrade.price === (item.upgradePrice ?? 0))?.label || item.upgradeLabel}
+                  {!item.upgradePrice && ' · included'}
+                </p>}
+                <p className="text-[11px] text-zinc-400 mt-1">{item.side === 'both' ? '2 × ' : ''}(₱{item.basePrice} service + ₱{item.upgradePrice ?? 0} jewelry)</p>
+              </div>
+              <span className="font-mono font-bold text-white text-[14px]">₱{itemEstimate(item).toLocaleString()}</span>
+              <div className="booking-cart-actions">
+                {onEditItem && (!canEditItem || canEditItem(item)) && <button type="button" aria-label={`Edit ${item.name}`} className="flex items-center gap-1.5 hover:bg-white/5"
+                  onClick={() => { setOpen(false); onEditItem(item); }}><Pencil size={14}/>Edit</button>}
+                <button type="button" aria-label={`Remove ${item.name} from cart`} title="Remove" className="flex items-center gap-1.5 hover:bg-red-500/10"
+                  onClick={() => onRemoveItem(item.id)}><Trash2 size={14}/>Remove</button>
+              </div>
+            </div>)}
+          </div>
+          <div className="booking-cart-footer shrink-0 px-5 py-4 border-t space-y-3" style={{ borderColor: 'var(--color-border)', paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+            <div className="flex justify-between items-center gap-3">
+              <span className="text-[12px] text-zinc-300">Estimated Total</span>
+              <span className="text-2xl font-bold font-mono text-white">₱{totalEstimate.toLocaleString()}</span>
+            </div>
+            <p className="text-[11px] text-zinc-400">Adding items does not reserve a slot. Choose a schedule next.</p>
+            <button type="button" onClick={() => { setOpen(false); onProceed(); }}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-[14px] text-white" style={{ background: 'var(--color-brand)' }}>
+              {nextLabel}<ArrowRight size={17}/>
+            </button>
+            <button type="button" onClick={() => setOpen(false)} className="w-full text-[12px] text-violet-300">Continue choosing</button>
+          </div>
+        </div>
+      </div>
+    </>}
+  </>, document.body);
 }

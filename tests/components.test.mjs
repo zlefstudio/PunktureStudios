@@ -405,6 +405,42 @@ test('emptying the cart releases the page scroll lock', async () => {
   assert.notEqual(document.body.style.overflow, 'hidden', 'deleting the last item releases page scroll');
   assert.doesNotMatch(document.body.textContent, /Estimated Total/);
 });
+
+test('booking cart edits side and jewelry without duplicating a selection, and traps dialog focus', async () => {
+  window.scrollTo = () => {};
+  window.sessionStorage.setItem('punkture.booking-cart.v1', JSON.stringify([{ id:'edit-me', name:'Lobe', category:'EAR', basePrice:300, side:'right', notes:'Discuss fit at the appointment.' }]));
+  await render(AppointmentPage);
+  const button = text => [...document.body.querySelectorAll('button')].find(b => b.textContent.trim() === text);
+  const labelled = label => document.body.querySelector(`button[aria-label="${label}"]`);
+  await act(async () => document.querySelector('[data-booking-cart-trigger]').click());
+  await act(async () => labelled('Edit Lobe').click());
+  assert.ok(document.querySelector('[role="dialog"][aria-labelledby="piercing-spot-title"]'));
+  assert.equal(document.body.style.overflow, 'hidden', 'switching dialogs keeps scroll locked');
+  await act(async () => button('Both (2×)').click());
+  await act(async () => [...document.querySelectorAll('button')].find(b => b.textContent.includes('Rhinestone Jewelry')).click());
+  const save = button('Save changes');
+  save.focus();
+  await act(async () => save.dispatchEvent(new dom.window.KeyboardEvent('keydown', {key:'Tab', bubbles:true, cancelable:true})));
+  assert.equal(document.activeElement, labelled('Close'), 'Tab wraps inside the detail dialog');
+  await act(async () => save.click());
+  const cart = JSON.parse(window.sessionStorage.getItem('punkture.booking-cart.v1'));
+  assert.equal(cart.length, 1);
+  assert.equal(cart[0].id, 'edit-me');
+  assert.equal(cart[0].side, 'both');
+  assert.equal(cart[0].upgradePrice, 50);
+  assert.equal(cart[0].notes, 'Discuss fit at the appointment.', 'editing preserves existing item notes');
+  assert.match(document.querySelector('[role="status"]').textContent, /updated in your cart/);
+  assert.notEqual(document.body.style.overflow, 'hidden');
+  await act(async () => document.querySelector('[data-booking-cart-trigger]').click());
+  const dialog = document.querySelector('[role="dialog"]');
+  assert.match(dialog.textContent, /Both ears · 2 piercings/);
+  assert.match(dialog.textContent, /₱700/);
+  await act(async () => labelled('Remove Lobe from cart').click());
+  assert.equal(document.querySelector('[role="dialog"]'), null);
+  assert.equal(document.querySelector('[data-booking-cart-trigger]'), null);
+  assert.deepEqual(JSON.parse(window.sessionStorage.getItem('punkture.booking-cart.v1')), []);
+  assert.equal(bookingWrites.length, 0, 'cart actions never reserve or pay');
+});
 test('the booking page highlights the three-person visit limit', async () => {
   await render(AppointmentPage);
   assert.match(container.textContent, /Up to 3 people per appointment/);

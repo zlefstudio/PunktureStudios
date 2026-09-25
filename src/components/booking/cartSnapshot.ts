@@ -5,6 +5,23 @@ export const MAX_BOOKING_NOTES = 20000;
 export const itemEstimate = (item: BookingSelectedPiercing) =>
   (item.basePrice + (item.upgradePrice ?? 0)) * (item.side === 'both' ? 2 : 1);
 
+/** Replace edits by stable id, even when their side changes. Keep one line per
+ * placement/side; selecting both ears supersedes individual ear selections. */
+export function upsertCartItem(items: BookingSelectedPiercing[], item: BookingSelectedPiercing): BookingSelectedPiercing[] {
+  const remaining = items.filter(previous => previous.id !== item.id && !(
+    previous.name === item.name && (previous.side === item.side || item.side === 'both')
+  )).map(previous => {
+    // Adding a single ear while a pair exists retains the other ear's jewelry.
+    if (previous.name === item.name && previous.side === 'both' && (item.side === 'left' || item.side === 'right')) {
+      return { ...previous, side: item.side === 'left' ? 'right' as const : 'left' as const };
+    }
+    return previous;
+  });
+  const index = items.findIndex(previous => previous.id === item.id);
+  remaining.splice(index < 0 ? remaining.length : Math.min(index, remaining.length), 0, item);
+  return remaining;
+}
+
 export function bookingCartNotes(items: BookingSelectedPiercing[], notes: string): string {
   const lines = items.length ? [
     `Selected items (${items.length}):`,

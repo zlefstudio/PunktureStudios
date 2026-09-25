@@ -579,12 +579,7 @@ button:disabled,
   }
 }
 
-@media (max-height: 680px) {
-  /* On very short viewports, shrink the anatomy graphic so the action bar stays visible */
-  .spot-location-graphic {
-    height: 96px !important;
-  }
-}
+/* Placement previews size their actual SVG; never shrink only its wrapper. */
 
 
 @keyframes pk-overlay-fade {

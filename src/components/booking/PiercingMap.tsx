@@ -8,7 +8,7 @@ export interface DiagramProps {
   onSelectSpot: (spot: PiercingHotspot) => void;
 }
 export type Jewel = 'stud' | 'ring' | 'vertical' | 'horizontal' | 'industrial' | 'navel' | 'floating' | 'rook' | 'fold' | 'snug' | 'daith' | 'septum' | 'smiley' | 'nipple';
-export interface MapPoint { id: string; x: number; y: number; jewel?: Jewel; rotation?: number; size?: number; landmark?: string; offset?: [number, number]; ends?: [[number, number], [number, number]]; }
+export interface MapPoint { id: string; x: number; y: number; jewel?: Jewel; rotation?: number; size?: number; landmark?: string; callout?: string; offset?: [number, number]; ends?: [[number, number], [number, number]]; }
 
 export function Jewelry({ kind = 'stud', metal, ends = [[-86,-38],[99,44]] }: { kind?: Jewel; metal: string; ends?: [[number, number], [number, number]] }) {
   const ball = (x: number, y: number, r = 4) => <circle cx={x} cy={y} r={r} fill={metal} stroke="#fbf6ee" strokeWidth=".7" />;
@@ -33,23 +33,25 @@ export function Jewelry({ kind = 'stud', metal, ends = [[-86,-38],[99,44]] }: { 
   return <><circle r="7" fill="#655a68" opacity=".4" cy="2" />{ball(0,0,6)}<path d="m0-4 3 4-3 4-3-4Z" fill="#fffaf1" /><circle cx="-2" cy="-2" r="1.2" fill="white" /></>;
 }
 
-export function PiercingMap({ title, subtitle, spots, points, selectedNames, onSelectSpot, children, detail, onDetail, previewId, artHeight = 500 }: DiagramProps & {
+export function PiercingMap({ title, subtitle, spots, points, selectedNames, onSelectSpot, children, detail, onDetail, previewId, previewFrame, artHeight = 500 }: DiagramProps & {
   title: string; subtitle: string; spots: PiercingHotspot[]; points: MapPoint[];
   children: (paint: { skin: string; shadow: string; ridge: string; metal: string }) => ReactNode;
-  artHeight?: number; detail?: ReactNode; onDetail?: (id: string) => void;
+  artHeight?: number; previewFrame?: string; detail?: ReactNode; onDetail?: (id: string) => void;
 }) {
   const uid = useId().replace(/:/g, '');
   const [active, setActive] = useState<string | null>(null);
   const targets = points.flatMap(point => (point.jewel === 'industrial' && point.ends ? point.ends : [[0,0]]).map(([x,y], index) => ({id: `${point.id}-${index}`, x: point.x + x!, y: point.y + y!})));
+  const previewSpot = spots.find(spot => spot.id === previewId);
+  const previewPoint = points.find(point => point.id === previewId);
   const current = spots.find(spot => spot.id === active);
   const currentPoint = points.find(point => point.id === active);
   const paint = { skin: `url(#${uid}-skin)`, shadow: `url(#${uid}-shadow)`, ridge: `url(#${uid}-ridge)`, metal: `url(#${uid}-metal)` };
   function choose(spot: PiercingHotspot) { setActive(spot.id); onSelectSpot(spot); }
   return <section className={`piercing-map ${previewId ? 'pm-preview' : ''}`} aria-label={`${title} piercing map`}>
     <div className="pm-stage">
-      <div className="pm-heading"><span>PLACEMENT ATELIER</span><span>{title}</span></div>
+      <div className="pm-heading"><span>PLACEMENT GUIDE</span><span>{previewSpot?.name || title}</span></div>
       {!previewId && detail}
-      <svg viewBox={`0 0 400 ${artHeight}`} className="pm-sculpture" aria-label={`${title}, sculpted placement guide`}>
+      <svg viewBox={previewId && previewFrame ? previewFrame : `0 0 400 ${artHeight}`} className="pm-sculpture" aria-label={`${title}, sculpted placement guide`}>
         <defs>
           <linearGradient id={`${uid}-skin`} x1="0" y1="0" x2="1" y2=".8"><stop stopColor="#f4f3f1"/><stop offset=".32" stopColor="#dbdad8"/><stop offset=".7" stopColor="#bab9b7"/><stop offset="1" stopColor="#92918f"/></linearGradient>
           <radialGradient id={`${uid}-shadow`} cx="65%" cy="45%" r="65%"><stop stopColor="#8b8987"/><stop offset=".55" stopColor="#b1aeab"/><stop offset="1" stopColor="#dedbd8"/></radialGradient>
@@ -63,8 +65,13 @@ export function PiercingMap({ title, subtitle, spots, points, selectedNames, onS
           return <g key={point.id} transform={`translate(${point.x} ${point.y})`} className={`pm-spot ${selected ? 'is-selected' : ''} ${active === point.id ? 'is-active' : ''}`}
             role={previewId ? undefined : "button"} tabIndex={previewId ? undefined : 0} aria-label={`Select ${spot.name} piercing`} aria-pressed={selected}
             onPointerEnter={() => setActive(point.id)} onPointerLeave={() => setActive(null)} onFocus={() => setActive(point.id)} onBlur={() => setActive(null)}
-            onClick={previewId ? undefined : () => choose(spot)} onKeyDown={e => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(spot); } }}>
+            onClick={previewId ? undefined : () => choose(spot)} onKeyDown={e => { if(!previewId && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); choose(spot); } }}>
             <title>{spot.name}</title>
+            {point.callout && !previewId && <g className="pm-callout" pointerEvents="none">
+              {point.offset && <line x1="0" y1="0" x2={point.offset[0]} y2={point.offset[1]} stroke="#51445f" strokeWidth="1" strokeDasharray="3 3"/>}
+              <rect pointerEvents="all" x={-point.callout.length * 2.9 - 8} y="-32" width={point.callout.length * 5.8 + 16} height="21" rx="6" fill="#16141c" fillOpacity=".88"/>
+              <text textAnchor="middle" y="-18" fill="#fff" fontSize="10">{point.callout}</text>
+            </g>}
             {(point.jewel === 'industrial' && point.ends ? point.ends : [[0,0]]).map(([x,y], index) => <g key={index} transform={`translate(${x} ${y})`}>
               <polygon className="pm-hit" points={hitCell({id: `${point.id}-${index}`, x: point.x + x!, y: point.y + y!},targets)} fill="transparent" />
               <g className="pm-pin" pointerEvents="none"><circle r="6.5" fill="#fff" fillOpacity=".85" stroke="#695681" strokeWidth="1"/><circle r="2.5" fill="#5e427e"/></g>
@@ -75,7 +82,7 @@ export function PiercingMap({ title, subtitle, spots, points, selectedNames, onS
           </g>;
         })}
       </svg>
-      <div className="pm-caption" aria-live="polite"><span>{current?.name || subtitle}{currentPoint?.landmark && <small>{currentPoint.landmark}</small>}</span><span>{current ? `₱${current.basePrice}` : 'TAP TO EXPLORE ↗'}</span></div>
+      <div className="pm-caption" aria-live="polite"><span>{previewId ? previewPoint?.landmark || previewSpot?.name : current?.name || subtitle}{!previewId && currentPoint?.landmark && <small>{currentPoint.landmark}</small>}</span>{!previewId && <span>{current ? `₱${current.basePrice}` : 'TAP TO EXPLORE ↗'}</span>}</div>
     </div>
     {!previewId && <><div className="pm-directory" aria-label={`${title} placements`}>
       {spots.map((spot, index) => <button type="button" key={spot.id} className={selectedNames.includes(spot.name) ? 'is-selected' : ''}

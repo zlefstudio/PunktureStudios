@@ -1,4 +1,4 @@
-import { bookingCartNotes, itemEstimate, readCartDraft, saveCartDraft, clearCartDraft } from './booking/cartSnapshot';
+import { bookingCartNotes, itemEstimate, upsertCartItem, readCartDraft, saveCartDraft, clearCartDraft } from './booking/cartSnapshot';
 import { editableEvents } from '../popupEvents';
 import { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -57,7 +57,15 @@ export function AppointmentPage() {
   const [activeModalSpot, setActiveModalSpot] = useState<{
     spot: PiercingHotspot;
     side?: 'left' | 'right';
+    itemId?: string;
   } | null>(null);
+
+  const [cartFeedback, setCartFeedback] = useState('');
+  useEffect(() => {
+    if (!cartFeedback) return;
+    const timer = window.setTimeout(() => setCartFeedback(''), 4500);
+    return () => window.clearTimeout(timer);
+  }, [cartFeedback]);
 
   // Public Settings from Firestore
   const [publicSettings, setPublicSettings] = useState<PublicSettings | null>(null);
@@ -180,19 +188,15 @@ export function AppointmentPage() {
   }
 
   function handleAddPiercing(item: BookingSelectedPiercing) {
-    setSelectedPiercings((prev) => {
-      const idx = prev.findIndex((p) => p.name === item.name && p.side === item.side);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = item;
-        return next;
-      }
-      return [...prev, item];
-    });
+    const editing = selectedPiercings.some(p => p.id === item.id || (p.name === item.name && p.side === item.side));
+    setSelectedPiercings(prev => upsertCartItem(prev, item));
+    setCartFeedback(`${item.name} ${editing ? 'updated in' : 'added to'} your cart.`);
   }
 
   function handleRemovePiercing(id: string) {
+    const removed = selectedPiercings.find(p => p.id === id);
     setSelectedPiercings((prev) => prev.filter((p) => p.id !== id));
+    setCartFeedback(`${removed?.name || 'Item'} removed from your cart.`);
   }
 
   function handleAddOtherService(itemName: string, basePrice: number) {
@@ -306,7 +310,7 @@ export function AppointmentPage() {
 
   return (
     <PublicShell page="appointment">
-      <div className="space-y-6 pb-20 sm:pb-12">
+      <div className="space-y-6 pb-28">
         {/* Page Header */}
         <div className="text-center">
           <p className="text-[10px] uppercase tracking-[0.2em] mb-1" style={{ color: 'var(--color-brand-text)' }}>
@@ -533,6 +537,7 @@ export function AppointmentPage() {
             {/* ════ STEP 1: PIERCING PLACEMENT PICKER ════ */}
             {step === 1 && (
               <div className="space-y-4">
+                <p className="text-[12px] text-zinc-400">Choose a placement, pick your jewelry, then add it to your cart. You can edit your choices before scheduling.</p>
                 {/* Category Switcher - Modern typography, NO emojis */}
                 <div className="flex items-center gap-1.5 p-1 rounded-2xl overflow-x-auto" style={{ background: 'rgba(255,255,255,0.04)' }}>
                   <button
@@ -1160,10 +1165,11 @@ export function AppointmentPage() {
         {/* ── Active Spot Modal ── */}
         {activeModalSpot && (
           <PiercingSpotModal
+            key={activeModalSpot.itemId || activeModalSpot.spot.id}
             spot={activeModalSpot.spot}
             initialSide={activeModalSpot.side}
             existingSelection={selectedPiercings.find(
-              (p) => p.name === activeModalSpot.spot.name && (!activeModalSpot.side || p.side === activeModalSpot.side)
+              (p) => activeModalSpot.itemId ? p.id === activeModalSpot.itemId : p.name === activeModalSpot.spot.name && (!activeModalSpot.side || p.side === activeModalSpot.side)
             )}
             onAdd={handleAddPiercing}
             onRemove={handleRemovePiercing}
@@ -1171,13 +1177,20 @@ export function AppointmentPage() {
           />
         )}
 
+        <div role="status" aria-live="polite" aria-atomic="true" className={cartFeedback && !activeModalSpot && !showWaiverModal ? 'booking-cart-feedback' : 'sr-only'}>{cartFeedback}</div>
+
         {/* ── Floating Cart FAB — visible on the booking steps, never over a modal ── */}
         <BookingCartBar
           items={selectedPiercings}
           onRemoveItem={handleRemovePiercing}
+          canEditItem={item => ALL_HOTSPOTS.some(spot => spot.name === item.name)}
+          onEditItem={item => {
+            const spot = ALL_HOTSPOTS.find(candidate => candidate.name === item.name);
+            if (spot) setActiveModalSpot({ spot, itemId: item.id });
+          }}
           onProceed={handleCartProceed}
           nextLabel={step === 1 ? 'Next: Schedule' : step === 2 ? 'Next: Client Details' : 'Back to Your Details'}
-          hidden={showWaiverModal || activeModalSpot !== null}
+          hidden={showWaiverModal || activeModalSpot !== null || !!payment || !bookingEnabled}
         />
 
         {/* ── Waiver Review Modal (mirrors /waiver.html content) ── */}

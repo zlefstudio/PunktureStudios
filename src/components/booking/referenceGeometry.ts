@@ -4,8 +4,8 @@ import type { MapPoint } from './PiercingMap';
 // places the image and its points, avoiding aspect-ratio/crop drift on resize.
 export const EAR_IMAGE = { src: '/media/anatomy/ear-reference.png', width: 736, height: 1199, x: -140 * 5 / 6, y: -345 * 5 / 6, scale: 5 / 6 };
 export const FACE_IMAGE = { src: '/media/anatomy/face-reference.png', width: 286, height: 463, x: (400 - 286 * 500 / 463) / 2, y: 0, scale: 500 / 463 };
-export const BODY_IMAGE = { src: '/media/anatomy/body-reference.png', width: 802, height: 688, x: -80 * 2 / 3, y: 0, scale: 2 / 3 };
-export const BODY_CROP_HEIGHT = 638 * BODY_IMAGE.scale;
+export const BODY_IMAGE = { src: '/media/anatomy/body-torso-v2.jpg', width: 527, height: 520, x: 0, y: 0, scale: 400 / 527 };
+export const BODY_CROP_HEIGHT = BODY_IMAGE.height * BODY_IMAGE.scale;
 export function onReference(image: {x: number; y: number; scale: number}, point: MapPoint): MapPoint {
   return {...point, x: image.x + point.x * image.scale, y: image.y + point.y * image.scale, offset: point.offset ? [point.offset[0] * image.scale, point.offset[1] * image.scale] : undefined};
 }
@@ -46,23 +46,15 @@ export const FACE_POINTS: MapPoint[] = [
   {id:'monroe',x:175,y:289,size:.54,landmark:'Above the upper lip, on the wearer’s left'},
   {id:'dimple',x:94,y:306,size:.54,landmark:'Cheek, outside the mouth corner'},
 ].map(point => onReference(FACE_IMAGE, point as MapPoint));
-// Chest and navel share ONE torso graphic: the navel marker, the floating-navel
-// marker just below it, and the nipple-line marker on the chest. All are drawn
-// on the supplied torso reference so customers never switch views.
+// Two labelled callouts share one upper-rim jewelry anchor. Floating navel is
+// a jewelry configuration at the same rim, not a second hole below the navel.
 export const NAVEL_POINTS: MapPoint[] = [
-  {id:'navel',x:393,y:611,jewel:'navel',size:.65,landmark:'Upper navel rim'},
-  {id:'floating_navel',x:393,y:627,jewel:'floating',size:.6,landmark:'Upper rim · flat lower end inside the navel'},
+  {id:'navel',x:126,y:450,offset:[140,2],callout:'Navel',jewel:'navel',size:.8,landmark:'Upper navel rim · curved barbell'},
+  {id:'floating_navel',x:406,y:450,offset:[-140,2],callout:'Floating navel',jewel:'floating',size:.8,landmark:'Same upper rim · flat lower end inside the navel'},
 ].map(point => onReference(BODY_IMAGE, point as MapPoint));
-// The supplied torso has no individually photographed nipple landmark, so this is
-// a labelled chest-line guide (with the modal's left/right picker) rather than an
-// invented anatomical mark; the piercer confirms the exact position in person.
-// Position is derived from the torso's own landmarks, not guessed: the shot is
-// cropped at the neck (top edge ≈ sternal notch, source y≈25) and the navel dip
-// sits at (392, 614) — where NAVEL_POINTS already lands. The nipple line is ~50%
-// of the notch-to-navel span and ~20 cm below the notch, so source y ≈ 325; the
-// marker sits 100 source px (~7 cm) left of the x≈392 midline, which keeps the
-// whole horizontal barbell on the pectoral instead of on the sternum.
-export const NIPPLE_POINT: MapPoint = onReference(BODY_IMAGE,{id:'nipple_single',x:292,y:328,jewel:'nipple',size:.8,landmark:'Pectoral, nipple line · mirrored on the other side'});
+// Positioned at the user's red-dot guide on the image's right breast. The
+// mannequin has no nipple texture; this remains an illustrative placement.
+export const NIPPLE_POINT: MapPoint = onReference(BODY_IMAGE,{id:'nipple_single',x:405,y:208,callout:'Nipple',jewel:'nipple',size:.6,landmark:'Nipple area · one piercing, either side · illustrative guide'});
 
 /** Voronoi partition clipped to a square hit target. Close facial spots cannot
  * steal one another's taps. Coordinates returned are local to the current point. */
