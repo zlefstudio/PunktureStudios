@@ -203,6 +203,8 @@ test('older Workers without the agenda still render from loaded records, with a 
   await render({ report: { ...report(), upcoming: undefined, reviews: undefined, bookings: [maya, expired] } });
   assert.match(container.textContent, /Maya Santos/);
   assert.match(container.textContent, /Deploy the updated booking Worker/);
+  assert.match(container.textContent, /Google Calendar · deploy the updated booking Worker to turn on calendar sync/);
+  assert.equal(button('Sync to Google Calendar'), undefined, 'no sync button until the Worker supports it');
 });
 
 /* ─────────── Social media contact ─────────── */
@@ -260,6 +262,8 @@ test('calendar setup problems surface in the attention strip; all-synced stays q
   await render({ report: { ...report(), calendar: retrying } });
   assert.match(container.querySelector('[aria-label="Needs attention"]').textContent, /2 bookings couldn’t be added to Google Calendar yet/);
   assert.match(container.textContent, /Google Calendar · isn’t set up yet\. Run setupCalendar/);
+  await render({ report: { ...report(), calendar: [{ booking_id: 'jo', status: 'pending', last_error: 'calendar_invalid_request' }] } });
+  assert.match(container.textContent, /Apps Script web app is still on the old version\. Paste the new Code\.gs/, 'an old script version is named, not just "retrying"');
   const allSent = [{ booking_id: 'jo', status: 'sent', last_error: null }, { booking_id: 'closed', status: 'sent', last_error: null }];
   await render({ report: { ...report(), calendar: allSent } });
   assert.match(container.textContent, /Google Calendar · all 2 upcoming bookings are on your calendar/);

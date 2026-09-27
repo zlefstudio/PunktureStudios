@@ -79,7 +79,10 @@ export function BookingsBoard({ report, settings, now, busy, canLoadMore, onLoad
   const calendarOf = (b: AdminBooking) => calendarState(b, report, now);
   const calendarStates = all.map(calendarOf).filter((state): state is CalendarState => state !== null);
   const calendarRetrying = calendarStates.filter(state => state === 'retrying').length;
-  const calendarNotConfigured = (report.calendar ?? []).some(job => job.status !== 'sent' && job.last_error === 'calendar_not_configured');
+  const calendarErrors = (report.calendar ?? []).filter(job => job.status !== 'sent').map(job => job.last_error);
+  // invalid_request/unauthorized from the script means the web app still runs the pre-calendar Code.gs.
+  const calendarSetup: CalendarSetup = calendarErrors.some(e => e === 'calendar_invalid_request' || e === 'calendar_unauthorized') ? 'outdated'
+    : calendarErrors.includes('calendar_not_configured') ? 'not_configured' : 'ok';
   const toggle = (id: string) => setExpanded(current => current === id ? null : id);
 
   function goToDate(date: string) {
@@ -133,8 +136,12 @@ export function BookingsBoard({ report, settings, now, busy, canLoadMore, onLoad
         onSelect={goToDate} onShiftWeek={days => { setStripStart(start => shiftDate(start, days)); setSelected(date => shiftDate(date, days)); }}
         onToday={() => { setStripStart(today); setSelected(today); }}
         expanded={expanded} onToggle={toggle} busy={busy} onCancel={onCancel} onOpen={showInSchedule} complete={Boolean(report.upcoming)} calendarOf={calendarOf}
-        calendarBar={report.calendar ? <CalendarBar states={calendarStates} notConfigured={calendarNotConfigured} busy={busy} onSync={onSyncCalendar} /> : null}
-        calendarNeedsAction={calendarStates.some(state => state === 'missing' || state === 'retrying')} />}
+        calendarBar={report.calendar ? <CalendarBar states={calendarStates} setup={calendarSetup} busy={busy} onSync={onSyncCalendar} />
+          : <p role="status" className="flex items-center gap-2 rounded-xl px-3 py-2 text-body-xs" style={{ ...muted, border: '1px dashed var(--color-border-strong)' }}>
+            <CalendarCheck size={14} className="shrink-0" aria-hidden="true" />
+            <span><span className="font-semibold">Google Calendar</span> · deploy the updated booking Worker to turn on calendar sync (docs/gmail-setup.md §5).</span>
+          </p>}
+        calendarNeedsAction={!report.calendar || calendarStates.some(state => state === 'missing' || state === 'retrying')} />}
       {tab === 'records' && <RecordsView all={all} settings={settings} now={now} today={today} expanded={expanded} onToggle={toggle} busy={busy}
         onCancel={onCancel} onShowInSchedule={showInSchedule} calendarOf={calendarOf} canLoadMore={canLoadMore} onLoadMore={onLoadMore} initialFilter={reviews.some(b => b.id === expanded) ? 'payment_review' : 'all'} />}
       {tab === 'payments' && <PaymentsView report={report} all={all} busy={busy} onImportLegacy={onImportLegacy} />}
@@ -151,12 +158,14 @@ function AttentionItem({ children, action, onClick }: { children: ReactNode; act
 }
 
 /** Google Calendar sync status for upcoming confirmed bookings, with a manual (re)sync. */
-function CalendarBar({ states, notConfigured, busy, onSync }: { states: CalendarState[]; notConfigured: boolean; busy: boolean; onSync: () => void }) {
+type CalendarSetup = 'ok' | 'not_configured' | 'outdated';
+function CalendarBar({ states, setup, busy, onSync }: { states: CalendarState[]; setup: CalendarSetup; busy: boolean; onSync: () => void }) {
   const count = (state: CalendarState) => states.filter(s => s === state).length;
   const [missing, retrying, queued] = [count('missing'), count('retrying'), count('queued')];
   const bookings = (n: number, one: string, many: string) => `${n} upcoming booking${n === 1 ? one : many}`;
   const needsAction = missing + retrying > 0;
-  const message = notConfigured ? 'isn’t set up yet. Run setupCalendar in the Apps Script, then sync again.'
+  const message = setup === 'outdated' ? 'the Apps Script web app is still on the old version. Paste the new Code.gs, run setupCalendar, then Deploy → Manage deployments → Edit → New version, and sync again.'
+    : setup === 'not_configured' ? 'isn’t set up yet. Run setupCalendar in the Apps Script, then sync again.'
     : missing ? `${bookings(missing, ' isn’t', 's aren’t')} on your calendar yet.`
       : retrying ? `${bookings(retrying, '', 's')} couldn’t be added yet — retrying automatically.`
         : queued ? `adding ${bookings(queued, '', 's')}…`

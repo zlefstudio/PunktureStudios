@@ -9,6 +9,18 @@
 - Direct local preview reads existing local settings, with a default studio schedule if none exist. Draft preview uses the saved snapshot. It bypasses only the overall public pause for display; weekday/date closures, pop-ups, notice days and future dates remain in force. Times are simulated schedule choices, never actual live availability. No booking API requests, holds, checkout, charge, release or email can occur. Payment URL fragments are ignored, and the customer cart's session draft is neither read nor overwritten. The consent button says **Finish preview — no payment** and reports completion without submitting.
 - The local **Bookings & deposits** panel now shows separate booked and paid timestamps in Manila time, supports payment-reference searches, and explains that verified gross collections do not establish wallet settlement. Links lead to the PayMongo dashboard and official payout guide. Existing totals still precede fees/refunds; no payout or refund accounting is inferred.
 
+## Privacy page rewrite (2026-09-27)
+
+`PrivacyPage.tsx` was rewritten in plain language without repeated statements. It now has these sections:
+- **What we collect**: pop-up queue nickname, used for calling clients and for finding them if they forget their ticket number; the public board shows only the ticket number and the masked nickname from `maskNickname`, e.g. `M**a`. It also says clients can leave Instagram or other social media instead of a phone number to be messaged when they are next. The online booking fields, payment (reference only) and waiver are covered too.
+- **How we use it**: including the private Google Calendar.
+- **Services we use**: links to the [PayMongo](https://www.paymongo.com/privacy), [Google](https://policies.google.com/privacy) and [Cloudflare](https://www.cloudflare.com/privacypolicy/) privacy policies.
+- **How long we keep it**.
+- **Your rights**: links to the [National Privacy Commission](https://privacy.gov.ph/).
+- The Contact and Copyright sections are unchanged.
+
+This is copy only; data handling did not change. It reaches customers after `npm run deploy`.
+
 ## Google Calendar sync and social media contact (2026-09-27)
 
 **Calendar sync (one-way, website → Google Calendar):** confirmed bookings become 45-minute events on a **Punkture Bookings** calendar owned by the Google account that deployed the Apps Script. The studio wants the calendar in punkturepiercingstudio@gmail.com: if that account is not the script owner, share the calendar to it (steps in [docs/gmail-setup.md §5](docs/gmail-setup.md)). Flow:
@@ -36,6 +48,8 @@
 - The Schedule view shows a Google Calendar bar: at the top with **Sync to Google Calendar** when upcoming bookings are missing or failing, otherwise a quiet “all N upcoming bookings are on your calendar · Sync again” line at the bottom.
 - Booking details show *On Google Calendar* / *Adding…* / *Not added yet* for upcoming confirmed bookings.
 - Failing calendar jobs appear in **Needs attention**. The Payments email list and email attention count exclude calendar jobs.
+
+**Live status (2026-09-27, read-only D1 check):** the studio deployed Worker version `f1340f49-36ea-4d90-89b9-44adcb3fee44`. The remote `booking_calendar` trigger exists and `migrations list` reports nothing pending. The first `migrations apply` attempt had shown a transient Cloudflare API error 7403, but the account, token scopes (`d1 write`) and later queries were all fine. The first sync queued the one upcoming confirmed booking. It returned `calendar_invalid_request` because the Apps Script web app still ran the pre-calendar Code.gs. The Schedule bar now names this case (“still on the old version…”). A local simulation of that real booking against the new Code.gs returned `sent` (3:15 PM Manila, 45 min, 90-min reminder). The remaining step is the Apps Script update: paste, `setupCalendar`, new version, then press Sync again.
 
 **Release order:** paste Code.gs → run `setupCalendar` → new web-app version → `wrangler d1 migrations apply punkture-booking --remote` → deploy Worker → press **Sync to Google Calendar** once for existing bookings. Any other order only delays events; nothing is lost or duplicated.
 
