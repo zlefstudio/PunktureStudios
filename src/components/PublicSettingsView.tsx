@@ -149,6 +149,8 @@ export function SettingsSidebar() {
 /** Main wide Settings Workspace */
 export function PublicSettingsView() {
   const [settings, setSettings] = useState<PublicSettings | null>(null);
+  // Last loaded/saved copy: the bookings schedule shows what customers see, not unsaved edits.
+  const [savedSettings, setSavedSettings] = useState<PublicSettings | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [saved, setSaved] = useState(false);
   const [savedMessage, setSavedMessage] = useState('Settings saved successfully!');
@@ -178,19 +180,19 @@ export function PublicSettingsView() {
     void getLocalPublicSettings()
       .then((s) => {
         if (!active) return;
-        setSettings(
-          s ? upgradeLegacySchedule(s) : {
-            key: 'public',
-            eventActive: false,
-            bookingEnabled: true,
-            bookingDays: [...DEFAULT_DAYS],
-            bookingSlots: [...DEFAULT_SLOTS],
-            bookingDaySlots: studioDaySlots(),
-            blockedDates: [],
-            bookingNoticeDays: 1,
-            updatedAt: 0,
-          }
-        );
+        const initial: PublicSettings = s ? upgradeLegacySchedule(s) : {
+          key: 'public',
+          eventActive: false,
+          bookingEnabled: true,
+          bookingDays: [...DEFAULT_DAYS],
+          bookingSlots: [...DEFAULT_SLOTS],
+          bookingDaySlots: studioDaySlots(),
+          blockedDates: [],
+          bookingNoticeDays: 1,
+          updatedAt: 0,
+        };
+        setSettings(initial);
+        setSavedSettings(initial);
         setLoaded(true);
       })
       .catch((e) => {
@@ -328,6 +330,7 @@ export function PublicSettingsView() {
         bookingNoticeDays: settings.bookingNoticeDays ?? 1,
       });
       setSettings(next);
+      setSavedSettings(next);
       setScheduleNotice('');
       if (user) {
         await syncNow();
@@ -488,7 +491,7 @@ export function PublicSettingsView() {
       )}
 
       <div className={tab === 'bookings' ? 'space-y-6' : 'hidden'}>
-        <PaidBookingsView />
+        <PaidBookingsView settings={savedSettings} />
       </div>
 
       {/* ════ PANEL 1: PUBLIC BOOKING & SCHEDULE CONTROLS ════ */}

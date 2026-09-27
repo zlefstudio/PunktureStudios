@@ -367,9 +367,16 @@ async function route(request, env) {
       await expire(env);
       const limit=Math.min(500,Math.max(1,Number(url.searchParams.get('limit'))||30));
       const rows=(await sql(env,'SELECT id,name,email,contact,notes,date,time,status,createdAt,expiresAt,paidAt,payment_id,session_id,amount,last_error FROM bookings ORDER BY createdAt DESC LIMIT ?',limit).all()).results;
+      // The staff agenda needs every slot holder by appointment date, however long ago it was booked.
+      // Online booking is limited to 21 days ahead, so 500 rows covers the whole window.
+      const fromParam=url.searchParams.get('from') || '';
+      const from=/^\d{4}-\d{2}-\d{2}$/.test(fromParam) ? fromParam : new Date(Date.now()+28800000).toISOString().slice(0,10);
+      const agendaColumns='id,name,email,contact,notes,date,time,status,createdAt,expiresAt,paidAt,payment_id,amount,last_error';
+      const upcoming=(await sql(env,`SELECT ${agendaColumns} FROM bookings WHERE status IN ('creating','pending','confirmed') AND date>=? ORDER BY date,time LIMIT 500`,from).all()).results;
+      const reviews=(await sql(env,`SELECT ${agendaColumns} FROM bookings WHERE status='payment_review' ORDER BY createdAt DESC LIMIT 50`).all()).results;
       const notifications=(await sql(env,"SELECT booking_id,audience,kind,status,attempts,last_error FROM outbox WHERE status!='sent' ORDER BY createdAt DESC LIMIT 100").all()).results;
       const totals=await sql(env,"SELECT COUNT(payment_id) AS payments,COALESCE(SUM(CASE WHEN payment_id IS NOT NULL THEN amount ELSE 0 END),0) AS grossCentavos, SUM(CASE WHEN status='payment_review' THEN 1 ELSE 0 END) AS needsReview FROM bookings").first();
-      return json({bookings:rows,notifications,totals});
+      return json({bookings:rows,upcoming,reviews,notifications,totals});
     }
     if (request.method==='POST' && /^\/admin\/bookings\/[^/]+\/cancel$/.test(url.pathname)) {
       const id=url.pathname.split('/')[3];

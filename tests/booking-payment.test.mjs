@@ -204,6 +204,27 @@ test('staff registry authorization and cancellation preserve payment audit and q
   assert.equal(db.prepare('SELECT count(*) n FROM outbox').get().n,4);
   assert.deepEqual((await (await request(`/availability?date=${b.date}`)).json()).unavailable,[]);
 });
+test('staff agenda lists every slot holder by appointment date, regardless of how old the booking is',async()=>{
+  const insert=(id,date,time,status,createdAt,extra={})=>db.prepare('INSERT INTO bookings(id,token_hash,request_hash,name,email,contact,notes,date,time,requestedFor,status,createdAt,expiresAt,paidAt,payment_id,policy) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id,'t','r',id,`${id}@example.com`,'0917',`notes ${id}`,date,time,Date.parse(`${date}T${time}:00+08:00`),status,createdAt,extra.expiresAt ?? createdAt+900000,extra.paidAt ?? null,extra.payment_id ?? null,POLICY);
+  const from=new Date(Date.now()+28800000).toISOString().slice(0,10);
+  const later=bookableDate(3), soon=bookableDate(2);
+  insert('old-confirmed',later,'09:00','confirmed',1000,{paidAt:2000,payment_id:'pay_old'});
+  insert('soon-confirmed',soon,'15:15','confirmed',5000,{paidAt:6000,payment_id:'pay_soon'});
+  insert('live-hold',soon,'09:45','pending',Date.now(),{expiresAt:Date.now()+600000});
+  insert('stale-hold',soon,'10:30','pending',Date.now()-2000000,{expiresAt:Date.now()-1000});
+  insert('cancelled',soon,'11:15','cancelled',7000);
+  insert('past-confirmed','2020-01-06','09:00','confirmed',8000,{paidAt:8000,payment_id:'pay_past'});
+  insert('late-payment',soon,'13:00','payment_review',9000,{paidAt:9000,payment_id:'pay_late'});
+  const headers={Authorization:'Bearer staff-token'};
+  const report=await (await request(`/admin/bookings?limit=1&from=${from}`,null,headers)).json();
+  assert.equal(report.bookings.length,1,'the ledger still honours its limit');
+  assert.deepEqual(report.upcoming.map(b=>b.id),soon<later?['live-hold','soon-confirmed','old-confirmed']:['old-confirmed','live-hold','soon-confirmed'],'ordered by appointment date and time; expired, cancelled and past rows excluded');
+  assert.deepEqual(report.reviews.map(b=>b.id),['late-payment']);
+  assert.equal(report.upcoming[0].token_hash,undefined,'no secrets in the agenda');
+  const fallback=await (await request('/admin/bookings?from=not-a-date',null,headers)).json();
+  assert.ok(fallback.upcoming.every(b=>b.date>=from),'an invalid from date falls back to Manila today');
+});
 test('legacy import is authenticated, enables launch and preserves holds on conflicting refresh',async()=>{
   const b=input(); const headers={Authorization:'Bearer staff-token'};
   legacyRecords=[{document:{name:'projects/test/documents/appointments/old',fields:{date:{stringValue:b.date},time:{stringValue:b.time},status:{stringValue:'confirmed'}}}}];
