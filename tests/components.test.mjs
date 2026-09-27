@@ -16,6 +16,7 @@ let savedSettings;
 let initialSettings;
 let publicSnapshot;
 let bookingWrites;
+let bookingApiCalls;
 let saveBooking;
 let queueRows;
 let heartbeat;
@@ -53,6 +54,7 @@ await mock.module('firebase/firestore', { namedExports: {
 await mock.module('../src/bookingApi.ts', { namedExports: {
   RESERVATION_POLICY: 'PHP 100.00 reservation fee',
   bookingApi: async (path, options = {}) => {
+    bookingApiCalls.push(path);
     if (path.startsWith('/availability')) {
       availabilityRequests++;
       if (availabilityFails) throw new Error('Availability unavailable');
@@ -75,13 +77,14 @@ let root;
 let container;
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
-  initialSettings = null; publicSnapshot = null; savedSettings = null; bookingWrites = []; saveBooking = async () => {}; queueRows = []; heartbeat = 0; unavailableSlots = []; availabilityFails = false; serverSlots = null;
+  initialSettings = null; publicSnapshot = null; savedSettings = null; bookingWrites = []; bookingApiCalls = []; saveBooking = async () => {}; queueRows = []; heartbeat = 0; unavailableSlots = []; availabilityFails = false; serverSlots = null;
   await db.transaction('rw', db.tickets, db.items, db.meta, db.settings, async () => {
     await Promise.all([db.tickets.clear(), db.items.clear(), db.meta.clear(), db.settings.clear()]);
   });
   await useStore.getState().loadAll();
   document.body.style.overflow = '';
   window.sessionStorage.clear();
+  window.localStorage.clear();
   container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
@@ -257,6 +260,63 @@ test('taken slots and availability failures disable schedule buttons', async () 
   const slots = [...container.querySelectorAll('button')].filter(b => /\d:\d\d (AM|PM)/.test(b.textContent));
   assert.ok(slots.length > 0); assert.ok(slots.every(b => b.disabled));
   assert.match(container.textContent, /Availability unavailable/);
+});
+
+test('private preview works while paused and never reads or writes live bookings, even with a payment fragment', async () => {
+  const cart = '[{"id":"saved","name":"Lobe","category":"EAR","basePrice":500}]';
+  window.sessionStorage.setItem('punkture.booking-cart.v1', cart);
+  window.history.replaceState(null, '', '/appointment.html?preview=draft#booking=existing&token=private&cancelled=1');
+  await render(AppointmentPage, { previewSettings: { key: 'public', updatedAt: 0, bookingEnabled: false } });
+  assert.match(container.textContent, /Private booking preview/);
+  assert.equal(publicSnapshot, null, 'preview must not subscribe to public settings');
+  const find = text => [...document.body.querySelectorAll('button')].find(b => b.textContent.includes(text));
+  await act(async () => find('Skip to Schedule').click());
+  const date = [...container.querySelectorAll('button')].find(b => b.querySelector('.text-lg.font-black') && !b.disabled);
+  await act(async () => date.click());
+  const slot = [...container.querySelectorAll('button')].find(b => /AM|PM/.test(b.textContent) && !b.disabled);
+  assert.ok(slot, 'schedule can be previewed without enabling public booking');
+  await act(async () => slot.click());
+  await act(async () => find('Next: Client Details').click());
+  await fill('input[placeholder="e.g. Maya Santos"]', 'Preview Person');
+  await fill('input[placeholder="e.g. 09171234567 or @mayasantos"]', 'preview');
+  await fill('input[type="email"]', 'preview@example.invalid');
+  await act(async () => submit());
+  assert.equal(find('Finish preview').disabled, true);
+  await act(async () => document.querySelector('#waiver-modal-agree').click());
+  await act(async () => document.querySelector('#waiver-modal-privacy').click());
+  await act(async () => find('Finish preview').click());
+  assert.match(container.textContent, /Preview complete/);
+  assert.deepEqual(bookingApiCalls, [], 'no availability, checkout, status or release API calls');
+  assert.deepEqual(bookingWrites, []);
+  assert.equal(window.sessionStorage.getItem('punkture.booking-cart.v1'), cart, 'customer cart stays isolated');
+  assert.equal(savedSettings, null);
+});
+
+test('public booking cannot bypass paused state with preview query parameters', async () => {
+  initialSettings = { bookingEnabled: false };
+  window.history.replaceState(null, '', '/appointment.html?preview=draft');
+  await render(AppointmentPage);
+  assert.match(container.textContent, /Not Accepting Automated Bookings/);
+  assert.doesNotMatch(container.textContent, /Private booking preview/);
+});
+
+test('saving and loading a private settings draft never enters cloud sync', async () => {
+  initialSettings = { key: 'public', updatedAt: 0, bookingEnabled: false };
+  await render(PublicSettingsView);
+  const originalOpen = window.open;
+  let opened;
+  window.open = (...args) => { opened = args; };
+  try {
+    const find = text => [...container.querySelectorAll('button')].find(b => b.textContent.includes(text));
+    await act(async () => find('Save draft & preview').click());
+    assert.equal(JSON.parse(window.localStorage.getItem('punkture.booking-preview.v1')).bookingEnabled, false);
+    assert.deepEqual(opened, ['/appointment.html?preview=draft', '_blank', 'noopener,noreferrer']);
+    assert.equal(savedSettings, null);
+    await act(async () => container.querySelector('input[type="checkbox"]').click());
+    await act(async () => find('Load saved draft').click());
+    assert.equal(container.querySelector('input[type="checkbox"]').checked, false);
+    assert.equal(savedSettings, null);
+  } finally { window.open = originalOpen; }
 });
 
 test('booking availability stops while hidden and refreshes immediately on return', async t => {

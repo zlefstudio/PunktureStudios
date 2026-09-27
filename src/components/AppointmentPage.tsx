@@ -48,9 +48,11 @@ const BOOKING_SERVICES: OtherService[] = [...OTHER_SERVICES].sort((a, b) =>
   a.single ? -1 : b.single ? 1 : 0
 );
 
-export function AppointmentPage() {
+export function AppointmentPage({ previewSettings }: { previewSettings?: PublicSettings } = {}) {
+  const preview = previewSettings !== undefined;
+  const [previewComplete, setPreviewComplete] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [selectedPiercings, setSelectedPiercings] = useState<BookingSelectedPiercing[]>(readCartDraft);
+  const [selectedPiercings, setSelectedPiercings] = useState<BookingSelectedPiercing[]>(() => preview ? [] : readCartDraft());
   const [activeCategory, setActiveCategory] = useState<VisualCategory>('EAR');
   const [viewMode, setViewMode] = useState<ViewMode>('diagram');
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,7 +70,7 @@ export function AppointmentPage() {
   }, [cartFeedback]);
 
   // Public Settings from Firestore
-  const [publicSettings, setPublicSettings] = useState<PublicSettings | null>(null);
+  const [publicSettings, setPublicSettings] = useState<PublicSettings | null>(previewSettings ?? null);
 
   // Step 2: Schedule State
   const [date, setDate] = useState('');
@@ -90,11 +92,12 @@ export function AppointmentPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payment, setPayment] = useState(() => {
+    if (preview) return null;
     const params = new URLSearchParams(window.location.hash.slice(1));
     return params.get('booking') && params.get('token') ? { id: params.get('booking')!, token: params.get('token')!, cancelled: params.has('cancelled') } : null;
   });
 
-  useEffect(() => { if (!payment) saveCartDraft(selectedPiercings); }, [selectedPiercings, payment]);
+  useEffect(() => { if (!preview && !payment) saveCartDraft(selectedPiercings); }, [selectedPiercings, payment, preview]);
 
   const pending = useRef(false);
   const requestId = useRef(crypto.randomUUID());
@@ -102,6 +105,13 @@ export function AppointmentPage() {
 
   useEffect(() => {
     if (!date || payment) return;
+    if (preview) {
+      setServerSlots(slotsForDate(publicSettings, date));
+      setUnavailable([]);
+      setAvailabilityReady(true);
+      setAvailabilityError('');
+      return;
+    }
     let active = true;
     setAvailabilityReady(false);
     setServerSlots(null);
@@ -140,9 +150,10 @@ export function AppointmentPage() {
     void refresh();
     const timer = setInterval(() => void refresh(), 10000);
     return () => { active = false; clearInterval(timer); document.removeEventListener('visibilitychange', visibility); };
-  }, [date, payment, publicSettings]);
+  }, [date, payment, publicSettings, preview]);
 
   useEffect(() => {
+    if (previewSettings) { setPublicSettings(previewSettings); return; }
     const unsub = onSnapshot(
       doc(firestore, 'public', 'public'),
       (snap) => {
@@ -151,9 +162,9 @@ export function AppointmentPage() {
       () => setPublicSettings(null)
     );
     return unsub;
-  }, []);
+  }, [previewSettings]);
 
-  const bookingEnabled = publicSettings?.bookingEnabled !== false;
+  const bookingEnabled = preview || publicSettings?.bookingEnabled !== false;
   // Slots belong to the weekday of the chosen date: Mon–Fri and Saturday differ.
   // The Worker's accepted list wins when it is known, so the grid always matches
   // what POST /bookings will accept.
@@ -164,9 +175,9 @@ export function AppointmentPage() {
   useEffect(() => {
     if (!date) return;
     const slots = slotsForDate(publicSettings, date);
-    const closed = publicSettings?.bookingEnabled === false || editableEvents(publicSettings).some(e => e.eventActive && e.eventDate <= date && (e.eventEndDate || e.eventDate) >= date);
+    const closed = (!preview && publicSettings?.bookingEnabled === false) || editableEvents(publicSettings).some(e => e.eventActive && e.eventDate <= date && (e.eventEndDate || e.eventDate) >= date);
     setTime(current => closed || !slots.includes(current) ? '' : current);
-  }, [publicSettings, date]);
+  }, [publicSettings, date, preview]);
 
   // The floating cart's CTA follows the booking step: it advances from step 1/2,
   // and on the details step it just returns the customer to the review they were on.
@@ -246,6 +257,11 @@ export function AppointmentPage() {
   async function submitRequest() {
     if (pending.current) return;
     if (!waiverAgreed || !privacyAgreed) return;
+    if (preview) {
+      setShowWaiverModal(false);
+      setPreviewComplete(true);
+      return;
+    }
     pending.current = true;
     setBusy(true);
     setError(null);
@@ -311,6 +327,11 @@ export function AppointmentPage() {
   return (
     <PublicShell page="appointment">
       <div className="space-y-6 pb-28">
+        {preview && <aside className="rounded-2xl border border-violet-400/40 bg-violet-500/10 p-4 text-sm space-y-1" role="status">
+          <p className="font-bold text-violet-200">Private booking preview · no payments</p>
+          <p>Changes here do not activate public bookings. Times are a schedule preview, not live availability. No reservation, charge, or email will be created.</p>
+          {previewComplete && <p className="font-semibold text-emerald-300">Preview complete. Your form and consent flow work; nothing was submitted.</p>}
+        </aside>}
         {/* Page Header */}
         <div className="text-center">
           <p className="text-[10px] uppercase tracking-[0.2em] mb-1" style={{ color: 'var(--color-brand-text)' }}>
@@ -1201,6 +1222,7 @@ export function AppointmentPage() {
             privacyAgreed={privacyAgreed}
             onPrivacyAgreedChange={setPrivacyAgreed}
             busy={busy}
+            preview={preview}
             error={error}
             onClose={() => setShowWaiverModal(false)}
             onSubmit={submitRequest}

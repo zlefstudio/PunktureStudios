@@ -10,6 +10,7 @@ interface WaiverReviewModalProps {
   privacyAgreed: boolean;
   onPrivacyAgreedChange: (v: boolean) => void;
   busy?: boolean;
+  preview?: boolean;
   error?: string | null;
   onClose: () => void;
   onSubmit: () => void;
@@ -26,6 +27,7 @@ export function WaiverReviewModal({
   privacyAgreed,
   onPrivacyAgreedChange,
   busy = false,
+  preview = false,
   error = null,
   onClose,
   onSubmit,
@@ -241,7 +243,7 @@ export function WaiverReviewModal({
           className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-ui-sm text-white transition-transform active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ background: 'var(--color-brand)', boxShadow: 'var(--shadow-brand)', border: 'none' }}
         >
-          {busy ? 'Preparing payment…' : 'Agree & Continue to PHP 100.00 Payment'}
+          {preview ? 'Finish preview — no payment' : busy ? 'Preparing payment…' : 'Agree & Continue to PHP 100.00 Payment'}
         </button>
         </div>
       </div>

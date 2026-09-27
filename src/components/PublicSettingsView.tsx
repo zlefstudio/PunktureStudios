@@ -517,6 +517,25 @@ export function PublicSettingsView() {
 
         {settings && <DateAvailabilityEditor settings={settings} onChange={changes => setSettings(current => current ? { ...current, ...changes } : current)} />}
 
+        <div className="rounded-2xl border border-violet-400/30 bg-violet-500/10 p-4 space-y-2">
+          <p className="text-sm text-zinc-300">Edit and preview while public bookings stay paused. Save a private draft here; the top Save changes button publishes settings through cloud sync.</p>
+          <button type="button" disabled={!settings} className="rounded-xl border border-violet-400/50 px-4 py-2 text-sm font-semibold" onClick={() => {
+            try {
+              window.localStorage.setItem('punkture.booking-preview.v1', JSON.stringify(settings));
+              setScheduleNotice('Private preview draft saved in this browser. Public settings have not changed.');
+              window.open('/appointment.html?preview=draft', '_blank', 'noopener,noreferrer');
+            } catch { setSaveError('Could not save the preview draft in this browser.'); }
+          }}>Save draft &amp; preview booking page</button>
+          <button type="button" className="ml-3 text-sm underline" onClick={() => {
+            try {
+              const draft = window.localStorage.getItem('punkture.booking-preview.v1');
+              if (!draft) { setScheduleNotice('No private preview draft saved yet.'); return; }
+              setSettings(upgradeLegacySchedule(JSON.parse(draft) as PublicSettings));
+              setScheduleNotice('Private preview draft loaded for editing. Public settings have not changed.');
+            } catch { setSaveError('Could not load the preview draft. Save a new draft to replace it.'); }
+          }}>Load saved draft</button>
+        </div>
+
         {/* Allowed Days of Week */}
         <div className="space-y-2">
           <label className="text-body-xs font-bold text-zinc-300 uppercase tracking-wider block">

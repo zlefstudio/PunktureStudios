@@ -4,7 +4,7 @@ import { auth } from '../../firebase';
 import { bookingApi } from '../../bookingApi';
 import type { PaymentBooking } from '../../types';
 import { CreditCard, RefreshCw } from 'lucide-react';
-type AdminBooking = PaymentBooking & { name: string; email: string; contact: string; notes: string; last_error: string | null };
+type AdminBooking = PaymentBooking & { name: string; email: string; contact: string; notes: string; createdAt: number; last_error: string | null };
 type Report = { bookings: AdminBooking[]; notifications: { booking_id: string; audience: string; kind: string; status: string; last_error: string | null }[]; totals: { payments: number; grossCentavos: number; needsReview: number } };
 
 // Shared recipes so this panel matches every other Settings section.
@@ -20,6 +20,7 @@ const STATUS_TONE: Record<string, { bg: string; color: string; border: string }>
 };
 const NEUTRAL_TONE = { bg: 'rgba(255,255,255,0.06)', color: 'var(--color-text-muted)', border: 'var(--color-border)' };
 const STATUS_FILTERS = ['all', 'confirmed', 'pending', 'creating', 'payment_review', 'expired', 'cancelled'] as const;
+const manilaTimestamp = (value: number | null) => value ? new Date(value).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }) : 'Not verified';
 export function PaidBookingsView() {
   const [user, setUser] = useState<User | null>(null);
   const [data, setData] = useState<Report | null>(null);
@@ -63,7 +64,7 @@ export function PaidBookingsView() {
     } catch (e) { setError(e instanceof Error ? e.message : 'Cancellation failed.'); }
     finally { setBusy(false); }
   }
-  const visible = data?.bookings.filter(b => (status === 'all' || b.status === status) && `${b.name} ${b.email} ${b.id} ${b.date}`.toLowerCase().includes(search.toLowerCase())) ?? [];
+  const visible = data?.bookings.filter(b => (status === 'all' || b.status === status) && `${b.name} ${b.email} ${b.id} ${b.payment_id || ''} ${b.date}`.toLowerCase().includes(search.toLowerCase())) ?? [];
   return <section id="paid-bookings" style={cardStyle} className="scroll-mt-6 p-5 sm:p-6 space-y-5">
     <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
       <div className="flex items-center gap-2.5">
@@ -94,8 +95,13 @@ export function PaidBookingsView() {
         </div>
       ))}</div>
       <p className="text-body-xs" style={{ color: 'var(--color-text-faint)' }}>Gross collections include payments still under review, before refunds and gateway fees. Deposits are advances toward the bill, not extra service revenue.</p>
+      <aside className="rounded-2xl p-4 space-y-2 text-body-xs" style={tileStyle}>
+        <p className="font-semibold">Verified payments are separate from your PayMongo Wallet balance.</p>
+        <p>A confirmed booking means PayMongo verified the customer’s payment. Wallet credit follows clearing and your payout schedule. This panel does not track payouts, refunds, or your available wallet balance.</p>
+        <p>To trace a deposit, match the payment reference below in your <a href="https://dashboard.paymongo.com" target="_blank" rel="noreferrer" className="underline">PayMongo dashboard</a>, then check Payments and Payouts. <a href="https://docs.paymongo.com/docs/money-movement-payouts" target="_blank" rel="noreferrer" className="underline">PayMongo payout guide</a>.</p>
+      </aside>
       <div className="flex flex-col sm:flex-row gap-2">
-        <input aria-label="Search loaded bookings" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, email, date, or booking ID" className="min-w-0 flex-1" style={controlStyle} />
+        <input aria-label="Search loaded bookings" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, email, date, booking or payment ID" className="min-w-0 flex-1" style={controlStyle} />
         <select aria-label="Filter booking status" value={status} onChange={e => setStatus(e.target.value)} style={controlStyle}>
           {STATUS_FILTERS.map(s => <option key={s} value={s}>{s === 'all' ? 'All statuses' : s.replaceAll('_', ' ')}</option>)}
         </select>
@@ -130,6 +136,8 @@ export function PaidBookingsView() {
             <div className="grid gap-1 sm:grid-cols-2 text-body-xs" style={{ color: 'var(--color-text-muted)' }}>
               <p className="truncate">Email: {b.email}</p>
               <p className="truncate">Contact: {b.contact}</p>
+              <p>Booked: {manilaTimestamp(b.createdAt)} (Manila)</p>
+              <p>Paid: {manilaTimestamp(b.paidAt)}{b.paidAt ? ' (Manila)' : ''}</p>
               <p className="break-all font-mono text-[11px]">Booking {b.id}</p>
               <p className="break-all font-mono text-[11px]">Payment {b.payment_id || 'not verified'}</p>
             </div>
