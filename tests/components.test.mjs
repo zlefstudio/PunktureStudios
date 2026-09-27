@@ -146,7 +146,7 @@ test('booking form requires waiver consent inside the review modal before submit
   const nextBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Next: Client Details'));
   await act(async () => nextBtn.click());
   await fill('input[placeholder="e.g. Maya Santos"]', 'Test Person');
-  await fill('input[placeholder="e.g. 09171234567 or @mayasantos"]', 'test@example.invalid');
+  await fill('#booking-contact', '@test.person');
 
   await fill('input[type="email"]', 'test@example.invalid');
 
@@ -176,6 +176,7 @@ test('booking form requires waiver consent inside the review modal before submit
   assert.equal(bookingWrites.length, 1);
   assert.equal(bookingWrites[0].value.consent, true);
   assert.equal(bookingWrites[0].value.email, 'test@example.invalid');
+  assert.equal(bookingWrites[0].value.contact, 'Instagram: @test.person', 'social media replaces the phone number');
   assert.equal(bookingWrites[0].value.policy, 'PHP 100.00 reservation fee');
   await act(async () => finish());
   assert.match(container.textContent, /Waiting for verified payment/i);
@@ -193,7 +194,15 @@ test('booking form rejects incomplete requests before contacting the cloud', asy
   await fill('input[placeholder="e.g. Maya Santos"]', 'Test Person');
   await act(async () => submit());
   assert.equal(bookingWrites.length, 0);
-  assert.match(container.textContent, /Please enter your name and contact info/);
+  assert.match(container.textContent, /Please add your social media so we can message you/);
+  await fill('#booking-contact', '0917 123 4567');
+  await act(async () => submit());
+  assert.match(container.textContent, /Please enter a valid Instagram username/, 'a phone number is not an Instagram handle');
+  const facebook = [...container.querySelectorAll('[role="radio"]')].find(b => b.textContent === 'Facebook');
+  await act(async () => facebook.click());
+  assert.equal(facebook.getAttribute('aria-checked'), 'true');
+  assert.equal(container.querySelector('#booking-contact').placeholder, 'Your Facebook name or profile link');
+  assert.equal(bookingWrites.length, 0);
 });
 test('an old queue heartbeat shows paused updates', async () => {
   queueRows = [{ ticketNumber: 1, status: 'waiting', position: 0, seq: 0, updatedAt: Date.now() }];
@@ -278,7 +287,7 @@ test('private preview works while paused and never reads or writes live bookings
   await act(async () => slot.click());
   await act(async () => find('Next: Client Details').click());
   await fill('input[placeholder="e.g. Maya Santos"]', 'Preview Person');
-  await fill('input[placeholder="e.g. 09171234567 or @mayasantos"]', 'preview');
+  await fill('#booking-contact', 'preview');
   await fill('input[type="email"]', 'preview@example.invalid');
   await act(async () => submit());
   assert.equal(find('Finish preview').disabled, true);
@@ -598,7 +607,7 @@ test('the waiver modal is full screen with the pay button outside the scrolling 
   const nextBtn = [...container.querySelectorAll('button')].find(b => b.textContent.includes('Next: Client Details'));
   await act(async () => nextBtn.click());
   await fill('input[placeholder="e.g. Maya Santos"]', 'Test Person');
-  await fill('input[placeholder="e.g. 09171234567 or @mayasantos"]', 'test@example.invalid');
+  await fill('#booking-contact', 'test.person');
   await fill('input[type="email"]', 'test@example.invalid');
   await act(async () => submit());
 

@@ -37,3 +37,28 @@ test('script rejects recipient/header injection and configuration rejects non-Go
   assert.equal(h.handle(await signMail({...message,subject:'Punkture Studios:\r\nBcc: x@example.com'},secret)).error,'invalid_request');
   assert.equal(mailerConfigured({GMAIL_SCRIPT_URL:'https://attacker.example/exec',GMAIL_SCRIPT_SECRET:secret,ADMIN_EMAIL:'admin@example.com'}),false);
 });
+const calendarRequest={id:'bk-1:confirmed:calendar',type:'calendar',action:'upsert',bookingId:'bk-1',date:'2026-09-28',time:'15:15',minutes:45,title:'Maya Santos · Helix (left)',description:'Deposit ₱100 paid online',reminders:[90]};
+test('Apps Script calendar sync needs setup, then adds each booking once and keeps staff edits',async()=>{
+  const h=gmailScript();
+  assert.equal(h.handle(await signMail(calendarRequest,secret)).error,'calendar_not_configured');
+  h.setupCalendar();h.setupCalendar();
+  assert.equal(h.calendar.sheets.get('calendar').rows[0][0],'booking_id','setup creates the private event index once');
+  assert.equal(h.handle(await signMail(calendarRequest,secret)).status,'sent');
+  const [event]=[...h.calendar.events.values()];
+  assert.equal(event.start.toISOString(),'2026-09-28T07:15:00.000Z','Manila 3:15 PM');
+  assert.equal((event.end-event.start)/60000,45);assert.deepEqual(event.reminders,[90]);assert.equal(event.getTag('punktureBookingId'),'bk-1');
+  event.title='Maya Santos (moved by staff)';
+  assert.equal(h.handle(await signMail(calendarRequest,secret)).status,'sent');
+  assert.equal(h.calendar.created.length,1,'a repeated upsert never duplicates');assert.equal(event.title,'Maya Santos (moved by staff)','and never overwrites staff edits');
+  assert.equal(h.state.sent.length,0,'calendar requests never send email or use mail quota');
+});
+test('Apps Script finds an event by its tag when the index write was interrupted, and removal is idempotent',async()=>{
+  const h=gmailScript();h.setupCalendar();
+  h.handle(await signMail(calendarRequest,secret));
+  h.calendar.sheets.get('calendar').rows.splice(1);
+  assert.equal(h.handle(await signMail(calendarRequest,secret)).status,'sent');assert.equal(h.calendar.created.length,1);
+  const remove={...calendarRequest,id:'bk-1:cancelled:calendar',action:'remove'};
+  assert.equal(h.handle(await signMail(remove,secret)).status,'sent');assert.equal(h.calendar.events.size,0);
+  assert.equal(h.handle(await signMail(remove,secret)).status,'sent');assert.equal(h.calendar.deleted.length,1);
+  for (const bad of [{...calendarRequest,date:'28/09/2026'},{...calendarRequest,title:'a\nb'},{...calendarRequest,action:'delete-all'},{...calendarRequest,reminders:[1,2,3,4,5,6]}]) assert.equal(h.handle(await signMail(bad,secret)).error,'invalid_request');
+});

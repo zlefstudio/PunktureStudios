@@ -23,6 +23,6 @@ export async function sendGmail(env, message) {
   const result = await response.json();
   if (result.status === 'sent' && result.id === message.id) return result.id;
   if (result.status === 'needs_review') throw Object.assign(new Error('email_delivery_needs_review'), { review: true });
-  const reasons = new Set(['quota_exhausted','busy','not_configured','unauthorized','invalid_request']);
+  const reasons = new Set(['quota_exhausted','busy','not_configured','unauthorized','invalid_request','calendar_not_configured']);
   throw new Error(reasons.has(result.error) ? `email_${result.error}` : 'email_delivery_uncertain');
 }

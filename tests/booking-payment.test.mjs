@@ -1,12 +1,12 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 import { gmailScript } from './helpers/gmail-script.mjs';
 import { RESERVATION_POLICY } from '../src/bookingApi.ts';
 import worker, { POLICY, LEGACY_POLICIES, CHECKOUT_DESCRIPTION, verifySignature, validateSchedule, paidPayment, deliver, emailMessage } from '../backend/worker.mjs';
-let db, env, originalFetch, sessions, sends, createCalls, providerDown, emailDown, legacyRecords, staffEnabled, mailer, scheduleFields;
+let db, env, originalFetch, sessions, sends, calendarSends, createCalls, providerDown, emailDown, legacyRecords, staffEnabled, mailer, scheduleFields;
 function adapter(database) {
   const prepare = query => ({ bind: (...args) => ({
     first: async () => database.prepare(query).get(...args) || null,
@@ -20,12 +20,13 @@ function adapter(database) {
   } };
 }
 beforeEach(() => {
-  db=new DatabaseSync(':memory:'); db.exec(readFileSync('backend/migrations/0001_booking.sql','utf8'));
+  db=new DatabaseSync(':memory:');
+  for (const migration of readdirSync('backend/migrations').filter(f=>f.endsWith('.sql')).sort()) db.exec(readFileSync(`backend/migrations/${migration}`,'utf8'));
   db.exec("INSERT INTO deployment_checks VALUES('legacy_import',0)");
   env={ DB:adapter(db), BOOKING_LAUNCH_READY:'true', PUBLIC_ORIGIN:'https://studio.example', ALLOWED_ORIGINS:'https://studio.example', PAYMONGO_SECRET_KEY:'sk_test_fake',PAYMONGO_WEBHOOK_SECRET:'webhook-secret',PAYMONGO_LIVE:'false',PAYMENT_METHODS:'gcash,card',GMAIL_SCRIPT_URL:'https://script.google.com/macros/s/test/exec',GMAIL_SCRIPT_SECRET:'test-gmail-secret-12345678901234567890',ADMIN_EMAIL:'admin@example.com',FIREBASE_PROJECT_ID:'test',FIREBASE_API_KEY:'fake' };
   scheduleFields = { bookingEnabled:{booleanValue:true},bookingNoticeDays:{integerValue:'1'} };
   mailer=gmailScript();
-  sessions=new Map(); sends=[]; createCalls=0; providerDown=false; emailDown=false; legacyRecords=[]; staffEnabled=true;
+  sessions=new Map(); sends=[]; calendarSends=[]; createCalls=0; providerDown=false; emailDown=false; legacyRecords=[]; staffEnabled=true;
   originalFetch=globalThis.fetch;
   globalThis.fetch=async (url, options={}) => {
     if (String(url).includes('identitytoolkit.googleapis.com')) return Response.json({users:[{localId:'staff'}]});
@@ -34,6 +35,7 @@ beforeEach(() => {
     if (String(url).includes('firestore.googleapis.com')) return Response.json({fields:scheduleFields});
     if (String(url).includes('script.google.com')) {
       const envelope=JSON.parse(options.body); const message=JSON.parse(envelope.payload);
+      if (message.type==='calendar') { calendarSends.push(message); return Response.json(mailer.handle(envelope)); }
       sends.push({body:{...message,to:[message.to]},key:message.id});
       mailer.state.quota=emailDown?0:100;
       return Response.json(mailer.handle(envelope));
@@ -101,13 +103,13 @@ test('forged and duplicate webhooks never create duplicate payments or notificat
   assert.equal((await webhook(s,id,'attacker')).status,401);
   assert.equal(db.prepare('SELECT status FROM bookings').get().status,'pending');
   assert.equal((await webhook(s,id)).status,200);assert.equal((await webhook(s,id)).status,200);assert.equal((await webhook(s,'evt_second')).status,200);
-  assert.equal(db.prepare('SELECT count(*) n FROM outbox').get().n,2);
+  assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE audience!='calendar'").get().n,2);
   assert.equal(db.prepare('SELECT count(*) n FROM audit').get().n,1);
 });
 test('wrong amounts and mode are rejected without confirmation',async()=>{
   const {b}=await book();const s=pay(b,1);assert.equal((await webhook(s)).status,422);
   s.attributes.payments[0].attributes.amount=10000;s.attributes.livemode=true;assert.equal((await webhook(s)).status,422);
-  assert.equal(db.prepare('SELECT status FROM bookings').get().status,'pending');assert.equal(db.prepare('SELECT count(*) n FROM outbox').get().n,0);
+  assert.equal(db.prepare('SELECT status FROM bookings').get().status,'pending');assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE audience!='calendar'").get().n,0);
 });
 test('expired reservation releases slot and late payment goes to review without stealing it',async()=>{
   const {b}=await book();db.prepare('UPDATE bookings SET expiresAt=? WHERE id=?').run(Date.now()-1,b.id);
@@ -125,13 +127,13 @@ test('checkout timeouts do not blindly create another charge and expire without 
 });
 test('email provider failures retry independently and keep stable idempotency keys',async()=>{
   const {b}=await book();await webhook(pay(b));emailDown=true;await deliver(env);
-  assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE status='pending'").get().n,2);
+  assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE status='pending' AND audience!='calendar'").get().n,2);
   const keys=sends.map(s=>s.key);emailDown=false;db.exec('UPDATE outbox SET nextAt=0');await deliver(env);
-  assert.deepEqual(sends.slice(2).map(s=>s.key),keys);assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE status='sent'").get().n,2);
+  assert.deepEqual(sends.slice(2).map(s=>s.key),keys);assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE status='sent' AND audience!='calendar'").get().n,2);
 });
 test('Gmail quota delays longer than a day still deliver safely after reset',async()=>{
   const {b}=await book();await webhook(pay(b));db.prepare('UPDATE outbox SET attempts=1,createdAt=?').run(Date.now()-24*3600000);await deliver(env);
-  assert.equal(sends.length,2);assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE status='sent'").get().n,2);
+  assert.equal(sends.length,2);assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE status='sent' AND audience!='calendar'").get().n,2);
 });
 test('backend reconciliation confirms paid checkout even without customer return or webhook',async()=>{
   const {b}=await book();pay(b);let task;await worker.scheduled({},env,{waitUntil:p=>{task=p;}});await task;
@@ -201,7 +203,7 @@ test('staff registry authorization and cancellation preserve payment audit and q
   staffEnabled=true;assert.equal((await request(`/admin/bookings/${b.id}/cancel`,{},headers)).status,200);
   const report=await (await request('/admin/bookings',null,headers)).json();
   assert.equal(report.bookings[0].status,'cancelled');assert.equal(report.totals.grossCentavos,10000);
-  assert.equal(db.prepare('SELECT count(*) n FROM outbox').get().n,4);
+  assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE audience!='calendar'").get().n,4);
   assert.deepEqual((await (await request(`/availability?date=${b.date}`)).json()).unavailable,[]);
 });
 test('staff agenda lists every slot holder by appointment date, regardless of how old the booking is',async()=>{
@@ -250,7 +252,7 @@ test('customer release frees an unpaid hold immediately and never frees a paid s
   assert.equal(db.prepare('SELECT status FROM bookings WHERE id=?').get(b.id).status,'expired');
   assert.deepEqual((await (await request(`/availability?date=${b.date}`)).json()).unavailable,[]);
   const replacement={...input(),date:b.date,time:b.time};await book(replacement);
-  assert.equal(db.prepare('SELECT count(*) n FROM outbox').get().n,0);
+  assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE audience!='calendar'").get().n,0);
 });
 
 test('release verifies with the provider so a paid-but-unnotified slot stays owned and confirmed',async()=>{
@@ -258,7 +260,7 @@ test('release verifies with the provider so a paid-but-unnotified slot stays own
   const r=await request(`/bookings/${b.id}/release`,{},{Authorization:`Bearer ${b.token}`});
   assert.equal(r.status,200);assert.equal((await r.json()).status,'confirmed');
   assert.equal(db.prepare('SELECT status FROM bookings WHERE id=?').get(b.id).status,'confirmed');
-  assert.equal(db.prepare('SELECT count(*) n FROM outbox').get().n,2);
+  assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE audience!='calendar'").get().n,2);
 });
 
 test('live mode end-to-end: sk_live_ key, li signature and livemode payment confirm exactly once',async()=>{
@@ -274,7 +276,7 @@ test('live mode end-to-end: sk_live_ key, li signature and livemode payment conf
 
 test('Gmail ambiguous send is visible for manual review and never blindly resent',async()=>{
   const {b}=await book();await webhook(pay(b));mailer.state.failSend=true;
-  await deliver(env);assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE status='needs_review'").get().n,2);
+  await deliver(env);assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE status='needs_review' AND audience!='calendar'").get().n,2);
   const attempts=mailer.state.sent.length;await deliver(env);assert.equal(mailer.state.sent.length,attempts);
 });
 
@@ -327,4 +329,51 @@ test('45-minute overlap protection includes legacy holds', async () => {
   assert.ok(availability.unavailable.includes('13:45'));
   assert.ok(availability.unavailable.includes('14:30'));
   assert.equal(createCalls, 0);
+});
+const cartNotes='Selected items (2):\n1. Helix (left)\nPiercing/service: ₱400 · Jewelry: Surgical Steel (₱0) · Line estimate: ₱400\n2. Lobe (both ears · 2×)\nPiercing/service: ₱300 · Jewelry: Rhinestone Jewelry (₱50) · Line estimate: ₱700\nTotal estimate: ₱1100\nClient notes: first time po';
+test('a paid booking is added to Google Calendar once with details and a 90-minute reminder; cancelling removes it',async()=>{
+  mailer.setupCalendar();
+  const {b}=await book({...input(),name:'Maya Santos',contact:'Instagram: @maya.santos',notes:cartNotes});
+  await webhook(pay(b));await webhook(pay(b));
+  assert.equal(db.prepare("SELECT count(*) n FROM outbox WHERE audience='calendar'").get().n,1,'duplicate webhooks queue one calendar job');
+  await deliver(env);
+  assert.equal(calendarSends.length,1);assert.equal(sends.length,2,'emails are unchanged');
+  const [event]=[...mailer.calendar.events.values()];
+  assert.equal(event.title,'Maya Santos · Helix (left), Lobe (both ears)');
+  assert.equal(event.start.getTime(),Date.parse(`${b.date}T13:45:00+08:00`));assert.equal((event.end-event.start)/60000,45);
+  assert.deepEqual(event.reminders,[90]);
+  assert.match(event.description,/Balance to collect ≈ ₱1,000/);assert.match(event.description,/Late fee applies from 2:00 PM/);
+  assert.match(event.description,/Social media \/ contact: Instagram: @maya\.santos/);
+  assert.match(event.description,/Open Instagram: https:\/\/www\.instagram\.com\/maya\.santos\//);assert.match(event.description,/Client notes: first time po/);assert.match(event.description,new RegExp(`Booking ID: ${b.id}`));
+  assert.equal(db.prepare("SELECT status FROM outbox WHERE audience='calendar'").get().status,'sent');
+  assert.equal((await request(`/admin/bookings/${b.id}/cancel`,{},{Authorization:'Bearer staff-token'})).status,200);
+  await deliver(env);
+  assert.equal(calendarSends.at(-1).action,'remove');assert.equal(mailer.calendar.events.size,0);
+});
+test('calendar jobs follow the current status and retry until the calendar is set up',async()=>{
+  const {b}=await book();await webhook(pay(b));
+  await deliver(env);
+  const job=()=>db.prepare("SELECT status,last_error,nextAt FROM outbox WHERE id=?").get(`${b.id}:confirmed:calendar`);
+  assert.equal(job().status,'pending');assert.equal(job().last_error,'calendar_not_configured');assert.ok(job().nextAt>Date.now());
+  // Cancelled before the calendar was ready: the late "confirmed" job must not add an event.
+  await request(`/admin/bookings/${b.id}/cancel`,{},{Authorization:'Bearer staff-token'});
+  mailer.setupCalendar();db.exec('UPDATE outbox SET nextAt=0');await deliver(env);
+  assert.deepEqual(calendarSends.filter(m=>m.bookingId===b.id).map(m=>m.action).slice(-2),['remove','remove']);
+  assert.equal(mailer.calendar.created.length,0);assert.equal(job().status,'sent');
+});
+test('staff calendar sync backfills upcoming confirmed bookings and is safe to repeat',async()=>{
+  const insert=(id,date,status)=>db.prepare('INSERT INTO bookings(id,token_hash,request_hash,name,email,contact,notes,date,time,requestedFor,status,createdAt,expiresAt,paidAt,payment_id,policy) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .run(id,'t','r',`Client ${id}`,`${id}@example.com`,'Facebook: Client',cartNotes,date,'09:00',Date.parse(`${date}T09:00:00+08:00`),status,1000,2000,3000,`pay_${id}`,POLICY);
+  insert('before-launch',bookableDate(2),'confirmed');insert('later',bookableDate(9),'confirmed');insert('long-ago','2020-01-06','confirmed');insert('called-off',bookableDate(3),'cancelled');
+  assert.equal((await request('/admin/calendar-sync',{})).status,401);
+  const headers={Authorization:'Bearer staff-token'};
+  mailer.setupCalendar();
+  assert.equal((await (await request('/admin/calendar-sync',{},headers)).json()).queued,2);
+  await deliver(env);
+  assert.deepEqual([...mailer.calendar.events.values()].map(e=>e.getTag('punktureBookingId')).sort(),['before-launch','later']);
+  const report=await (await request('/admin/bookings',null,headers)).json();
+  assert.deepEqual(report.calendar.map(c=>[c.booking_id,c.status]).sort(),[['before-launch','sent'],['later','sent']]);
+  assert.equal((await (await request('/admin/calendar-sync',{},headers)).json()).queued,2);
+  await deliver(env);
+  assert.equal(mailer.calendar.created.length,2,'repeating the sync never duplicates events');
 });

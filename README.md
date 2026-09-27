@@ -9,6 +9,44 @@
 - Direct local preview reads existing local settings, with a default studio schedule if none exist. Draft preview uses the saved snapshot. It bypasses only the overall public pause for display; weekday/date closures, pop-ups, notice days and future dates remain in force. Times are simulated schedule choices, never actual live availability. No booking API requests, holds, checkout, charge, release or email can occur. Payment URL fragments are ignored, and the customer cart's session draft is neither read nor overwritten. The consent button says **Finish preview — no payment** and reports completion without submitting.
 - The local **Bookings & deposits** panel now shows separate booked and paid timestamps in Manila time, supports payment-reference searches, and explains that verified gross collections do not establish wallet settlement. Links lead to the PayMongo dashboard and official payout guide. Existing totals still precede fees/refunds; no payout or refund accounting is inferred.
 
+## Google Calendar sync and social media contact (2026-09-27)
+
+**Calendar sync (one-way, website → Google Calendar):** confirmed bookings become 45-minute events on a **Punkture Bookings** calendar owned by the Google account that deployed the Apps Script. The studio wants the calendar in punkturepiercingstudio@gmail.com: if that account is not the script owner, share the calendar to it (steps in [docs/gmail-setup.md §5](docs/gmail-setup.md)). Flow:
+- `0002_calendar_sync.sql` → the status trigger inserts `<bookingId>:<status>:calendar` outbox jobs in the same transaction as confirmation/cancellation.
+- `deliver()` (cron, every minute, 5 jobs per run) → `calendarMessage()` in `backend/calendar.mjs` → the same HMAC-signed Apps Script bridge as email (`sendGmail`, which now also passes through `calendar_not_configured`).
+- `Code.gs` `applyCalendar_` runs under the script lock.
+
+**Event content:**
+- The title is the client plus their first two pieces.
+- The description holds the deposit, balance ≈ estimate − ₱100, late-fee time, cart notes (clipped to 3000 characters; whole description ≤ 4000), the social media contact plus its safe profile link (`socialProfileLink()` from `src/socialContact.ts`, bundled into the Worker by Wrangler), email and booking ID.
+- One popup reminder 90 minutes before (`CALENDAR_REMINDER_MINUTES`).
+- No guests, so Google never emails the customer.
+
+**Idempotency and safety:**
+- The Worker derives the action from the booking's **current** status (`confirmed` → `upsert`, otherwise `remove`), so a late confirmed job cannot re-add a cancelled booking.
+- `upsert` only creates a missing event. It finds existing events through the ledger spreadsheet's private `calendar` tab (booking_id → event_id), falling back to the event tag `punktureBookingId`. This means retries and re-syncs never duplicate events or overwrite staff edits.
+- `remove` deletes the event if present and is idempotent.
+- Calendar calls never use the MailApp quota.
+- Calendar errors are recorded as `calendar_*` codes and retry with backoff (max 1 h). `needs_review` is never used for calendar jobs.
+- `setupCalendar()` must be run once and the web app republished as a **new version** (same /exec URL) before events can be created. Until then jobs retry with `calendar_not_configured`.
+
+**Staff endpoints and UI:**
+- `POST /admin/calendar-sync` (staff token) upserts a pending calendar job for every confirmed booking dated today or later (`ON CONFLICT … DO UPDATE` resets sent/failed jobs) and writes an `audit` row.
+- `GET /admin/bookings` adds `calendar` (status/last_error of `<id>:confirmed:calendar` for confirmed bookings since `from`, read by primary key).
+- The Schedule view shows a Google Calendar bar: at the top with **Sync to Google Calendar** when upcoming bookings are missing or failing, otherwise a quiet “all N upcoming bookings are on your calendar · Sync again” line at the bottom.
+- Booking details show *On Google Calendar* / *Adding…* / *Not added yet* for upcoming confirmed bookings.
+- Failing calendar jobs appear in **Needs attention**. The Payments email list and email attention count exclude calendar jobs.
+
+**Release order:** paste Code.gs → run `setupCalendar` → new web-app version → `wrangler d1 migrations apply punkture-booking --remote` → deploy Worker → press **Sync to Google Calendar** once for existing bookings. Any other order only delays events; nothing is lost or duplicated.
+
+**Social media contact instead of phone:**
+- Step 3 of `/appointment.html` asks for “Social media we can message you on” with radio chips (Instagram, Facebook, TikTok, Other app) and one input.
+- `src/socialContact.ts` `socialContact()` normalizes Instagram/TikTok handles (accepts `@name`, `name` or a pasted profile link; rejects phone numbers and invalid characters). It stores one string in the existing `contact` field, e.g. `Instagram: @mayasantos`, `Facebook: Maya Santos`, `TikTok: @maya`, `Other: Telegram @maya` (≤ 80 characters, the Worker's existing limit). No backend, schema or email change was needed.
+- Staff booking details add a safe **Open Instagram / Open TikTok / Open Facebook / Find on Facebook** link (`socialProfileLink()`). Links are only built for recognized handle formats or facebook.com/fb.com/m.me URLs, and a bare `@name` from older bookings is treated as Instagram. Phone numbers and free text get no link.
+- The Privacy page now lists the social media account and the studio's private Google Calendar.
+
+**Validation:** Apps Script tests run the real Code.gs against a mock CalendarApp/Spreadsheet (setup, Manila time, 45 min, 90-min reminder, no duplicate on retry, staff edits kept, tag fallback after an interrupted index write, idempotent removal, payload validation). Worker tests cover the trigger + delivery with event content, duplicate webhooks, cancel → remove, status-based action after a late job, `calendar_not_configured` retries, and the sync endpoint (auth, backfill, repeat without duplicates, report status). Existing email-count assertions now count email jobs only. Component tests cover the new contact field and validation, contact serialization, profile-link safety, the calendar bar/attention states and details rows. **165/165 tests**, lint and build passed. The booking form was checked in the browser at desktop and 375px (no overflow; 44px chips). **Not yet done (studio's Google/Cloudflare accounts):** Apps Script update/authorization, remote D1 migration, Worker deploy, public frontend deploy (form + privacy text) and a real booking → calendar check.
+
 ## Staff bookings schedule (2026-09-27)
 
 **Settings → Bookings & deposits** is now built for running a busy day rather than reading a ledger. `PaidBookingsView` only loads data; `BookingsBoard` renders three views:
@@ -140,7 +178,7 @@ PunktureStudios/
 ├── waiver.html                 # Public: Digital Health & Safety Waiver
 ├── aftercare.html              # Public: Piercing Aftercare & LITHA Guide
 ├── privacy.html                # Public: Data Privacy Policy (RA 10173)
-├── backend/                    # Cloudflare Worker, D1 migration and deployment config
+├── backend/                    # Cloudflare Worker (worker.mjs, gmail.mjs, calendar.mjs), D1 migrations, Apps Script mail+calendar bridge
 ├── docs/booking-workflow.md     # Payment rollout, assumptions, test and operations runbook
 ├── firestore.rules             # Production security rules for Firestore
 ├── firebase.json               # Firebase Hosting & Emulator configuration
@@ -157,6 +195,7 @@ PunktureStudios/
     ├── privacy.tsx             # Entry point for privacy.html
     ├── bookingApi.ts           # Public Worker client and disclosed fee policy
     ├── schedule.ts            # Studio booking grid: hours, 45-minute slots, per-weekday resolution
+    ├── socialContact.ts        # Booking social media contact: normalize handles, safe staff profile links
     ├── constants.ts            # POP-UP piercing catalog, add-on services catalog, jewelry upgrades
     ├── dataLock.ts             # Mutex lock (`withDataLock`) serializing local IndexedDB transactions
     ├── db.ts                   # Dexie database definitions, ticket number generator, deletion log
@@ -290,7 +329,7 @@ The public surface comprises **7 dedicated pages** wrapped in a unified layout c
    - Dynamic date chip selector reflecting studio scheduling settings from Firestore (`public/public`).
    - Respects studio operating days (`bookingDays`), the per-weekday slot grid (`bookingDaySlots`, legacy `bookingSlots` still honoured), date-only time exclusions (`blockedDateSlots`), advance notice (`bookingNoticeDays`, default 1 day), and blackout dates (`blockedDates`). Days with no slot (Sunday by default) are not selectable, and each slot displays its clean start time (`format12Hour(slot)` with `Unavailable` label when booked/locked; the redundant "until" end time and slot-range header were removed for a cleaner customer UI). Schedule text above the date chips states simply: "All times are Philippine time. Only open dates and times can be selected." A settings update clears a selection that has become unavailable and refreshes server availability.
 3. **Step 3: Contact Details & Submission**:
-   - Customer name, required confirmation/receipt email, contact number / social handle, and optional notes.
+   - Customer name, required confirmation/receipt email, a **social media account** (Instagram / Facebook / TikTok / Other app chips + one input; see *Google Calendar sync and social media contact*), and optional notes. The old phone-number field was replaced (2026-09-27) because the studio messages clients over data.
    - Submit opens the shared health waiver plus explicit **PHP 100.00 reservation deposit** policy. Consent is required before backend checkout creation.
    - The deposit copy (`RESERVATION_POLICY` in `src/bookingApi.ts`, mirrored by `POLICY` in `backend/worker.mjs`) keeps the advance-payment explanation and now states the kindness-first terms: cancel or reschedule **at least 24 hours** ahead and the PHP 100.00 is refunded in full on request; **less than 24 hours** notice or arriving **15 minutes or more** late uses the PHP 100.00 as the cancellation or late fee. The step 3 card repeats the three cases as short bullets and closes with a one-line reminder of the visit limit (the old “Something came up? Message the studio…” sentence was removed at the studio's request).
    - The owner specifies a PHP 100.00 advance deposit deducted from the final total, not an additional charge. Staff must verify the payment reference and collect only the remaining balance; automatic POS deposit redemption is not implemented. Studio absorbs PayMongo transaction fees (explicitly accepted by the owner).
@@ -307,7 +346,7 @@ Cloudflare **Workers Free + D1 Free** handles checkout creation, atomic slot own
 
 **Launcher ledger cleanup (2026-09-14):** after the first real live payment, every pre-launch test row was removed from the live D1 ledger so staff reports start clean. Kept: `ee73211b-506e-4883-ac88-e6d0d37e339d` (PHP 100.00, `confirmed`, `pay_fbszE8Xr3p6f…`, the first real QR Ph payment). Removed: the two test-mode `confirmed` rows from the retired test account (`pay_Tr2ZHWQbm1…`, `pay_sgJNVR6Zof…`) and four unpaid `expired` rows. The trace survives in `audit` (`test_ledger_row_removed_for_launch`, `unpaid_test_row_removed_for_launch`) and in the pre-cleanup export `/tmp/punkture-d1-precleanup-2026-09-14.sql`; `deployment_checks` (the launch prerequisite) and `legacy_holds` were not touched. Resulting totals: 1 booking row, 1 payment, 10000 centavos gross, 1 webhook event, 2 outbox jobs. Both confirmation emails were recovered by the retry queue and are recorded `sent` (third attempt, `provider_id` = the job id) — `sent` still means provider acceptance, so the studio should spot-check the customer and admin inboxes.
 
-**D1 is the source of truth for new bookings**; Firestore `appointments` is a legacy collection. Schema is `backend/migrations/0001_booking.sql`:
+**D1 is the source of truth for new bookings**; Firestore `appointments` is a legacy collection. Schema is `backend/migrations/0001_booking.sql`, plus `0002_calendar_sync.sql` (trigger `booking_calendar` that queues an `outbox` job with `audience='calendar'` on confirmed/cancelled):
 
 | Table | Contract |
 | --- | --- |

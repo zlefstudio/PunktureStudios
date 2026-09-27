@@ -65,6 +65,19 @@ export function PaidBookingsView({ settings = null }: { settings?: PublicSetting
     } catch (e) { setError(e instanceof Error ? e.message : 'Migration failed.'); }
     finally { setBusy(false); }
   }
+  /** Queue every upcoming confirmed booking for Google Calendar (safe to repeat; never duplicates). */
+  async function syncCalendar() {
+    if (!user || busy) return;
+    setBusy(true);
+    try {
+      const result = await bookingApi<{ queued: number }>('/admin/calendar-sync', { method: 'POST', headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
+      setNotice(result.queued
+        ? `Sending ${result.queued} upcoming booking${result.queued === 1 ? '' : 's'} to Google Calendar. They appear within a few minutes.`
+        : 'There are no upcoming confirmed bookings to add to Google Calendar.');
+      setRefresh(n => n + 1);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Google Calendar sync failed.'); }
+    finally { setBusy(false); }
+  }
   async function cancel(b: AdminBooking) {
     const when = `${formatDate(b.date, { weekday: 'short', month: 'short', day: 'numeric' })} at ${format12Hour(b.time)}`;
     if (!user || busy || !window.confirm(`Cancel ${b.name}'s booking on ${when}?\n\nThe slot is released and the customer and studio are emailed. Refunds must be handled separately in PayMongo.`)) return;
@@ -105,6 +118,6 @@ export function PaidBookingsView({ settings = null }: { settings?: PublicSetting
     </p>}
     {data && <BookingsBoard report={data} settings={settings} now={now} busy={busy}
       canLoadMore={data.bookings.length >= limit && limit < 500} onLoadMore={() => setLimit(n => Math.min(500, n + 30))}
-      onCancel={b => void cancel(b)} onImportLegacy={() => void importLegacy()} />}
+      onCancel={b => void cancel(b)} onImportLegacy={() => void importLegacy()} onSyncCalendar={() => void syncCalendar()} />}
   </section>;
 }

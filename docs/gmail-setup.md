@@ -60,6 +60,37 @@ Complete a PayMongo sandbox booking. Check actual customer inbox/spam, the admin
 
 For later script changes, save Code.gs, then **Deploy → Manage deployments → Edit → New version → Deploy** to keep the same /exec URL. Do not create a new ledger or change the mailer secret during normal updates.
 
+## 5. Google Calendar sync (paid bookings → Google Calendar)
+
+Each confirmed booking becomes a 45-minute event on a calendar named **Punkture Bookings**, created by the same Apps Script. The event title is the client and their pieces (`Maya Santos · Helix (left), Lobe (both ears)`). The description has the deposit, balance to collect, late-fee time, full cart notes, client notes, social media contact, email and booking ID. There is one phone popup reminder **90 minutes** before (`CALENDAR_REMINDER_MINUTES` in `backend/calendar.mjs`). The customer is never added as a guest, so Google sends them nothing. Cancelling a booking in Settings deletes its event. Sync is one-way: moving or editing the event in Calendar does not change the booking, and later syncs keep your edits. Deleting an event by hand does not cancel the booking. Calendar requests do not use the email quota.
+
+The calendar belongs to the Google account that deployed the script (the booking email sender). The studio wants it in **punkturepiercingstudio@gmail.com**.
+
+Do these steps in order. If the order slips, calendar jobs only wait and retry; nothing is lost or duplicated.
+
+1. Open the existing **Punkture Booking Emails** project at https://script.google.com with the account that deployed it. Replace all of **Code.gs** with the local `backend/apps-script/Code.gs` and save. Do not create a new project: it would change the URL and secret.
+2. Choose **setupCalendar** in the function dropdown, then **Run**. Google asks for the new Calendar permission; approve it for your own script. The log says `Calendar ready: "Punkture Bookings" in the Google account …`. Setup creates the calendar and a private `calendar` tab in the delivery ledger sheet. It creates no events, and re-running it is safe.
+3. Click **Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy**. The /exec URL stays the same. Without a new version, the web app keeps running the old code.
+4. Apply the new D1 migration. It only adds a trigger, so existing rows are unchanged:
+   ```sh
+   npx --yes wrangler@4 d1 migrations apply punkture-booking --remote --config backend/wrangler.jsonc
+   ```
+5. Deploy the Worker, keeping the live `qrph` configuration:
+   ```sh
+   npx --yes wrangler@4 deploy --config backend/wrangler.jsonc
+   ```
+6. Reload the staff app (localhost:5174) → **Settings → Bookings & deposits → Schedule**, then press **Sync to Google Calendar** once. This adds bookings confirmed before the update. Events appear within a few minutes, because the Worker delivers up to five jobs per minute.
+
+**Seeing it in punkturepiercingstudio@gmail.com:**
+- **If the log in step 2 names punkturepiercingstudio@gmail.com:** open Google Calendar with that account. **Punkture Bookings** is under *My calendars*. On a phone, open the Google Calendar app → menu → tick **Punkture Bookings**.
+- **If it names another account:** open Google Calendar as that account → **Punkture Bookings → Settings and sharing → Share with specific people → Add** `punkturepiercingstudio@gmail.com` with **See all event details** (or **Make changes to events**). Accept the invitation email in punkturepiercingstudio@gmail.com. Reminders are per viewer, so set that account's own notification for the shared calendar if you want phone alerts there.
+
+**Troubleshooting:** the Schedule view shows the calendar state, and so does each booking's details (*On Google Calendar*, *Adding…*, *Not added yet*).
+- `calendar_not_configured`: run step 2, then publish a new version (step 3).
+- `invalid_request` or `unauthorized`: the web app is still on an old version (step 3), or the secret changed.
+
+Retries back off up to one hour. **Sync again** re-queues every upcoming confirmed booking and never duplicates events: the script finds existing ones through the `calendar` sheet or the event's private booking tag.
+
 ## Reliability and recovery
 
 - The Worker signs each message with HMAC-SHA256 over the timestamp and exact payload. The script rejects invalid/stale (over five minutes) requests and recipient/header injection. No customer browser possesses the shared secret.

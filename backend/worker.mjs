@@ -1,4 +1,5 @@
 import { mailerConfigured, sendGmail } from './gmail.mjs';
+import { calendarMessage } from './calendar.mjs';
 export const POLICY = 'PHP 100.00 reservation deposit secures one appointment once payment is verified. It is an advance toward your final total at the studio and never an extra charge — you pay only the remaining balance. Plans change, and that is okay: cancel or reschedule at least 24 hours before your appointment and we will refund the PHP 100.00 in full on request. With less than 24 hours notice, or if you arrive 15 minutes or more after your appointment time, the PHP 100.00 deposit serves as the cancellation or late fee for the studio time we kept reserved for you. Payments received after expiry require review and do not secure a slot.';
 /**
  * Wording shipped by earlier releases. `create()` accepts these too, so a frontend
@@ -257,10 +258,15 @@ export async function deliver(env) {
     if (!claim) continue;
     try {
       const b = await sql(env,'SELECT * FROM bookings WHERE id=?',job.booking_id).first();
-      const id = await sendGmail(env, { id: job.id, to: job.audience === 'admin' ? env.ADMIN_EMAIL : b.email, ...emailMessage(b,job) });
+      // Calendar jobs travel over the same signed Apps Script bridge as email.
+      const message = job.audience === 'calendar'
+        ? calendarMessage(b, job, SLOT_INTERVAL_MINUTES)
+        : { id: job.id, to: job.audience === 'admin' ? env.ADMIN_EMAIL : b.email, ...emailMessage(b,job) };
+      const id = await sendGmail(env, message);
       await sql(env,"UPDATE outbox SET status='sent',provider_id=?,leaseUntil=0,last_error=NULL WHERE id=?",id,job.id).run();
     } catch (e) {
-      const code = e instanceof Error && /^email_[a-z0-9_]+$/.test(e.message) ? e.message : 'email_delivery_uncertain';
+      const raw = e instanceof Error && /^email_[a-z0-9_]+$/.test(e.message) ? e.message : 'email_delivery_uncertain';
+      const code = job.audience === 'calendar' ? raw.replace(/^email_(calendar_)?/, 'calendar_') : raw;
       if (e.review) {
         await sql(env,"UPDATE outbox SET status='needs_review',leaseUntil=0,last_error=? WHERE id=?",code,job.id).run();
       } else {
@@ -375,8 +381,21 @@ async function route(request, env) {
       const upcoming=(await sql(env,`SELECT ${agendaColumns} FROM bookings WHERE status IN ('creating','pending','confirmed') AND date>=? ORDER BY date,time LIMIT 500`,from).all()).results;
       const reviews=(await sql(env,`SELECT ${agendaColumns} FROM bookings WHERE status='payment_review' ORDER BY createdAt DESC LIMIT 50`).all()).results;
       const notifications=(await sql(env,"SELECT booking_id,audience,kind,status,attempts,last_error FROM outbox WHERE status!='sent' ORDER BY createdAt DESC LIMIT 100").all()).results;
+      // Calendar state of upcoming confirmed bookings, read by primary key (cheap on D1 reads).
+      const calendar=(await sql(env,"SELECT booking_id,status,last_error FROM outbox WHERE id IN (SELECT id||':confirmed:calendar' FROM bookings WHERE status='confirmed' AND date>=?)",from).all()).results;
       const totals=await sql(env,"SELECT COUNT(payment_id) AS payments,COALESCE(SUM(CASE WHEN payment_id IS NOT NULL THEN amount ELSE 0 END),0) AS grossCentavos, SUM(CASE WHEN status='payment_review' THEN 1 ELSE 0 END) AS needsReview FROM bookings").first();
-      return json({bookings:rows,upcoming,reviews,notifications,totals});
+      return json({bookings:rows,upcoming,reviews,notifications,calendar,totals});
+    }
+    if (request.method==='POST' && url.pathname==='/admin/calendar-sync') {
+      // Queue (or re-queue) every upcoming confirmed booking. Apps Script only adds missing
+      // events, so repeating this never duplicates events or overwrites edits made in Calendar.
+      const now=Date.now();
+      const today=new Date(now+28800000).toISOString().slice(0,10);
+      const result=await sql(env,`INSERT INTO outbox(id,booking_id,audience,kind,createdAt,nextAt)
+        SELECT id||':confirmed:calendar',id,'calendar','confirmed',?,0 FROM bookings WHERE status='confirmed' AND date>=?
+        ON CONFLICT(id) DO UPDATE SET status='pending',nextAt=0,leaseUntil=0,last_error=NULL`,now,today).run();
+      await sql(env,'INSERT INTO audit(booking_id,action,createdAt) VALUES(NULL,?,?)','staff_calendar_sync',now).run();
+      return json({queued:result?.meta?.changes ?? result?.changes ?? 0});
     }
     if (request.method==='POST' && /^\/admin\/bookings\/[^/]+\/cancel$/.test(url.pathname)) {
       const id=url.pathname.split('/')[3];

@@ -24,13 +24,13 @@ export function PrivacyPage() {
               </div>
             </li>
             <li>• <b style={{ color: 'var(--color-text)' }}>Waiver:</b> The acknowledgment is session-only while this page is open. No identity, signature, or health record is stored by the standalone waiver page. Booking records retain the accepted fee policy and creation time as evidence of consent. Each visit asks you to read and acknowledge again.</li>
-            <li>• <b style={{ color: 'var(--color-text)' }}>Booking:</b> Name, email, contact, selected date and time, optional notes, fee-policy consent and payment references, used to process your reservation, email confirmation and receipt, and notify studio staff. Payment details are entered on PayMongo; we do not store card numbers.</li>
+            <li>• <b style={{ color: 'var(--color-text)' }}>Booking:</b> Name, email, the social media account you give us for messages, selected date and time, optional notes, fee-policy consent and payment references, used to process your reservation, email confirmation and receipt, notify studio staff and add your appointment to the studio's private Google Calendar. Payment details are entered on PayMongo; we do not store card numbers.</li>
           </ul>
         </SectionCard>
 
         <SectionCard title="Why we use it">
           <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-            We process data only to run the queue and confirm bookings. We do not sell your information or use it for advertising. Staff and legacy booking records use Google Firebase. New bookings, payment references and notification delivery records use Cloudflare D1. PayMongo processes payments; The studio's Gmail account sends transactional emails through Google Apps Script. A private Google Sheet stores notification job IDs, content hashes and delivery states to prevent duplicate sends; it does not store email bodies. Access to customer records is restricted to authorized staff or your private booking access link.
+            We process data only to run the queue and confirm bookings. We do not sell your information or use it for advertising. Staff and legacy booking records use Google Firebase. New bookings, payment references and notification delivery records use Cloudflare D1. PayMongo processes payments; The studio's Gmail account sends transactional emails through Google Apps Script. A private Google Sheet stores notification job IDs, content hashes and delivery states to prevent duplicate sends; it does not store email bodies. Confirmed appointments (your name, booking details, contact and email) are also placed on the studio's private Google Calendar so staff can plan the day; you are not invited to the event, and cancelled bookings are removed from it. Access to customer records is restricted to authorized staff or your private booking access link.
           </p>
         </SectionCard>
 

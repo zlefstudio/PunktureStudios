@@ -1,13 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Coffee, ListFilter, MessageSquareText, Search, Wallet } from 'lucide-react';
+import { AlertTriangle, CalendarCheck, CalendarDays, CalendarSync, ChevronDown, ChevronLeft, ChevronRight, Coffee, ListFilter, MessageSquareText, Search, Wallet } from 'lucide-react';
 import type { PublicSettings } from '../../types';
 import { format12Hour, slotEndTime } from '../../schedule';
 import { BookingDetails } from './BookingDetails';
 import {
-  STATUS_LABEL, appointmentStart, buildDayPlan, countdown, dayLoad, formatDate, formatDuration, holdsSlot, isHolding,
+  STATUS_LABEL, appointmentStart, buildDayPlan, calendarState, countdown, dayLoad, formatDate, formatDuration, holdsSlot, isHolding,
   manilaMinutes, manilaStamp, manilaToday, mergeBookings, parseBookingNotes, peso, relativeDay, scheduleConflict, servicesSummary,
   shiftDate, toMinutes,
-  type AdminBooking, type AdminReport, type TimelineRow,
+  type AdminBooking, type AdminReport, type CalendarState, type TimelineRow,
 } from './bookingAgenda';
 
 type BoardTab = 'schedule' | 'records' | 'payments';
@@ -58,13 +58,14 @@ export interface BookingsBoardProps {
   onLoadMore: () => void;
   onCancel: (booking: AdminBooking) => void;
   onImportLegacy: () => void;
+  onSyncCalendar: () => void;
 }
 
 /**
  * Staff view of online bookings: a day-by-day schedule for time management,
  * the full searchable record list, and deposit/payment housekeeping.
  */
-export function BookingsBoard({ report, settings, now, busy, canLoadMore, onLoadMore, onCancel, onImportLegacy }: BookingsBoardProps) {
+export function BookingsBoard({ report, settings, now, busy, canLoadMore, onLoadMore, onCancel, onImportLegacy, onSyncCalendar }: BookingsBoardProps) {
   const today = manilaToday(now);
   const all = useMemo(() => mergeBookings(report, now), [report, now]);
   const [tab, setTab] = useState<BoardTab>('schedule');
@@ -74,7 +75,11 @@ export function BookingsBoard({ report, settings, now, busy, canLoadMore, onLoad
 
   const conflicts = all.filter(b => scheduleConflict(b, settings, today)).sort(byStart);
   const reviews = all.filter(b => b.status === 'payment_review');
-  const emailIssues = report.notifications.filter(n => n.status === 'needs_review' || Boolean(n.last_error));
+  const emailIssues = report.notifications.filter(n => n.audience !== 'calendar' && (n.status === 'needs_review' || Boolean(n.last_error)));
+  const calendarOf = (b: AdminBooking) => calendarState(b, report, now);
+  const calendarStates = all.map(calendarOf).filter((state): state is CalendarState => state !== null);
+  const calendarRetrying = calendarStates.filter(state => state === 'retrying').length;
+  const calendarNotConfigured = (report.calendar ?? []).some(job => job.status !== 'sent' && job.last_error === 'calendar_not_configured');
   const toggle = (id: string) => setExpanded(current => current === id ? null : id);
 
   function goToDate(date: string) {
@@ -94,7 +99,7 @@ export function BookingsBoard({ report, settings, now, busy, canLoadMore, onLoad
   ];
 
   return <div className="space-y-4">
-    {(conflicts.length > 0 || reviews.length > 0 || emailIssues.length > 0) && <div role="region" aria-label="Needs attention" className="rounded-2xl p-3 space-y-1"
+    {(conflicts.length > 0 || reviews.length > 0 || emailIssues.length > 0 || calendarRetrying > 0) && <div role="region" aria-label="Needs attention" className="rounded-2xl p-3 space-y-1"
       style={{ background: 'var(--color-warn-bg)', border: '1px solid var(--color-warn-ring)' }}>
       <p className="flex items-center gap-1.5 px-1 text-[10px] font-bold uppercase tracking-[0.08em]" style={{ color: 'var(--color-warn-text)' }}>
         <AlertTriangle size={12} aria-hidden="true" /> Needs attention
@@ -107,6 +112,9 @@ export function BookingsBoard({ report, settings, now, busy, canLoadMore, onLoad
       </AttentionItem>}
       {emailIssues.length > 0 && <AttentionItem onClick={() => setTab('payments')} action="Check">
         {emailIssues.length} confirmation email{emailIssues.length === 1 ? '' : 's'} may not have been delivered
+      </AttentionItem>}
+      {calendarRetrying > 0 && <AttentionItem onClick={() => setTab('schedule')} action="Check">
+        {calendarRetrying} booking{calendarRetrying === 1 ? '' : 's'} couldn’t be added to Google Calendar yet
       </AttentionItem>}
     </div>}
 
@@ -124,9 +132,11 @@ export function BookingsBoard({ report, settings, now, busy, canLoadMore, onLoad
       {tab === 'schedule' && <ScheduleView all={all} settings={settings} now={now} today={today} selected={selected} stripStart={stripStart}
         onSelect={goToDate} onShiftWeek={days => { setStripStart(start => shiftDate(start, days)); setSelected(date => shiftDate(date, days)); }}
         onToday={() => { setStripStart(today); setSelected(today); }}
-        expanded={expanded} onToggle={toggle} busy={busy} onCancel={onCancel} onOpen={showInSchedule} complete={Boolean(report.upcoming)} />}
+        expanded={expanded} onToggle={toggle} busy={busy} onCancel={onCancel} onOpen={showInSchedule} complete={Boolean(report.upcoming)} calendarOf={calendarOf}
+        calendarBar={report.calendar ? <CalendarBar states={calendarStates} notConfigured={calendarNotConfigured} busy={busy} onSync={onSyncCalendar} /> : null}
+        calendarNeedsAction={calendarStates.some(state => state === 'missing' || state === 'retrying')} />}
       {tab === 'records' && <RecordsView all={all} settings={settings} now={now} today={today} expanded={expanded} onToggle={toggle} busy={busy}
-        onCancel={onCancel} onShowInSchedule={showInSchedule} canLoadMore={canLoadMore} onLoadMore={onLoadMore} initialFilter={reviews.some(b => b.id === expanded) ? 'payment_review' : 'all'} />}
+        onCancel={onCancel} onShowInSchedule={showInSchedule} calendarOf={calendarOf} canLoadMore={canLoadMore} onLoadMore={onLoadMore} initialFilter={reviews.some(b => b.id === expanded) ? 'payment_review' : 'all'} />}
       {tab === 'payments' && <PaymentsView report={report} all={all} busy={busy} onImportLegacy={onImportLegacy} />}
     </div>
   </div>;
@@ -140,13 +150,37 @@ function AttentionItem({ children, action, onClick }: { children: ReactNode; act
   </button>;
 }
 
+/** Google Calendar sync status for upcoming confirmed bookings, with a manual (re)sync. */
+function CalendarBar({ states, notConfigured, busy, onSync }: { states: CalendarState[]; notConfigured: boolean; busy: boolean; onSync: () => void }) {
+  const count = (state: CalendarState) => states.filter(s => s === state).length;
+  const [missing, retrying, queued] = [count('missing'), count('retrying'), count('queued')];
+  const bookings = (n: number, one: string, many: string) => `${n} upcoming booking${n === 1 ? one : many}`;
+  const needsAction = missing + retrying > 0;
+  const message = notConfigured ? 'isn’t set up yet. Run setupCalendar in the Apps Script, then sync again.'
+    : missing ? `${bookings(missing, ' isn’t', 's aren’t')} on your calendar yet.`
+      : retrying ? `${bookings(retrying, '', 's')} couldn’t be added yet — retrying automatically.`
+        : queued ? `adding ${bookings(queued, '', 's')}…`
+          : states.length ? `all ${bookings(states.length, ' is', 's are')} on your calendar.` : 'new paid bookings are added automatically.';
+  return <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2 text-body-xs"
+    style={needsAction ? { background: 'var(--color-brand-subtle)', border: '1px solid var(--color-brand-ring)' } : { border: '1px solid var(--color-border)' }}>
+    <span className="inline-flex min-w-0 items-center gap-2" style={needsAction ? { color: 'var(--color-text)' } : muted}>
+      <CalendarCheck size={14} className="shrink-0" aria-hidden="true" style={{ color: needsAction ? 'var(--color-brand-text)' : 'var(--color-success-text)' }} />
+      <span><span className="font-semibold">Google Calendar</span> · {message}</span>
+    </span>
+    <button type="button" disabled={busy} onClick={onSync} className={ghostButton}
+      style={{ color: needsAction ? '#fff' : 'var(--color-brand-text)', background: needsAction ? 'var(--color-brand)' : undefined, opacity: busy ? 0.6 : 1 }}>
+      <CalendarSync size={13} aria-hidden="true" /> {needsAction ? 'Sync to Google Calendar' : 'Sync again'}
+    </button>
+  </div>;
+}
+
 /* ─────────────────────────── Schedule ─────────────────────────── */
 
-function ScheduleView({ all, settings, now, today, selected, stripStart, onSelect, onShiftWeek, onToday, expanded, onToggle, busy, onCancel, onOpen, complete }: {
+function ScheduleView({ all, settings, now, today, selected, stripStart, onSelect, onShiftWeek, onToday, expanded, onToggle, busy, onCancel, onOpen, complete, calendarOf, calendarBar, calendarNeedsAction }: {
   all: AdminBooking[]; settings: PublicSettings | null | undefined; now: number; today: string; selected: string; stripStart: string;
   onSelect: (date: string) => void; onShiftWeek: (days: number) => void; onToday: () => void;
   expanded: string | null; onToggle: (id: string) => void; busy: boolean; onCancel: (b: AdminBooking) => void; onOpen: (b: AdminBooking) => void;
-  complete: boolean;
+  complete: boolean; calendarOf: (b: AdminBooking) => CalendarState | null; calendarBar: ReactNode; calendarNeedsAction: boolean;
 }) {
   const days = Array.from({ length: STRIP_DAYS }, (_, i) => shiftDate(stripStart, i));
   const plan = buildDayPlan(selected, all, settings, today);
@@ -166,6 +200,7 @@ function ScheduleView({ all, settings, now, today, selected, stripStart, onSelec
   const nowIndex = showNowLine ? plan.rows.findIndex(r => toMinutes(r.end) > nowMinutes) : -1;
 
   return <div className="space-y-4">
+    {calendarNeedsAction && calendarBar}
     {(inSession || next) && <div className="grid gap-2 sm:grid-cols-2">
       {inSession && <HeadsUp label="In session" tone="brand" onClick={() => onOpen(inSession)}
         title={inSession.name} detail={`${format12Hour(inSession.time)} – ${format12Hour(slotEndTime(inSession.time))}`} />}
@@ -231,10 +266,11 @@ function ScheduleView({ all, settings, now, today, selected, stripStart, onSelec
       </div> : <ol className="space-y-1.5" aria-label={`Schedule for ${formatDate(selected, { weekday: 'long', month: 'long', day: 'numeric' })}`}>
         {plan.rows.map((row, index) => <TimelineItem key={`${row.kind}-${row.start}-${row.kind === 'booking' ? row.booking.id : ''}`}
           row={row} now={now} today={today} nowMinutes={nowMinutes} isToday={selected === today} showNowBefore={index === nowIndex}
-          current={row.kind === 'booking' && current(row)} expanded={expanded} onToggle={onToggle} busy={busy} onCancel={onCancel} />)}
+          current={row.kind === 'booking' && current(row)} expanded={expanded} onToggle={onToggle} busy={busy} onCancel={onCancel} calendarOf={calendarOf} />)}
       </ol>}
       {plan.closed && booked > 0 && <p className="text-body-xs" style={{ color: 'var(--color-error-text)' }}>{plan.closed} — these bookings were made before the change and are still valid.</p>}
     </div>
+    {!calendarNeedsAction && calendarBar}
     {!complete && <p className="text-body-xs" style={faint}>Showing appointments from the latest loaded records. Deploy the updated booking Worker so every upcoming appointment always appears here.</p>}
   </div>;
 }
@@ -252,9 +288,10 @@ function HeadsUp({ label, title, detail, tone, onClick }: { label: string; title
   </button>;
 }
 
-function TimelineItem({ row, now, today, nowMinutes, isToday, showNowBefore, current, expanded, onToggle, busy, onCancel }: {
+function TimelineItem({ row, now, today, nowMinutes, isToday, showNowBefore, current, expanded, onToggle, busy, onCancel, calendarOf }: {
   row: TimelineRow; now: number; today: string; nowMinutes: number; isToday: boolean; showNowBefore: boolean; current: boolean;
   expanded: string | null; onToggle: (id: string) => void; busy: boolean; onCancel: (b: AdminBooking) => void;
+  calendarOf: (b: AdminBooking) => CalendarState | null;
 }) {
   const past = isToday ? toMinutes(row.end) <= nowMinutes : row.kind === 'booking' && row.booking.date < today;
   const timeColumn = (strong: boolean) => <div className="w-[4.25rem] shrink-0 pt-2.5 text-right tabular-nums">
@@ -320,7 +357,7 @@ function TimelineItem({ row, now, today, nowMinutes, isToday, showNowBefore, cur
           </div>
         </button>
         {open && <div id={`booking-${b.id}`} className="px-3.5 pb-3.5">
-          <BookingDetails booking={b} now={now} conflict={row.conflict} busy={busy} onCancel={onCancel} />
+          <BookingDetails booking={b} now={now} conflict={row.conflict} calendar={calendarOf(b)} busy={busy} onCancel={onCancel} />
         </div>}
       </article>
     </div>
@@ -329,10 +366,10 @@ function TimelineItem({ row, now, today, nowMinutes, isToday, showNowBefore, cur
 
 /* ─────────────────────────── Records ─────────────────────────── */
 
-function RecordsView({ all, settings, now, today, expanded, onToggle, busy, onCancel, onShowInSchedule, canLoadMore, onLoadMore, initialFilter }: {
+function RecordsView({ all, settings, now, today, expanded, onToggle, busy, onCancel, onShowInSchedule, calendarOf, canLoadMore, onLoadMore, initialFilter }: {
   all: AdminBooking[]; settings: PublicSettings | null | undefined; now: number; today: string; expanded: string | null;
   onToggle: (id: string) => void; busy: boolean; onCancel: (b: AdminBooking) => void; onShowInSchedule: (b: AdminBooking) => void;
-  canLoadMore: boolean; onLoadMore: () => void; initialFilter: RecordFilter;
+  calendarOf: (b: AdminBooking) => CalendarState | null; canLoadMore: boolean; onLoadMore: () => void; initialFilter: RecordFilter;
 }) {
   const [filter, setFilter] = useState<RecordFilter>(initialFilter);
   const [search, setSearch] = useState('');
@@ -383,7 +420,7 @@ function RecordsView({ all, settings, now, today, expanded, onToggle, busy, onCa
             </div>
           </button>
           {open && <div id={`record-${b.id}`} className="px-3.5 pb-3.5">
-            <BookingDetails booking={b} now={now} conflict={scheduleConflict(b, settings, today)} busy={busy} onCancel={onCancel}
+            <BookingDetails booking={b} now={now} conflict={scheduleConflict(b, settings, today)} calendar={calendarOf(b)} busy={busy} onCancel={onCancel}
               onShowInSchedule={holdsSlot(b) ? onShowInSchedule : undefined} />
           </div>}
         </article>;
@@ -397,6 +434,8 @@ function RecordsView({ all, settings, now, today, expanded, onToggle, busy, onCa
 
 function PaymentsView({ report, all, busy, onImportLegacy }: { report: AdminReport; all: AdminBooking[]; busy: boolean; onImportLegacy: () => void }) {
   const names = new Map(all.map(b => [b.id, b.name]));
+  // Calendar jobs have their own status bar on the Schedule view.
+  const emails = report.notifications.filter(n => n.audience !== 'calendar');
   const tile = (label: string, value: ReactNode, hint?: string) => <div className="rounded-xl px-4 py-3" style={{ border: '1px solid var(--color-border)', background: 'rgba(255,255,255,0.03)' }}>
     <p className="text-body-xs" style={muted}>{label}</p>
     <p className="mt-1 text-xl font-semibold text-white tabular-nums">{value}</p>
@@ -415,9 +454,9 @@ function PaymentsView({ report, all, busy, onImportLegacy }: { report: AdminRepo
     </aside>
     <section className="space-y-2" aria-label="Email delivery">
       <h4 className="text-body-sm font-bold text-white">Email delivery</h4>
-      {report.notifications.length === 0
+      {emails.length === 0
         ? <p className="text-body-xs" style={muted}>All confirmation emails were accepted by Gmail.</p>
-        : <ul className="space-y-1.5">{report.notifications.map((n, i) => <li key={i} className="rounded-xl px-3 py-2 text-body-xs"
+        : <ul className="space-y-1.5">{emails.map((n, i) => <li key={i} className="rounded-xl px-3 py-2 text-body-xs"
           style={{ border: `1px solid ${n.status === 'needs_review' || n.last_error ? 'var(--color-warn-ring)' : 'var(--color-border)'}`, background: 'rgba(255,255,255,0.02)' }}>
           <p style={{ color: 'var(--color-text)' }}><span className="font-semibold">{names.get(n.booking_id) ?? 'Booking'}</span> · {n.audience === 'admin' ? 'studio copy' : 'customer email'} · {n.kind.replaceAll('_', ' ')}</p>
           <p style={muted}>{n.status === 'needs_review' ? 'Needs review — check the Gmail sent folder before resending' : n.status.replaceAll('_', ' ')}{n.last_error ? ` · ${n.last_error.replaceAll('_', ' ')}` : ''}</p>

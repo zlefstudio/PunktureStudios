@@ -3,6 +3,7 @@ import { editableEvents } from '../popupEvents';
 import { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { bookingApi, RESERVATION_POLICY } from '../bookingApi';
+import { SOCIAL_APPS, socialContact, type SocialApp } from '../socialContact';
 import { PaymentStatus } from './booking/PaymentStatus';
 import { firestore } from '../firebase';
 import type { PublicSettings, BookingSelectedPiercing } from '../types';
@@ -78,6 +79,8 @@ export function AppointmentPage({ previewSettings }: { previewSettings?: PublicS
 
   // Step 3: Client Info & Submission
   const [name, setName] = useState('');
+  // Social media account instead of a phone number: the studio messages clients over data.
+  const [contactApp, setContactApp] = useState<SocialApp>('instagram');
   const [contact, setContact] = useState('');
   const [email, setEmail] = useState('');
   const [unavailable, setUnavailable] = useState<string[]>([]);
@@ -239,10 +242,12 @@ export function AppointmentPage({ previewSettings }: { previewSettings?: PublicS
   function handleReviewStart(e: React.FormEvent) {
     e.preventDefault();
     if (pending.current || busy) return;
-    if (!name.trim() || !contact.trim()) {
-      setError('Please enter your name and contact info.');
+    if (!name.trim()) {
+      setError('Please enter your name.');
       return;
     }
+    const social = socialContact(contactApp, contact);
+    if ('error' in social) { setError(social.error); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError('Please enter a valid email address for your confirmation and receipt.'); return; }
     if (!availabilityReady || unavailable.includes(time) || !date || !time || !validAppointmentDate(date, time)) {
       setError('Please select a valid future date and time slot.');
@@ -268,10 +273,12 @@ export function AppointmentPage({ previewSettings }: { previewSettings?: PublicS
 
     try {
       const safeNotes = bookingCartNotes(selectedPiercings, notes);
+      const social = socialContact(contactApp, contact);
+      if ('error' in social) throw new Error(social.error);
 
       await bookingApi('/bookings', { method: 'POST', body: JSON.stringify({
         id: requestId.current, token: paymentToken.current, name: name.trim(), email: email.trim(),
-        contact: contact.trim(), date, time, notes: safeNotes, consent: true, policy: RESERVATION_POLICY,
+        contact: social.value, date, time, notes: safeNotes, consent: true, policy: RESERVATION_POLICY,
       }) });
       const next = { id: requestId.current, token: paymentToken.current, cancelled: false };
       window.history.replaceState(null, '', `#booking=${next.id}&token=${next.token}`);
@@ -1113,21 +1120,43 @@ export function AppointmentPage({ previewSettings }: { previewSettings?: PublicS
                     <span className="text-body-xs font-semibold text-zinc-300">Email for confirmation &amp; receipt *</span>
                     <input type="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" className="w-full p-3.5 rounded-xl text-body-sm text-white bg-zinc-800" />
                   </label>
-                  <label className="block space-y-1">
-                    <span className="text-body-xs font-semibold text-zinc-300">
-                      Contact Number or Instagram Handle *
-                    </span>
+                  <div className="space-y-1.5">
+                    <p id="booking-contact-label" className="text-body-xs font-semibold text-zinc-300">Social media we can message you on *</p>
+                    <div role="radiogroup" aria-labelledby="booking-contact-label" className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                      {SOCIAL_APPS.map(app => (
+                        <button
+                          key={app.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={contactApp === app.id}
+                          onClick={() => setContactApp(app.id)}
+                          className="min-h-11 px-2 py-2 rounded-xl text-body-xs font-semibold transition-colors"
+                          style={contactApp === app.id
+                            ? { background: 'var(--color-brand-subtle)', border: '1px solid var(--color-brand-light)', color: '#fff' }
+                            : { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}
+                        >
+                          {app.label}
+                        </button>
+                      ))}
+                    </div>
                     <input
+                      id="booking-contact"
                       type="text"
+                      aria-labelledby="booking-contact-label"
+                      aria-describedby="booking-contact-help"
                       value={contact}
                       onChange={(e) => setContact(e.target.value)}
                       required
-                      placeholder="e.g. 09171234567 or @mayasantos"
-                      maxLength={80}
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      placeholder={SOCIAL_APPS.find(app => app.id === contactApp)?.placeholder}
+                      maxLength={60}
                       className="w-full p-3.5 rounded-xl text-body-sm text-white"
                       style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)' }}
                     />
-                  </label>
+                    <p id="booking-contact-help" className="text-body-xs text-zinc-400">We’ll message you here about your appointment — no calls or texts needed.</p>
+                  </div>
 
                   <label className="block space-y-1">
                     <span className="text-body-xs font-semibold text-zinc-300">

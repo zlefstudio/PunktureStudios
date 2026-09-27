@@ -20,7 +20,19 @@ export interface AdminReport {
   /** Late payments that never secured a slot. Absent on older Workers. */
   reviews?: AdminBooking[];
   notifications: AdminNotification[];
+  /** Google Calendar job per upcoming confirmed booking. Absent on Workers without calendar sync. */
+  calendar?: { booking_id: string; status: string; last_error: string | null }[];
   totals: { payments: number; grossCentavos: number; needsReview: number | null };
+}
+
+/** Where an upcoming confirmed booking stands with the studio's Google Calendar. */
+export type CalendarState = 'synced' | 'queued' | 'retrying' | 'missing';
+export function calendarState(b: AdminBooking, report: AdminReport, now = Date.now()): CalendarState | null {
+  if (!report.calendar || b.status !== 'confirmed' || appointmentStart(b) + 45 * 60000 <= now) return null;
+  const job = report.calendar.find(j => j.booking_id === b.id);
+  if (!job) return 'missing';
+  if (job.status === 'sent') return 'synced';
+  return job.last_error ? 'retrying' : 'queued';
 }
 
 const DAY_MS = 86400000;

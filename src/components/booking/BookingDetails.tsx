@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { AlertTriangle, CalendarDays, Check, Copy, MessageSquareText, XCircle } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Check, Copy, ExternalLink, MessageSquareText, XCircle } from 'lucide-react';
 import { format12Hour } from '../../schedule';
+import { socialProfileLink } from '../../socialContact';
 import {
   DEPOSIT_PESOS, LATE_GRACE_MINUTES, addMinutes, appointmentStart, isHolding, manilaStamp, manilaToday, parseBookingNotes, peso, reminderMessage,
-  type AdminBooking,
+  type AdminBooking, type CalendarState,
 } from './bookingAgenda';
+
+const CALENDAR_LABEL: Record<CalendarState, { text: string; color: string }> = {
+  synced: { text: 'On Google Calendar', color: 'var(--color-success-text)' },
+  queued: { text: 'Adding to Google Calendar…', color: 'var(--color-text-muted)' },
+  retrying: { text: 'Not added yet — retrying', color: 'var(--color-warn-text)' },
+  missing: { text: 'Not on Google Calendar — use Sync to Google Calendar', color: 'var(--color-warn-text)' },
+};
 
 /** Clipboard with a short "Copied" acknowledgement per field. */
 function useCopy() {
@@ -37,15 +45,18 @@ function Notice({ tone, children }: { tone: 'warn' | 'error' | 'muted'; children
   </p>;
 }
 
-export function BookingDetails({ booking, now, conflict, busy, onCancel, onShowInSchedule }: {
+export function BookingDetails({ booking, now, conflict, calendar = null, busy, onCancel, onShowInSchedule }: {
   booking: AdminBooking;
   now: number;
   conflict: string | null;
+  /** Google Calendar state for upcoming confirmed bookings; null hides the row. */
+  calendar?: CalendarState | null;
   busy: boolean;
   onCancel: (booking: AdminBooking) => void;
   onShowInSchedule?: (booking: AdminBooking) => void;
 }) {
   const parsed = parseBookingNotes(booking.notes);
+  const profile = socialProfileLink(booking.contact || '');
   const { copied, copy } = useCopy();
   const start = appointmentStart(booking);
   const notEnded = start + 45 * 60000 > now;
@@ -115,7 +126,15 @@ export function BookingDetails({ booking, now, conflict, busy, onCancel, onShowI
         {field('Contact', <>
           <span className="break-all">{booking.contact || '—'}</span>
           {booking.contact && copyButton('contact', booking.contact, `Copy contact of ${booking.name}`)}
+          {profile && <a href={profile.href} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors hover:bg-white/5"
+            style={{ color: 'var(--color-brand-text)' }}>
+            <ExternalLink size={12} aria-hidden="true" /> {profile.label}
+          </a>}
         </>)}
+        {calendar && field('Google Calendar', <span className="inline-flex items-center gap-1.5 text-body-xs" style={{ color: CALENDAR_LABEL[calendar].color }}>
+          {calendar === 'synced' ? <Check size={12} aria-hidden="true" /> : <CalendarDays size={12} aria-hidden="true" />} {CALENDAR_LABEL[calendar].text}
+        </span>)}
         {field('Payment reference', booking.payment_id ? <>
           <span className="font-mono text-[12px] break-all">{booking.payment_id}</span>
           {copyButton('payment', booking.payment_id, 'Copy payment reference')}

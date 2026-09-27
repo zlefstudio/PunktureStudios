@@ -12,6 +12,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const { createRoot } = await import('react-dom/client');
 const { bookingCartNotes } = await import('../src/components/booking/cartSnapshot.ts');
 const agenda = await import('../src/components/booking/bookingAgenda.ts');
+const social = await import('../src/socialContact.ts');
 const { BookingsBoard } = await import('../src/components/booking/BookingsBoard.tsx');
 const { studioDaySlots, DEFAULT_DAYS } = await import('../src/schedule.ts');
 
@@ -30,7 +31,7 @@ const cartNotes = bookingCartNotes([
   { id: 'c', name: 'Aftercare Solution', category: 'CUSTOM', basePrice: 150, notes: 'Pick up at the counter' },
 ], 'First piercing, a bit nervous');
 const booking = (id, date, time, status, extra = {}) => ({
-  id, name: extra.name ?? id, email: `${id}@example.com`, contact: '09171234567', notes: extra.notes ?? 'Lobe', date, time, status,
+  id, name: extra.name ?? id, email: `${id}@example.com`, contact: extra.contact ?? '09171234567', notes: extra.notes ?? 'Lobe', date, time, status,
   createdAt: extra.createdAt ?? Date.parse('2026-09-20T09:00:00+08:00'), expiresAt: extra.expiresAt ?? 0,
   paidAt: status === 'confirmed' || status === 'payment_review' ? Date.parse('2026-09-20T09:02:00+08:00') : null,
   payment_id: status === 'confirmed' || status === 'payment_review' ? `pay_${id}` : null, amount: 10000, last_error: null,
@@ -121,7 +122,7 @@ let container;
 beforeEach(() => { container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container); });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 after(() => dom.window.close());
-const props = (extra = {}) => ({ report: report(), settings, now: NOW, busy: false, canLoadMore: false, onLoadMore: () => {}, onCancel: () => {}, onImportLegacy: () => {}, ...extra });
+const props = (extra = {}) => ({ report: report(), settings, now: NOW, busy: false, canLoadMore: false, onLoadMore: () => {}, onCancel: () => {}, onImportLegacy: () => {}, onSyncCalendar: () => {}, ...extra });
 async function render(extra) { await act(async () => root.render(React.createElement(BookingsBoard, props(extra)))); }
 const buttons = () => [...container.querySelectorAll('button')];
 const button = (text) => buttons().find(b => b.textContent.includes(text));
@@ -202,4 +203,66 @@ test('older Workers without the agenda still render from loaded records, with a 
   await render({ report: { ...report(), upcoming: undefined, reviews: undefined, bookings: [maya, expired] } });
   assert.match(container.textContent, /Maya Santos/);
   assert.match(container.textContent, /Deploy the updated booking Worker/);
+});
+
+/* ─────────── Social media contact ─────────── */
+
+test('social media contact accepts handles and profile links, and rejects phone numbers as usernames', () => {
+  assert.deepEqual(social.socialContact('instagram', '@maya.santos'), { value: 'Instagram: @maya.santos' });
+  assert.deepEqual(social.socialContact('instagram', 'https://www.instagram.com/maya.santos/?hl=en'), { value: 'Instagram: @maya.santos' });
+  assert.deepEqual(social.socialContact('tiktok', 'maya_s'), { value: 'TikTok: @maya_s' });
+  assert.deepEqual(social.socialContact('facebook', '  Maya   Santos '), { value: 'Facebook: Maya Santos' });
+  assert.deepEqual(social.socialContact('other', 'Telegram @maya'), { value: 'Other: Telegram @maya' });
+  assert.match(social.socialContact('instagram', '0917 123 4567').error, /valid Instagram username/);
+  assert.match(social.socialContact('facebook', ' ').error, /add your social media/);
+  assert.ok(social.socialContact('other', 'x'.repeat(60)).value.length <= 80, 'fits the Worker contact limit');
+});
+
+test('staff profile links are built only for safe, recognised accounts', () => {
+  assert.deepEqual(social.socialProfileLink('Instagram: @maya.santos'), { label: 'Open Instagram', href: 'https://www.instagram.com/maya.santos/' });
+  assert.equal(social.socialProfileLink('@maya').href, 'https://www.instagram.com/maya/', 'older bookings asked for an Instagram handle');
+  assert.equal(social.socialProfileLink('TikTok: @maya_s').href, 'https://www.tiktok.com/@maya_s');
+  assert.equal(social.socialProfileLink('Facebook: facebook.com/maya.santos').href, 'https://facebook.com/maya.santos');
+  assert.equal(social.socialProfileLink('Facebook: https://m.me/maya.santos').href, 'https://m.me/maya.santos');
+  assert.equal(social.socialProfileLink('Facebook: Maya Santos').href, 'https://www.facebook.com/search/people/?q=Maya%20Santos');
+  assert.match(social.socialProfileLink('Facebook: https://evil.example/facebook.com/x').href, /^https:\/\/www\.facebook\.com\/search\//, 'other hosts are never linked directly');
+  assert.equal(social.socialProfileLink('09171234567'), null);
+  assert.equal(social.socialProfileLink('Other: Telegram @maya'), null);
+});
+
+test('booking details link to the customer’s social profile', async () => {
+  const ig = booking('ig', '2026-09-28', '13:00', 'confirmed', { name: 'Ivy Gomez', contact: 'Instagram: @ivy.gomez' });
+  await render({ report: { ...report(), upcoming: [ig] } });
+  await click(buttons().find(b => b.getAttribute('aria-expanded') === 'false' && b.textContent.includes('Ivy Gomez')));
+  const link = container.querySelector('#booking-ig a[href="https://www.instagram.com/ivy.gomez/"]');
+  assert.ok(link);
+  assert.equal(link.getAttribute('rel'), 'noopener noreferrer');
+  assert.match(link.textContent, /Open Instagram/);
+});
+
+/* ─────────── Google Calendar status ─────────── */
+
+test('calendar bar asks for a sync when upcoming bookings are missing, and details show each state', async () => {
+  let synced = 0;
+  await render({ onSyncCalendar: () => { synced++; }, report: { ...report(), calendar: [{ booking_id: 'jo', status: 'sent', last_error: null }] } });
+  const bar = () => [...container.querySelectorAll('[role="status"]')].find(el => el.textContent.includes('Google Calendar'));
+  assert.match(bar().textContent, /1 upcoming booking isn’t on your calendar yet/, 'Ria Lim (Sep 30) predates calendar sync');
+  await click(button('Sync to Google Calendar'));
+  assert.equal(synced, 1);
+  await click(buttons().find(b => b.getAttribute('aria-expanded') === 'false' && b.textContent.includes('Jo Cruz')));
+  assert.match(container.querySelector('#booking-jo').textContent, /Google Calendar\s*On Google Calendar/);
+  await click(buttons().find(b => b.getAttribute('aria-expanded') === 'false' && b.textContent.includes('Maya Santos')));
+  assert.doesNotMatch(container.querySelector('#booking-maya').textContent, /Google Calendar/, 'finished appointments show no calendar row');
+});
+
+test('calendar setup problems surface in the attention strip; all-synced stays quiet', async () => {
+  const retrying = [{ booking_id: 'jo', status: 'pending', last_error: 'calendar_not_configured' }, { booking_id: 'closed', status: 'pending', last_error: 'calendar_not_configured' }];
+  await render({ report: { ...report(), calendar: retrying } });
+  assert.match(container.querySelector('[aria-label="Needs attention"]').textContent, /2 bookings couldn’t be added to Google Calendar yet/);
+  assert.match(container.textContent, /Google Calendar · isn’t set up yet\. Run setupCalendar/);
+  const allSent = [{ booking_id: 'jo', status: 'sent', last_error: null }, { booking_id: 'closed', status: 'sent', last_error: null }];
+  await render({ report: { ...report(), calendar: allSent } });
+  assert.match(container.textContent, /Google Calendar · all 2 upcoming bookings are on your calendar/);
+  assert.ok(button('Sync again'));
+  assert.doesNotMatch(container.querySelector('[aria-label="Needs attention"]').textContent, /Google Calendar/);
 });
