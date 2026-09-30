@@ -23,13 +23,12 @@ export interface MirrorConfig {
   inspectAngle: number;
 }
 
-export interface ClampConfig {
-  frames: string[];
-  naturalWidth: number;
-  naturalHeight: number;
-  displayHeight: number;
-  anchor: { x: number; y: number };
+/** Forceps are drawn as vector arms (ForcepsSprite.tsx) so the jaws and handles can open and close smoothly. */
+export interface ForcepsConfig {
+  /** Rotation of the whole tool at the ear. Negative = handles point up and to the right, clear of the face. */
   contactAngle: number;
+  /** Degrees each arm swings from closed (0) to fully open. */
+  openAngle: number;
 }
 
 export interface RitualConfigType {
@@ -37,6 +36,7 @@ export interface RitualConfigType {
   stageSize: number;
   piercePoint: { x: number; y: number };
   durations: {
+    /** Excited waiting before the first tool arrives (the last 1.2s of the loop continues into it). */
     idle: number;
     clean: number;
     mark: number;
@@ -45,7 +45,11 @@ export interface RitualConfigType {
     pierce: number;
     jewel: number;
     reveal: number;
+    /** Ritual length: the procedure itself, ending after the happy reveal. */
+    ritual: number;
+    /** Full loop = ritual + a short excited wait, so the logo perks up before the next tools arrive. */
     total: number;
+    pace: number;
   };
   logo: {
     src: string;
@@ -59,9 +63,8 @@ export interface RitualConfigType {
     cottonbuds: ToolConfig;
     marker: ToolConfig;
     mirror: MirrorConfig;
-    clamp: ClampConfig;
+    forceps: ForcepsConfig;
     needle: ToolConfig;
-    forecepwithjew: ToolConfig;
   };
 }
 
@@ -83,7 +86,10 @@ export const RITUAL_CONFIG: RitualConfigType = {
     pierce: 1.5,  // 9.5s -> 11.0s
     jewel: 2.0,   // 11.0s -> 13.0s
     reveal: 1.0,  // 13.0s -> 14.0s
-    total: 14.0,  // Complete loop duration
+    ritual: 14.0,
+    total: 15.2,  // 14.0s -> 15.2s waits happily, then 0 -> 1.5s idle continues the wait
+    /** Real seconds per ritual second. 1.25 makes the whole loop 25% slower (19s) without touching the timeline. */
+    pace: 1.25,
   },
 
   logo: {
@@ -96,58 +102,43 @@ export const RITUAL_CONFIG: RitualConfigType = {
   },
 
   tools: {
+    // Sprites are cropped to their visible pixels at 3x, so displayHeight is the tool's real
+    // on-stage size and the anchor is measured inside the cropped image.
     cottonbuds: {
       src: '/animations/cottonbuds.png',
-      naturalWidth: 1408,
-      naturalHeight: 768,
-      displayHeight: 170,
-      anchor: { x: 704, y: 147 }, // Top bud center
-      contactAngle: -22,          // Angle held when wiping
+      naturalWidth: 71,
+      naturalHeight: 264,
+      displayHeight: 88,
+      anchor: { x: 24, y: 32 },  // Top bud center
+      contactAngle: -22,         // Angle held when wiping
     },
     marker: {
       src: '/animations/marker.png',
-      naturalWidth: 1408,
-      naturalHeight: 768,
-      displayHeight: 160,
-      anchor: { x: 706, y: 65 },  // Pen tip
-      contactAngle: -25,          // Angle held when marking
+      naturalWidth: 37,
+      naturalHeight: 276,
+      displayHeight: 92,
+      anchor: { x: 18, y: 3 },   // Pen tip
+      contactAngle: -25,         // Angle held when marking
     },
     mirror: {
       src: '/animations/mirror.png',
-      naturalWidth: 1408,
-      naturalHeight: 768,
-      displayHeight: 170,
-      anchor: { x: 701, y: 276 }, // Center of glass face
-      inspectAngle: 18,           // Angle held when inspecting
+      naturalWidth: 238,
+      naturalHeight: 450,
+      displayHeight: 150,
+      anchor: { x: 117, y: 142 }, // Center of glass face
+      inspectAngle: 18,          // Angle held when inspecting
     },
-    clamp: {
-      frames: [
-        '/animations/clampframe1.png',
-        '/animations/clampframe2.png',
-        '/animations/clampframe3.png',
-        '/animations/clampframe4closed.png',
-      ],
-      naturalWidth: 1376,
-      naturalHeight: 768,
-      displayHeight: 170,
-      anchor: { x: 689, y: 44 },  // Jaw contact point (identical across all 4 frames)
-      contactAngle: 16,           // Natural upright contact tilt
+    forceps: {
+      contactAngle: -135,        // Comes in from the upper right; the needle uses the lower right
+      openAngle: 22,
     },
     needle: {
       src: '/animations/needle.png',
-      naturalWidth: 1408,
-      naturalHeight: 768,
-      displayHeight: 150,
-      anchor: { x: 713, y: 68 },  // Beveled piercing tip
-      contactAngle: -26,          // Sharp entry angle
-    },
-    forecepwithjew: {
-      src: '/animations/forecepwithjew.png',
-      naturalWidth: 1408,
-      naturalHeight: 768,
-      displayHeight: 170,
-      anchor: { x: 703, y: 72 },  // Gold stud center
-      contactAngle: 16,           // Placed at matching angle
+      naturalWidth: 22,
+      naturalHeight: 252,
+      displayHeight: 84,
+      anchor: { x: 13, y: 2 },   // Beveled piercing tip
+      contactAngle: -26,         // Sharp entry angle
     },
   },
 };

@@ -1,6 +1,8 @@
 import { ritualMotion } from './ritualMotion';
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { RITUAL_CONFIG } from './ritualConfig';
+import { Forceps } from './ForcepsSprite';
+import { FORCEPS_BOX } from './forcepsGeometry';
 
 // Math & Easing Helpers
 function clamp(v: number, min: number, max: number): number {
@@ -14,6 +16,11 @@ function easeOutCubic(t: number): number {
 function easeInCubic(t: number): number {
   const c = clamp(t, 0, 1);
   return c * c * c;
+}
+
+function easeInOutCubic(t: number): number {
+  const c = clamp(t, 0, 1);
+  return c < 0.5 ? 4 * c * c * c : 1 - Math.pow(-2 * c + 2, 3) / 2;
 }
 
 function easeOutBack(t: number): number {
@@ -130,9 +137,7 @@ export function PiercingRitualAnimation() {
       RITUAL_CONFIG.tools.cottonbuds.src,
       RITUAL_CONFIG.tools.marker.src,
       RITUAL_CONFIG.tools.mirror.src,
-      ...RITUAL_CONFIG.tools.clamp.frames,
       RITUAL_CONFIG.tools.needle.src,
-      RITUAL_CONFIG.tools.forecepwithjew.src,
     ];
 
     urls.forEach((url) => {
@@ -185,11 +190,12 @@ export function PiercingRitualAnimation() {
 
     let animId: number;
     const startTime = performance.now();
-    const totalMs = RITUAL_CONFIG.durations.total * 1000;
+    // Timeline seconds run `pace` times slower than the clock, so every move is a little calmer.
+    const totalMs = RITUAL_CONFIG.durations.total * RITUAL_CONFIG.durations.pace * 1000;
 
     const tick = (now: number) => {
       const elapsed = (now - startTime) % totalMs;
-      setTime(elapsed / 1000);
+      setTime(elapsed / 1000 / RITUAL_CONFIG.durations.pace);
       animId = requestAnimationFrame(tick);
     };
 
@@ -219,9 +225,7 @@ export function PiercingRitualAnimation() {
       cottonbuds: calcSpec(tools.cottonbuds),
       marker: calcSpec(tools.marker),
       mirror: calcSpec(tools.mirror),
-      clamp: calcSpec(tools.clamp),
       needle: calcSpec(tools.needle),
-      forecepwithjew: calcSpec(tools.forecepwithjew),
     };
   }, []);
 
@@ -238,7 +242,7 @@ export function PiercingRitualAnimation() {
     else if (t >= 7.5 && t < 9.5) phaseName = 'CLAMP';
     else if (t >= 9.5 && t < 11.0) phaseName = 'PIERCE';
     else if (t >= 11.0 && t < 13.0) phaseName = 'JEWEL';
-    else if (t >= 13.0) phaseName = 'REVEAL';
+    else if (t >= 13.0 && t < RITUAL_CONFIG.durations.ritual) phaseName = 'REVEAL';
 
     const motion = ritualMotion(t);
     const logoY = motion.y;
@@ -338,7 +342,7 @@ export function PiercingRitualAnimation() {
     // 5. Mirror (5.5s -> 7.5s)
     let mirror = { x: 400, y: 360, angle: 5, opacity: 0, elevation: 0.7, sheenP: 0 };
     if (t >= 5.5 && t < 7.5) {
-      const inspectPos = { x: P.x + 36, y: P.y + 12 };
+      const inspectPos = { x: P.x + 54, y: P.y + 16 };
       if (t < 6.1) {
         // Rise in
         const p = easeOutBack((t - 5.5) / 0.6);
@@ -375,55 +379,45 @@ export function PiercingRitualAnimation() {
       }
     }
 
-    // 6. Forceps / Clamp (7.5s -> 9.5s, stays during Pierce 9.5s -> 11.0s)
+    // 6. Forceps (7.5s -> 9.5s, stay during Pierce 9.5s -> 11.0s).
+    // They enter open from the upper right, the two arms swing shut around the ear as one
+    // rigid piece (jaws and finger rings together), then hold while the needle passes.
+    const F = RITUAL_CONFIG.tools.forceps;
+    const fromTopRight = { x: 424, y: 16 };
     let clampState = {
-      x: 390,
-      y: 360,
-      angle: 28,
+      x: fromTopRight.x,
+      y: fromTopRight.y,
+      angle: F.contactAngle - 22,
       opacity: 0,
-      frameIdx: 0,
+      open: 1,
       scale: 1,
       elevation: 0.7,
     };
 
     if (t >= 7.5 && t < 11.0) {
       if (t < 8.1) {
-        // Enter open
-        const p = easeOutBack((t - 7.5) / 0.6);
+        // Glide in wide open
+        const p = easeOutCubic((t - 7.5) / 0.6);
         clampState = {
-          x: lerp(390, P.x, p),
-          y: lerp(360, P.y, p),
-          angle: lerp(28, RITUAL_CONFIG.tools.clamp.contactAngle, p),
+          x: lerp(fromTopRight.x, P.x, p),
+          y: lerp(fromTopRight.y, P.y, p),
+          angle: lerp(F.contactAngle - 22, F.contactAngle, p),
           opacity: easeOutCubic((t - 7.5) / 0.25),
-          frameIdx: 0,
+          open: 1,
           scale: 1,
           elevation: lerp(0.7, 0, p),
         };
       } else if (t < 9.5) {
-        // Crisp swaps 1 -> 2 -> 3 -> 4 with slight grip pulse
-        const clampTime = t - 8.1;
-        let frame = 0;
-        let pulse = 1;
-        if (clampTime < 0.25) {
-          frame = 0;
-        } else if (clampTime < 0.5) {
-          frame = 1;
-          pulse = 1 + Math.sin(((clampTime - 0.25) / 0.25) * Math.PI) * 0.018;
-        } else if (clampTime < 0.75) {
-          frame = 2;
-          pulse = 1 + Math.sin(((clampTime - 0.5) / 0.25) * Math.PI) * 0.018;
-        } else {
-          frame = 3; // Fully closed
-          pulse = 1 + Math.sin(((clampTime - 0.75) / 0.25) * Math.PI) * 0.018;
-        }
-
+        // Pause open around the ear, close smoothly (8.25s -> 8.85s), then a tiny bite squeeze.
+        const close = easeInOutCubic((t - 8.25) / 0.6);
+        const bite = t > 8.85 && t < 9.1 ? Math.sin(((t - 8.85) / 0.25) * Math.PI) : 0;
         clampState = {
           x: P.x,
           y: P.y,
-          angle: RITUAL_CONFIG.tools.clamp.contactAngle,
+          angle: F.contactAngle,
           opacity: 1,
-          frameIdx: frame,
-          scale: pulse,
+          open: 1 - close,
+          scale: 1 - bite * 0.012,
           elevation: 0,
         };
       } else {
@@ -431,9 +425,9 @@ export function PiercingRitualAnimation() {
         clampState = {
           x: P.x,
           y: P.y,
-          angle: RITUAL_CONFIG.tools.clamp.contactAngle,
+          angle: F.contactAngle,
           opacity: t < 10.8 ? 1 : 1 - (t - 10.8) / 0.2,
-          frameIdx: 3,
+          open: 0,
           scale: 1,
           elevation: 0,
         };
@@ -441,82 +435,84 @@ export function PiercingRitualAnimation() {
     }
 
     // Approach and retract on the sprite's shaft axis; no sideways stab or tip orbit.
+    const NEEDLE_REACH = 100; // px the needle travels in from along its shaft
     const needleAngle = RITUAL_CONFIG.tools.needle.contactAngle;
     const shaft = { x: -Math.sin(needleAngle * Math.PI / 180), y: Math.cos(needleAngle * Math.PI / 180) };
-    let needle = { x: P.x + shaft.x * 120, y: P.y + shaft.y * 120, angle: needleAngle, opacity: 0, elevation: 0.4 };
+    let needle = { x: P.x + shaft.x * NEEDLE_REACH, y: P.y + shaft.y * NEEDLE_REACH, angle: needleAngle, opacity: 0, elevation: 0.4 };
     if (t >= 9.5 && t < 11) {
       let distance: number;
-      if (t < 9.95) distance = lerp(120, 0, easeOutCubic((t - 9.5) / .45));
+      if (t < 9.95) distance = lerp(NEEDLE_REACH, 0, easeOutCubic((t - 9.5) / .45));
       else if (t < 10.15) distance = lerp(0, -6, easeOutCubic((t - 9.95) / .2));
       else if (t < 10.35) distance = -6;
-      else distance = lerp(-6, 120, easeInCubic((t - 10.35) / .65));
+      else distance = lerp(-6, NEEDLE_REACH, easeInCubic((t - 10.35) / .65));
       needle = { x: P.x + shaft.x * distance, y: P.y + shaft.y * distance, angle: needleAngle,
-        opacity: Math.min(clamp((t - 9.5) / .2, 0, 1), clamp((11 - t) / .2, 0, 1)), elevation: clamp(distance / 120, 0, .4) };
+        opacity: Math.min(clamp((t - 9.5) / .2, 0, 1), clamp((11 - t) / .2, 0, 1)), elevation: clamp(distance / NEEDLE_REACH, 0, .4) };
     }
 
-    // 8. Jeweled Forceps & Release (11.0s -> 13.0s)
+    // 8. Jeweled forceps & release (11.0s -> 13.0s): they arrive gripping the gold stud, place it
+    // on the ear, then open smoothly. The stud stays on the ear; the open forceps leave.
     let jewelClamp = {
-      x: 390,
-      y: 360,
-      angle: 26,
+      x: fromTopRight.x,
+      y: fromTopRight.y,
+      angle: F.contactAngle - 22,
       opacity: 0,
       elevation: 0.7,
       scale: 1,
-      reverseFrame: -1, // -1 means forecepwithjew image, 0..3 means clamp frames 4..1 opening
+      open: 0.06,
+      stud: true,
     };
 
     if (t >= 11.0 && t < 13.0) {
       if (t < 11.5) {
-        // Enter with gold stud
+        // Glide in holding the stud
         const p = easeOutCubic((t - 11.0) / 0.5);
         jewelClamp = {
-          x: lerp(390, P.x, p),
-          y: lerp(360, P.y, p),
-          angle: lerp(26, RITUAL_CONFIG.tools.forecepwithjew.contactAngle, p),
+          x: lerp(fromTopRight.x, P.x, p),
+          y: lerp(fromTopRight.y, P.y, p),
+          angle: lerp(F.contactAngle - 22, F.contactAngle, p),
           opacity: easeOutCubic((t - 11.0) / 0.25),
           elevation: lerp(0.7, 0, p),
           scale: 1,
-          reverseFrame: -1,
+          open: 0.06,
+          stud: true,
         };
       } else if (t < 11.8) {
         // Placed on PIERCE_POINT, contact moment
         jewelClamp = {
           x: P.x,
           y: P.y,
-          angle: RITUAL_CONFIG.tools.forecepwithjew.contactAngle,
+          angle: F.contactAngle,
           opacity: 1,
           elevation: 0,
           scale: 1,
-          reverseFrame: -1,
+          open: 0.06,
+          stud: true,
         };
       } else if (t < 12.4) {
-        // Reverse frame swaps 4 -> 3 -> 2 -> 1 (clamp opens, releasing stud)
-        const openTime = t - 11.8;
-        let rFrame = 3;
-        if (openTime > 0.45) rFrame = 0;
-        else if (openTime > 0.3) rFrame = 1;
-        else if (openTime > 0.15) rFrame = 2;
-
+        // Arms swing wide open; the held stud is handed over to the ear (the gold stud on the logo)
+        const release = easeOutBack((t - 11.8) / 0.5);
         jewelClamp = {
           x: P.x,
           y: P.y,
-          angle: RITUAL_CONFIG.tools.forecepwithjew.contactAngle,
+          angle: F.contactAngle,
           opacity: 1,
           elevation: 0.05,
           scale: 1,
-          reverseFrame: rFrame,
+          open: lerp(0.06, 1, clamp(release, 0, 1.12)),
+          stud: false,
         };
       } else {
-        // Retract open forceps and exit
+        // Retract open forceps and exit to the upper right
         const p = easeInCubic((t - 12.4) / 0.6);
         jewelClamp = {
-          x: lerp(P.x, 400, p),
-          y: lerp(P.y, 380, p),
-          angle: lerp(RITUAL_CONFIG.tools.forecepwithjew.contactAngle, 28, p),
+          x: lerp(P.x, fromTopRight.x, p),
+          y: lerp(P.y, fromTopRight.y, p),
+          angle: lerp(F.contactAngle, F.contactAngle - 22, p),
           opacity: 1 - easeInCubic((t - 12.7) / 0.3),
           elevation: lerp(0.05, 0.8, p),
           scale: 1,
-          reverseFrame: 0,
+          open: 1,
+          stud: false,
         };
       }
     }
@@ -885,7 +881,7 @@ export function PiercingRitualAnimation() {
                 </div>
               </ToolRig>
 
-              {/* 4. Forceps / Clamp Frame Stack (Frames 1 -> 4) */}
+              {/* 4. Forceps: two rigid arms that swing open and shut */}
               <ToolRig
                 x={stageState.clamp.x}
                 y={stageState.clamp.y}
@@ -893,26 +889,13 @@ export function PiercingRitualAnimation() {
                 opacity={stageState.clamp.opacity}
                 elevation={stageState.clamp.elevation}
                 scale={stageState.clamp.scale}
-                anchorLogical={toolSpecs.clamp.anchorLogical}
-                width={toolSpecs.clamp.width}
-                height={toolSpecs.clamp.height}
+                anchorLogical={FORCEPS_BOX.anchor}
+                width={FORCEPS_BOX.width}
+                height={FORCEPS_BOX.height}
                 debug={RITUAL_CONFIG.debug}
                 debugColor="#facc15"
               >
-                <div className="relative w-full h-full">
-                  {tools.clamp.frames.map((src, idx) => (
-                    <img
-                      key={src}
-                      src={src}
-                      alt={`Clamp frame ${idx + 1}`}
-                      className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-75"
-                      style={{
-                        opacity: stageState.clamp.frameIdx === idx ? 1 : 0,
-                      }}
-                      loading="eager"
-                    />
-                  ))}
-                </div>
+                <Forceps open={stageState.clamp.open} openAngle={tools.forceps.openAngle} />
               </ToolRig>
 
               {/* 5. Piercing Needle */}
@@ -936,7 +919,7 @@ export function PiercingRitualAnimation() {
                 />
               </ToolRig>
 
-              {/* 6. Forceps with Jewel & Release Swaps */}
+              {/* 6. Forceps carrying the gold stud, then opening to release it */}
               <ToolRig
                 x={stageState.jewelClamp.x}
                 y={stageState.jewelClamp.y}
@@ -944,47 +927,13 @@ export function PiercingRitualAnimation() {
                 opacity={stageState.jewelClamp.opacity}
                 elevation={stageState.jewelClamp.elevation}
                 scale={stageState.jewelClamp.scale}
-                anchorLogical={
-                  stageState.jewelClamp.reverseFrame >= 0
-                    ? toolSpecs.clamp.anchorLogical
-                    : toolSpecs.forecepwithjew.anchorLogical
-                }
-                width={
-                  stageState.jewelClamp.reverseFrame >= 0
-                    ? toolSpecs.clamp.width
-                    : toolSpecs.forecepwithjew.width
-                }
-                height={
-                  stageState.jewelClamp.reverseFrame >= 0
-                    ? toolSpecs.clamp.height
-                    : toolSpecs.forecepwithjew.height
-                }
+                anchorLogical={FORCEPS_BOX.anchor}
+                width={FORCEPS_BOX.width}
+                height={FORCEPS_BOX.height}
                 debug={RITUAL_CONFIG.debug}
                 debugColor="#f97316"
               >
-                <div className="relative w-full h-full">
-                  {stageState.jewelClamp.reverseFrame === -1 ? (
-                    <img
-                      src={tools.forecepwithjew.src}
-                      alt="Forceps with Jeweled Stud"
-                      className="w-full h-full object-contain pointer-events-none"
-                      loading="eager"
-                    />
-                  ) : (
-                    tools.clamp.frames.map((src, idx) => (
-                      <img
-                        key={src}
-                        src={src}
-                        alt={`Opening frame ${idx + 1}`}
-                        className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-75"
-                        style={{
-                          opacity: stageState.jewelClamp.reverseFrame === idx ? 1 : 0,
-                        }}
-                        loading="eager"
-                      />
-                    ))
-                  )}
-                </div>
+                <Forceps open={stageState.jewelClamp.open} openAngle={tools.forceps.openAngle} stud={stageState.jewelClamp.stud} />
               </ToolRig>
 
               {/* 7. Particles Overlay */}
