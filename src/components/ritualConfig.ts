@@ -104,8 +104,10 @@ export const RITUAL_CONFIG: RitualConfigType = {
   tools: {
     // Sprites are cropped to their visible pixels at 3x, so displayHeight is the tool's real
     // on-stage size and the anchor is measured inside the cropped image.
+    // They live in /animations/v2/: hosting caches /animations for an hour, so whenever a sprite's
+    // size changes, use a NEW folder (v3, ...) or visitors get the new numbers with the old picture.
     cottonbuds: {
-      src: '/animations/cottonbuds.png',
+      src: '/animations/v2/cottonbuds.png',
       naturalWidth: 71,
       naturalHeight: 264,
       displayHeight: 88,
@@ -113,7 +115,7 @@ export const RITUAL_CONFIG: RitualConfigType = {
       contactAngle: -22,         // Angle held when wiping
     },
     marker: {
-      src: '/animations/marker.png',
+      src: '/animations/v2/marker.png',
       naturalWidth: 37,
       naturalHeight: 276,
       displayHeight: 92,
@@ -121,7 +123,7 @@ export const RITUAL_CONFIG: RitualConfigType = {
       contactAngle: -25,         // Angle held when marking
     },
     mirror: {
-      src: '/animations/mirror.png',
+      src: '/animations/v2/mirror.png',
       naturalWidth: 238,
       naturalHeight: 450,
       displayHeight: 150,
@@ -133,7 +135,7 @@ export const RITUAL_CONFIG: RitualConfigType = {
       openAngle: 22,
     },
     needle: {
-      src: '/animations/needle.png',
+      src: '/animations/v2/needle.png',
       naturalWidth: 22,
       naturalHeight: 252,
       displayHeight: 84,

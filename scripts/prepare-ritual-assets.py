@@ -4,7 +4,7 @@ The artwork in assets-src/animations/ is drawn on large 1408x768 canvases that a
 95% empty. Shipping those means ~6 MB of transparent pixels to every phone that
 opens /live.html. This script crops each sprite to its visible pixels, removes
 faint checkerboard noise and resizes it to about 3x its on-screen size, then writes
-the result to public/animations/ and prints the numbers for src/components/ritualConfig.ts.
+the result to public/animations/v2/ and prints the numbers for src/components/ritualConfig.ts.
 
 usage:   python scripts/prepare-ritual-assets.py          (needs Pillow: pip install pillow)
 edit:    TOOLS below. `anchor` is the working point in the ORIGINAL image (pixels): the
@@ -17,7 +17,9 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / 'assets-src' / 'animations'
-OUT = ROOT / 'public' / 'animations'
+# Bump this folder (v3, ...) together with the src paths in ritualConfig.ts whenever a sprite's size changes:
+# hosting caches /animations for an hour, so a reused filename can pair a cached old picture with new numbers.
+OUT = ROOT / 'public' / 'animations' / 'v2'
 RESOLUTION = 3          # output pixels per stage pixel (sharp on 3x phone screens)
 MARGIN = 6              # original pixels kept around the visible art (anti-aliasing, outline)
 

@@ -61,6 +61,7 @@ test('tool sprites are tightly cropped, match their configured size and stay tin
   let total = 0;
   for (const [name, spec] of Object.entries(RITUAL_CONFIG.tools)) {
     if (!('src' in spec)) continue;
+    assert.match(spec.src, /^\/animations\/v\d+\//,`${name} sprite is in a versioned folder, so a cached old picture can never pair with new size numbers`);
     const file = `public${spec.src}`;
     const png = readFileSync(file);
     assert.equal(png.readUInt32BE(16), spec.naturalWidth, `${name} width`);
