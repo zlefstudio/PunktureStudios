@@ -203,7 +203,7 @@ export function LiveQueuePage({ localPreview }: { localPreview?: { rows: PublicR
           ) : (
             <>
               <p className="text-body-sm" style={{ color: 'var(--color-text-muted)' }}>
-                <strong className="font-semibold" style={{ color: 'var(--color-text)' }}>Please note:</strong>{' '}Times are estimates in Philippine time and may change depending on session duration. Please proceed to our booth as your turn approaches. Once your name or number is called, come to the booth promptly. If you miss 3 calls, you will be removed from the queue.
+                <strong className="font-semibold" style={{ color: 'var(--color-text)' }}>Good to know:</strong>{' '}Times are estimates (Philippine time) and may change. Please head to our booth as your turn gets close, and come right away when called. If you miss a call, we'll skip you and call you again. To keep things fair for everyone waiting, you'll move to the last spot in the queue after 3 missed calls. Thank you for understanding!
               </p>
               {/* Now serving */}
               {nowServing && (
